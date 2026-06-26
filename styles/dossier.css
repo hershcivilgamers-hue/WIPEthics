@@ -1,0 +1,196 @@
+/* ===========================================================================
+   dossier.css — Personnel file, record detail blocks, directives and log.
+   =========================================================================== */
+
+/* --- Key/value rows (used in dossier + admin) --- */
+.kv {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: var(--s3);
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13.5px;
+}
+.kv:last-child { border-bottom: none; }
+.kv__k { align-self: center; }
+.kv__v { color: var(--text); display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+
+/* --- Dossier header --- */
+.dossier-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  margin: var(--s4) 0 var(--s5);
+}
+.avatar {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  letter-spacing: .02em;
+}
+.avatar--omega   { border-color: rgba(194, 80, 63, .6);  background: rgba(194, 80, 63, .12);  color: #e08a7c; }
+.avatar--ethics  { border-color: rgba(87, 134, 189, .6); background: rgba(87, 134, 189, .12); color: #93b6e0; }
+.avatar--command { border-color: rgba(217, 164, 65, .6); background: rgba(217, 164, 65, .12); color: #f0c978; }
+
+.dossier-codename { font-size: 24px; font-weight: 700; letter-spacing: .01em; }
+.dossier-line { display: flex; align-items: center; gap: var(--s2); margin-top: var(--s2); flex-wrap: wrap; }
+
+/* --- Redaction banners --- */
+.redact-banner {
+  background: rgba(207, 68, 54, .1);
+  border: 1px solid rgba(207, 68, 54, .35);
+  border-left: 3px solid var(--bad);
+  border-radius: var(--radius);
+  padding: var(--s3) var(--s4);
+  font-size: 13px;
+  color: var(--text-2);
+  margin-bottom: var(--s4);
+}
+.redact-banner strong { color: #f0a59b; }
+.redact-banner--soft {
+  background: rgba(217, 164, 65, .08);
+  border-color: rgba(217, 164, 65, .3);
+  border-left-color: var(--warn);
+}
+
+/* --- Action bar --- */
+.actionbar {
+  display: flex;
+  gap: var(--s2);
+  flex-wrap: wrap;
+  margin-bottom: var(--s5);
+  padding-bottom: var(--s4);
+  border-bottom: 1px solid var(--line);
+}
+
+/* --- Dossier grid --- */
+.dossier-grid { display: grid; grid-template-columns: 360px 1fr; gap: var(--s4); align-items: start; }
+.dossier-col { display: flex; flex-direction: column; gap: var(--s4); }
+@media (max-width: 820px) { .dossier-grid { grid-template-columns: 1fr; } }
+
+/* --- Service-record timeline --- */
+.timeline { list-style: none; margin: 0; padding: 0; }
+.tl__item { display: flex; gap: var(--s3); padding: var(--s2) 0; position: relative; }
+.tl__item:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 18px;
+  bottom: -6px;
+  width: 1px;
+  background: var(--line-strong);
+}
+.tl__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex-shrink: 0;
+  background: var(--text-3);
+  z-index: 1;
+}
+.tl__dot--promotion, .tl__dot--appointment { background: var(--ok); }
+.tl__dot--strike { background: var(--bad); }
+.tl__dot--leave { background: var(--warn); }
+.tl__dot--clearance, .tl__dot--commendation { background: var(--amber); }
+.tl__dot--transfer, .tl__dot--training, .tl__dot--registration { background: var(--info); }
+.tl__text { font-size: 13.5px; }
+.tl__meta { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
+.tl__type { text-transform: uppercase; letter-spacing: .08em; }
+
+/* --- Awards / strikes / notes --- */
+.award, .strike, .note {
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--line);
+}
+.award:last-child, .strike:last-child, .note:last-child { border-bottom: none; }
+.award__title { font-weight: 600; font-size: 13.5px; }
+.award__meta, .strike__meta, .note__meta { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
+.strike__reason, .note__text { font-size: 13.5px; }
+.strike { border-left: 2px solid rgba(207, 68, 54, .4); padding-left: var(--s3); }
+
+/* ===========================================================================
+   Directives board
+   =========================================================================== */
+.dir-group { margin-bottom: var(--s6); }
+.dir-group__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-bottom: var(--s3);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--line);
+}
+.dir-group__name { font-size: 12px; flex: 1; }
+.dir-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--s3); }
+
+.directive {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--s4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+.directive--rescinded { opacity: .6; }
+.directive__top { display: flex; align-items: center; gap: var(--s2); }
+.directive__ref { font-size: 12px; color: var(--text-2); flex: 1; }
+.directive__title { font-size: 15px; font-weight: 700; }
+.directive__body { font-size: 13px; color: var(--text-2); line-height: 1.55; }
+.directive__locked {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-3);
+  background: var(--surface-2);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  padding: var(--s3);
+  text-align: center;
+  letter-spacing: .04em;
+}
+.directive__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  font-size: 11.5px;
+  color: var(--text-3);
+  margin-top: var(--s1);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--line);
+}
+
+/* ===========================================================================
+   Activity log
+   =========================================================================== */
+.log { list-style: none; margin: 0; padding: 0; }
+.log__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--line);
+  border-left: 2px solid var(--line-strong);
+}
+.log__row:last-child { border-bottom: none; }
+.log__row--ok { border-left-color: var(--ok); }
+.log__row--warn { border-left-color: var(--warn); }
+.log__row--bad { border-left-color: var(--bad); }
+.log__row--info { border-left-color: var(--info); }
+.log__row--muted { border-left-color: var(--muted); }
+.log__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.log__action { font-weight: 600; font-size: 13.5px; }
+.log__detail { color: var(--text-2); font-size: 12.5px; }
+.log__meta { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; font-size: 11.5px; color: var(--text-3); white-space: nowrap; }

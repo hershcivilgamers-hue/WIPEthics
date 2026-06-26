@@ -1,0 +1,229 @@
+/* ===========================================================================
+   layout.css — Application shell and major regions.
+   =========================================================================== */
+
+/* --- Shell scaffold --- */
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.shell__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.shell__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Classification banners --- */
+.classbar {
+  height: var(--classbar-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: .22em;
+  color: var(--amber);
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      rgba(217, 164, 65, .06) 0 10px,
+      transparent 10px 20px
+    ),
+    var(--surface);
+  border-bottom: 1px solid var(--line);
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.classbar--bottom { border-bottom: none; border-top: 1px solid var(--line); }
+
+/* --- Sidebar --- */
+.sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s4) var(--s4) var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+.sidebar__sigil { color: var(--amber); display: flex; }
+.sidebar__brand-text { display: flex; flex-direction: column; line-height: 1.2; }
+.sidebar__name { font-weight: 700; letter-spacing: .04em; }
+.sidebar__tag { font-family: var(--mono); font-size: 10px; color: var(--text-3); letter-spacing: .12em; }
+
+.nav { padding: var(--s3) var(--s2); flex: 1; }
+.nav__group { margin-bottom: var(--s4); }
+.nav__group-label { padding: var(--s2) var(--s3); }
+
+.nav__item {
+  display: block;
+  padding: var(--s2) var(--s3);
+  margin: 1px 0;
+  border-radius: var(--radius);
+  color: var(--text-2);
+  font-size: 14px;
+  border-left: 2px solid transparent;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.nav__item:hover { background: var(--surface-2); color: var(--text); }
+.nav__item--active {
+  background: var(--surface-3);
+  color: var(--text);
+  border-left-color: var(--amber);
+  font-weight: 600;
+}
+
+.sidebar__foot {
+  padding: var(--s3) var(--s4);
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-3);
+  border-top: 1px solid var(--line);
+}
+
+/* --- Topbar --- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s3) var(--s5);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.topbar__title { font-weight: 700; letter-spacing: .03em; }
+.topbar__sub { color: var(--text-3); font-weight: 400; font-size: 12px; letter-spacing: .04em; margin-left: var(--s2); }
+.topbar__op { display: flex; align-items: center; gap: var(--s3); }
+
+.op-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s1) var(--s3);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.op-chip__id { color: var(--text-2); font-size: 12px; }
+.op-chip__name { font-size: 13px; font-weight: 600; }
+
+/* --- Main view region --- */
+.view {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--s6) var(--s5);
+}
+.view > * { max-width: var(--max-content); margin-inline: auto; }
+
+/* --- Page header block --- */
+.page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s4);
+  margin-bottom: var(--s5);
+}
+.page-title { font-size: 26px; font-weight: 700; letter-spacing: .01em; margin-top: 2px; }
+.page-sub { color: var(--text-2); font-size: 13.5px; margin-top: 4px; }
+
+/* ===========================================================================
+   Auth (sign-in) screen
+   =========================================================================== */
+.auth {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 420px) minmax(0, 320px);
+  gap: var(--s6);
+  align-items: center;
+  justify-content: center;
+  padding: var(--s6);
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(217, 164, 65, .05), transparent 60%),
+    var(--bg);
+}
+
+.auth__panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--s6);
+  box-shadow: var(--shadow);
+}
+.auth__brand { display: flex; align-items: center; gap: var(--s3); margin-bottom: var(--s4); }
+.sigil { color: var(--amber); }
+.auth__name { font-size: 20px; font-weight: 800; letter-spacing: .06em; }
+.auth__sub { color: var(--text-3); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+.auth__notice {
+  font-size: 12.5px;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--amber-dim);
+  border-radius: var(--radius);
+  padding: var(--s3);
+  margin-bottom: var(--s4);
+}
+.auth__error {
+  margin-top: var(--s3);
+  font-size: 13px;
+  color: #f0a59b;
+  background: rgba(207, 68, 54, .1);
+  border: 1px solid rgba(207, 68, 54, .35);
+  border-radius: var(--radius);
+  padding: var(--s2) var(--s3);
+}
+.auth__link {
+  display: block;
+  width: 100%;
+  margin-top: var(--s3);
+  background: none;
+  border: none;
+  color: var(--text-2);
+  font-size: 13px;
+  cursor: pointer;
+  padding: var(--s2);
+}
+.auth__link:hover { color: var(--amber); }
+
+.auth__demo { align-self: center; }
+.auth__demo-head { margin-bottom: var(--s1); }
+.auth__demo-hint { font-size: 12px; color: var(--text-3); margin-bottom: var(--s3); }
+.cred-list { display: flex; flex-direction: column; gap: var(--s2); }
+.cred {
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--s3);
+  cursor: pointer;
+  transition: border-color .12s, background .12s;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cred:hover { border-color: var(--amber-dim); background: var(--surface-2); }
+.cred__name { font-family: var(--mono); font-weight: 600; color: var(--amber-2); }
+.cred__note { font-size: 12px; color: var(--text-2); }
+
+@media (max-width: 820px) {
+  .auth { grid-template-columns: minmax(0, 440px); }
+  .auth__demo { order: 2; }
+}

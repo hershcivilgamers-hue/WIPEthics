@@ -1,0 +1,330 @@
+// =============================================================================
+// views/admin.js — Administration (CL5 only).
+//
+// Four tools behind one screen:
+//   • Registrations — approve or reject pending access requests.
+//   • Clearance     — adjust any operator's clearance from one table.
+//   • Recycle bin   — restore or permanently purge removed records.
+//   • System        — backend status, dataset export, full reset.
+// =============================================================================
+
+import { ORGS, RANKS, CLEARANCE_ORDER, CLEARANCES } from '../constants.js';
+import {
+  users, directives, getUser, upsertUser, getDirective, upsertDirective,
+  newId, loadDb, saveDb, clearDb, storageBackend,
+} from '../storage.js';
+import { canSetClearance, isCL5 } from '../permissions.js';
+import { ensureSeeded } from '../seed.js';
+import { logAction } from '../audit.js';
+import {
+  esc, fmtDate, fmtDateTime, clearanceBadge, orgTag, accountBadge,
+  toast, openModal, confirmDialog,
+} from '../ui.js';
+
+let activeTab = 'registrations';
+
+function nextDesignation(org) {
+  const prefix = org === 'omega-1' ? 'O1' : org === 'ethics-committee' ? 'EC' : 'CMD';
+  const nums = users().filter((x) => x.org === org && /-(\d+)$/.test(x.designation || '')).map((x) => parseInt(x.designation.split('-')[1], 10));
+  return `${prefix}-${(nums.length ? Math.max(...nums) : 0) + 1}`;
+}
+
+export function render(host, app) {
+  const tabs = [
+    ['registrations', 'Registrations'],
+    ['clearance', 'Clearance'],
+    ['recycle', 'Recycle Bin'],
+    ['system', 'System'],
+  ];
+
+  const pendingCount = users().filter((u) => !u.deleted && u.accountStatus === 'pending').length;
+  const binCount = users().filter((u) => u.deleted).length + directives().filter((d) => d.deleted).length;
+
+  host.innerHTML = `
+    <div class="page-head">
+      <div>
+        <div class="eyebrow">Site Command</div>
+        <h1 class="page-title">Administration</h1>
+        <div class="page-sub">Command-tier controls \u00b7 CL5</div>
+      </div>
+    </div>
+    <div class="tabs" role="tablist">
+      ${tabs.map(([id, lbl]) => `
+        <button class="tab ${activeTab === id ? 'tab--active' : ''}" data-tab="${id}">
+          ${esc(lbl)}
+          ${id === 'registrations' && pendingCount ? `<span class="tab__count">${pendingCount}</span>` : ''}
+          ${id === 'recycle' && binCount ? `<span class="tab__count">${binCount}</span>` : ''}
+        </button>`).join('')}
+    </div>
+    <div id="admin-panel"></div>
+  `;
+
+  host.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { activeTab = b.dataset.tab; render(host, app); }));
+  drawPanel(host.querySelector('#admin-panel'), app);
+}
+
+function drawPanel(panel, app) {
+  if (activeTab === 'registrations') return drawRegistrations(panel, app);
+  if (activeTab === 'clearance') return drawClearance(panel, app);
+  if (activeTab === 'recycle') return drawRecycle(panel, app);
+  return drawSystem(panel, app);
+}
+
+// --- Registrations ----------------------------------------------------------
+function drawRegistrations(panel, app) {
+  const pending = users().filter((u) => !u.deleted && u.accountStatus === 'pending');
+  if (!pending.length) {
+    panel.innerHTML = '<div class="card"><div class="card__body empty">No access requests awaiting approval.</div></div>';
+    return;
+  }
+  panel.innerHTML = `<div class="stack">${pending.map((u) => `
+    <div class="card req-card">
+      <div class="req-card__main">
+        <div class="req-card__name">${esc(u.codename)} <span class="mono req-card__id">${esc(u.designation)}</span></div>
+        <div class="req-card__meta">Requested ${orgTag(u.requestedOrg || u.org)} ${esc(ORGS[u.requestedOrg || u.org].name)} \u00b7 ${fmtDate(u.createdAt)} \u00b7 operator ID <span class="mono">${esc(u.username)}</span></div>
+      </div>
+      <div class="req-card__actions">
+        <button class="btn btn--primary btn--sm" data-approve="${esc(u.id)}">Approve</button>
+        <button class="btn btn--danger btn--sm" data-reject="${esc(u.id)}">Reject</button>
+      </div>
+    </div>`).join('')}</div>`;
+
+  panel.querySelectorAll('[data-approve]').forEach((b) => b.addEventListener('click', () => approve(app, b.dataset.approve)));
+  panel.querySelectorAll('[data-reject]').forEach((b) => b.addEventListener('click', () => reject(app, b.dataset.reject)));
+}
+
+function approve(app, id) {
+  const u = getUser(id);
+  if (!u) return;
+  const org = u.requestedOrg || u.org;
+  const ranks = RANKS[org] || [];
+  const ceiling = CLEARANCES[app.user.clearance].weight;
+  const allowed = CLEARANCE_ORDER.filter((c) => CLEARANCES[c].weight <= ceiling);
+  const rankOpts = ranks.map((r) => `<option value="${esc(r)}">${esc(r)}</option>`).join('');
+  const clrOpts = allowed.map((c) => `<option value="${c}">${esc(CLEARANCES[c].label)}</option>`).join('');
+
+  openModal({
+    title: `Approve \u2014 ${u.codename}`,
+    body: `
+      <p class="modal__message">Confirm organisation, assign a rank and clearance. A permanent designation is issued on approval.</p>
+      <div class="field"><label>Organisation</label>
+        <select id="ap-org">${['omega-1', 'ethics-committee', 'command'].map((o) => `<option value="${o}" ${o === org ? 'selected' : ''}>${esc(ORGS[o].name)}</option>`).join('')}</select></div>
+      <div class="field"><label>Rank</label><select id="ap-rank">${rankOpts}</select></div>
+      <div class="field"><label>Clearance</label><select id="ap-clr">${clrOpts}</select></div>
+    `,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Approve & activate', tone: 'primary', onClick: (c, d) => {
+          const chosenOrg = d.querySelector('#ap-org').value;
+          const rank = d.querySelector('#ap-rank').value;
+          const clr = d.querySelector('#ap-clr').value;
+          const fresh = getUser(id);
+          if (!fresh) { c(); app.refresh(); return; }
+          const designation = nextDesignation(chosenOrg);
+          fresh.org = chosenOrg;
+          fresh.rank = rank;
+          fresh.clearance = clr;
+          fresh.designation = designation;
+          fresh.accountStatus = 'active';
+          fresh.requestedOrg = null;
+          fresh.version += 1;
+          fresh.updatedAt = new Date().toISOString();
+          fresh.events = fresh.events || [];
+          fresh.events.unshift({ id: newId('evt'), date: new Date().toISOString(), type: 'appointment', text: `Access approved by ${app.user.designation}; assigned ${rank}, ${CLEARANCES[clr].label}.` });
+          upsertUser(fresh);
+          logAction(app.user, 'APPROVE_REGISTRATION', `Approved ${designation} (${fresh.codename}) into ${ORGS[chosenOrg].short}.`);
+          c();
+          toast(`Approved \u2014 ${designation} activated.`, 'success');
+          app.refresh();
+        } },
+    ],
+  });
+}
+
+async function reject(app, id) {
+  const u = getUser(id);
+  if (!u) return;
+  const ok = await confirmDialog({ title: 'Reject request', message: `Reject and discard the access request from ${u.codename}?`, confirmLabel: 'Reject request', danger: true });
+  if (!ok) return;
+  u.deleted = true;
+  u.deletedAt = new Date().toISOString();
+  upsertUser(u);
+  logAction(app.user, 'REJECT_REGISTRATION', `Rejected access request from ${u.codename}.`);
+  toast('Request rejected.', 'success');
+  app.refresh();
+}
+
+// --- Clearance management ---------------------------------------------------
+function drawClearance(panel, app) {
+  const roster = users().filter((u) => !u.deleted && u.accountStatus === 'active')
+    .sort((a, b) => a.org.localeCompare(b.org) || (CLEARANCES[b.clearance]?.weight || 0) - (CLEARANCES[a.clearance]?.weight || 0));
+
+  const rows = roster.map((u) => {
+    const self = u.id === app.user.id;
+    const opts = CLEARANCE_ORDER.map((c) => `<option value="${c}" ${u.clearance === c ? 'selected' : ''}>${esc(CLEARANCES[c].label)}</option>`).join('');
+    return `
+      <tr>
+        <td class="mono">${esc(u.designation)}</td>
+        <td>${esc(u.codename)}</td>
+        <td>${orgTag(u.org)}</td>
+        <td>${clearanceBadge(u.clearance)}</td>
+        <td>
+          ${self ? '<span class="muted-text">\u2014 self \u2014</span>' : `
+            <span class="inline-set">
+              <select data-clr="${esc(u.id)}">${opts}</select>
+              <button class="btn btn--xs" data-apply="${esc(u.id)}">Apply</button>
+            </span>`}
+        </td>
+      </tr>`;
+  }).join('');
+
+  panel.innerHTML = `
+    <div class="card">
+      <div class="card__title">Clearance assignment</div>
+      <table class="table">
+        <thead><tr><th>Designation</th><th>Codename</th><th>Org</th><th>Current</th><th>Set</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+
+  panel.querySelectorAll('[data-apply]').forEach((b) => b.addEventListener('click', () => {
+    const id = b.dataset.apply;
+    const sel = panel.querySelector(`[data-clr="${id}"]`);
+    const next = sel.value;
+    const target = getUser(id);
+    if (!target) return;
+    if (!canSetClearance(app.user, target, next)) { toast('You cannot assign a clearance above your own.', 'error'); return; }
+    const from = target.clearance || 'none';
+    target.clearance = next;
+    target.version += 1;
+    target.updatedAt = new Date().toISOString();
+    target.events = target.events || [];
+    target.events.unshift({ id: newId('evt'), date: new Date().toISOString(), type: 'clearance', text: `Clearance changed ${from} \u2192 ${next} by ${app.user.designation}.` });
+    upsertUser(target);
+    logAction(app.user, 'SET_CLEARANCE', `${target.designation} set to ${next}.`);
+    toast(`${target.designation} \u2192 ${CLEARANCES[next].label}.`, 'success');
+    app.refresh();
+  }));
+}
+
+// --- Recycle bin ------------------------------------------------------------
+function drawRecycle(panel, app) {
+  const delUsers = users().filter((u) => u.deleted);
+  const delDirs = directives().filter((d) => d.deleted);
+
+  if (!delUsers.length && !delDirs.length) {
+    panel.innerHTML = '<div class="card"><div class="card__body empty">The recycle bin is empty.</div></div>';
+    return;
+  }
+
+  const userRows = delUsers.map((u) => `
+    <div class="bin-row">
+      <div><span class="mono">${esc(u.designation)}</span> \u00b7 ${esc(u.codename)} ${orgTag(u.org)}<div class="bin-row__meta">Removed ${fmtDateTime(u.deletedAt)}</div></div>
+      <div class="bin-row__actions">
+        <button class="btn btn--xs" data-restore-u="${esc(u.id)}">Restore</button>
+        <button class="btn btn--xs btn--danger" data-purge-u="${esc(u.id)}">Purge</button>
+      </div>
+    </div>`).join('');
+
+  const dirRows = delDirs.map((d) => `
+    <div class="bin-row">
+      <div><span class="mono">${esc(d.ref)}</span> \u00b7 ${esc(d.title)}<div class="bin-row__meta">Removed ${fmtDateTime(d.deletedAt)}</div></div>
+      <div class="bin-row__actions">
+        <button class="btn btn--xs" data-restore-d="${esc(d.id)}">Restore</button>
+        <button class="btn btn--xs btn--danger" data-purge-d="${esc(d.id)}">Purge</button>
+      </div>
+    </div>`).join('');
+
+  panel.innerHTML = `
+    ${delUsers.length ? `<div class="card"><div class="card__title">Removed personnel</div><div class="card__body">${userRows}</div></div>` : ''}
+    ${delDirs.length ? `<div class="card"><div class="card__title">Removed directives</div><div class="card__body">${dirRows}</div></div>` : ''}
+  `;
+
+  panel.querySelectorAll('[data-restore-u]').forEach((b) => b.addEventListener('click', () => {
+    const u = getUser(b.dataset.restoreU); if (!u) return;
+    u.deleted = false; u.deletedAt = null; u.version += 1; upsertUser(u);
+    logAction(app.user, 'RESTORE_RECORD', `${u.designation} restored from recycle bin.`);
+    toast('Record restored.', 'success'); app.refresh();
+  }));
+  panel.querySelectorAll('[data-purge-u]').forEach((b) => b.addEventListener('click', async () => {
+    const u = getUser(b.dataset.purgeU); if (!u) return;
+    const ok = await confirmDialog({ title: 'Purge permanently', message: `Permanently delete ${u.designation} \u00b7 ${u.codename}? This cannot be undone.`, confirmLabel: 'Purge', danger: true });
+    if (!ok) return;
+    const db = loadDb(); db.users = db.users.filter((x) => x.id !== u.id);
+    saveDb();
+    logAction(app.user, 'PURGE_RECORD', `${u.designation} permanently deleted.`);
+    toast('Record purged.', 'success'); app.refresh();
+  }));
+  panel.querySelectorAll('[data-restore-d]').forEach((b) => b.addEventListener('click', () => {
+    const d = getDirective(b.dataset.restoreD); if (!d) return;
+    d.deleted = false; d.deletedAt = null; upsertDirective(d);
+    logAction(app.user, 'RESTORE_RECORD', `Directive ${d.ref} restored.`);
+    toast('Directive restored.', 'success'); app.refresh();
+  }));
+  panel.querySelectorAll('[data-purge-d]').forEach((b) => b.addEventListener('click', async () => {
+    const d = getDirective(b.dataset.purgeD); if (!d) return;
+    const ok = await confirmDialog({ title: 'Purge permanently', message: `Permanently delete directive ${d.ref}?`, confirmLabel: 'Purge', danger: true });
+    if (!ok) return;
+    const db = loadDb(); db.directives = db.directives.filter((x) => x.id !== d.id);
+    saveDb();
+    logAction(app.user, 'PURGE_RECORD', `Directive ${d.ref} permanently deleted.`);
+    toast('Directive purged.', 'success'); app.refresh();
+  }));
+}
+
+// --- System -----------------------------------------------------------------
+function drawSystem(panel, app) {
+  const backend = storageBackend();
+  const db = loadDb();
+  const counts = {
+    users: db.users.length,
+    directives: db.directives.length,
+    audit: db.audit.length,
+  };
+
+  panel.innerHTML = `
+    <div class="card">
+      <div class="card__title">Storage</div>
+      <div class="card__body">
+        <div class="kv"><span class="kv__k">Backend</span><span class="kv__v">${backend === 'localStorage' ? '<span class="badge badge--ok">localStorage</span> persistent on this browser' : '<span class="badge badge--warn">in-memory</span> not persisted (storage unavailable)'}</span></div>
+        <div class="kv"><span class="kv__k">Seeded</span><span class="kv__v">${fmtDateTime(db.meta.seededAt)}</span></div>
+        <div class="kv"><span class="kv__k">Records</span><span class="kv__v">${counts.users} personnel \u00b7 ${counts.directives} directives \u00b7 ${counts.audit} log entries</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card__title">Data</div>
+      <div class="card__body">
+        <p class="muted-text">Export a full snapshot of the dataset, or reset the system to its seeded state.</p>
+        <div class="btn-row">
+          <button class="btn" id="sys-export">Export dataset (JSON)</button>
+          <button class="btn btn--danger" id="sys-reset">Reset system\u2026</button>
+        </div>
+      </div>
+    </div>`;
+
+  panel.querySelector('#sys-export').addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(loadDb(), null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `cairo-aic-export-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('Dataset exported.', 'success');
+  });
+
+  panel.querySelector('#sys-reset').addEventListener('click', async () => {
+    const ok = await confirmDialog({
+      title: 'Reset system',
+      message: 'Wipe all records and restore the original seed data? Every change, including new personnel and your current session, will be lost.',
+      confirmLabel: 'Reset everything',
+      danger: true,
+    });
+    if (!ok) return;
+    clearDb();
+    await ensureSeeded();
+    logAction(null, 'RESET_SYSTEM', 'System reset to seed state.');
+    toast('System reset. Returning to sign-in.', 'success');
+    app.refresh();
+  });
+}
