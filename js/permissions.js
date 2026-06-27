@@ -108,3 +108,24 @@ export function accessLevel(actor, target) {
 export const canSeeStrikes = (actor, target) => accessLevel(actor, target) === 'full';
 export const canSeeNotes = (actor, target) => accessLevel(actor, target) === 'full';
 export const canSeeLeaveReason = (actor, target) => accessLevel(actor, target) === 'full';
+
+// --- Surveillance -----------------------------------------------------------
+// A subject carries a minimum clearance (its sensitivity). Visibility is a hard
+// gate, not a soft redaction: below the required clearance, you get nothing.
+// This is checked on direct access in the view, not just by hiding the menu.
+export function canViewSubject(actor, subject) {
+  if (!actor || !subject) return false;
+  return w(actor) >= clearanceWeight(subject.clearance);
+}
+
+// Managing a subject (create / edit / log / close / remove) follows the same
+// rule as managing personnel: CL4·Senior or above with a stake in the org.
+export function canManageSubject(actor, subject) {
+  return canManageOrg(actor, subject?.org);
+}
+
+// You cannot classify a subject at a sensitivity higher than your own clearance
+// — you can't mark something more secret than you are cleared to see.
+export function canClassifySubjectAt(actor, clearance) {
+  return clearanceWeight(clearance) <= w(actor);
+}

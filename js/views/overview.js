@@ -8,8 +8,8 @@
 
 import { CONFIG } from '../config.js';
 import { ORGS, ORG_ORDER, STRIKE_LIMIT } from '../constants.js';
-import { users, directives } from '../storage.js';
-import { canApproveRegistrations, canManageOrg } from '../permissions.js';
+import { users, directives, subjects } from '../storage.js';
+import { canApproveRegistrations, canManageOrg, canViewSubject, canManageSubject } from '../permissions.js';
 import { esc, clearanceBadge, orgTag } from '../ui.js';
 
 export function render(host, app) {
@@ -20,6 +20,15 @@ export function render(host, app) {
   const onLeave = roster.filter((u) => u.status === 'loa');
   const flagged = roster.filter((u) => (u.strikes || []).length >= STRIKE_LIMIT);
   const activeDirectives = directives().filter((d) => !d.deleted && d.status === 'active');
+
+  // Surveillance signals (only the subjects this operator is cleared to see).
+  const surveillanceOn = CONFIG.features.surveillance;
+  const visibleSubjects = surveillanceOn
+    ? subjects().filter((s) => !s.deleted && canViewSubject(actor, s))
+    : [];
+  const liveStatuses = ['active', 'located', 'detained'];
+  const activeTargets = visibleSubjects.filter((s) => s.kind === 'target' && liveStatuses.includes(s.status));
+  const criticalWatch = visibleSubjects.filter((s) => s.threat === 'critical' && liveStatuses.includes(s.status) && canManageSubject(actor, s));
 
   // --- Requires You ---
   const queue = [];
@@ -43,6 +52,14 @@ export function render(host, app) {
   if (actor.status === 'loa') {
     queue.push({ tone: 'info', title: 'You are currently marked on leave', sub: 'Command can return you to active duty.', hash: `#/personnel/${actor.id}` });
   }
+  criticalWatch.slice(0, 3).forEach((s) => {
+    queue.push({
+      tone: 'bad',
+      title: `${s.ref} \u00b7 ${s.alias} is a critical-threat ${s.kind === 'target' ? 'target' : 'subject'}`,
+      sub: 'Active surveillance at critical threat — review the subject file.',
+      hash: `#/subject/${s.id}`,
+    });
+  });
 
   const queueHtml = queue.length ? queue.map((q) => `
     <button class="req" data-nav="${esc(q.hash)}">
@@ -82,6 +99,7 @@ export function render(host, app) {
 
     <div class="metric-row">
       ${metric(roster.length, 'Personnel on roster')}
+      ${surveillanceOn ? metric(activeTargets.length, 'Active targets', activeTargets.length ? 'bad' : '') : ''}
       ${metric(activeDirectives.length, 'Active directives')}
       ${metric(onLeave.length, 'On leave', onLeave.length ? 'warn' : '')}
       ${metric(flagged.length, 'At strike limit', flagged.length ? 'bad' : '')}

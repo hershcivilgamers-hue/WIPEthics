@@ -9,15 +9,17 @@
 
 import { CONFIG } from './config.js';
 import { ensureSeeded } from './seed.js';
+import { runMigrations } from './migrations.js';
 import { currentUser, endSession } from './state.js';
 import { logAction } from './audit.js';
 import { NAV, parseHash, isRouteAllowed } from './router.js';
-import { getUser } from './storage.js';
+import { getUser, getSubject } from './storage.js';
 import { esc, clearanceBadge, toast } from './ui.js';
 
 import * as loginView from './views/login.js';
 import * as overviewView from './views/overview.js';
 import * as personnelView from './views/personnel.js';
+import * as surveillanceView from './views/surveillance.js';
 import * as directivesView from './views/directives.js';
 import * as activityView from './views/activity.js';
 import * as adminView from './views/admin.js';
@@ -84,6 +86,8 @@ function renderShell(user, route) {
   if (route.name === 'dossier') {
     const target = getUser(route.params.id);
     activeName = target ? navNameForOrg(target.org) : '';
+  } else if (route.name === 'subject') {
+    activeName = 'surveillance';
   }
 
   const banner = `CLASSIFIED \u00b7 ${esc(CONFIG.facility)} \u00b7 OPERATOR CLEARANCE ${esc(clearanceWord(user))} \u00b7 ACCESS LOGGED`;
@@ -131,15 +135,17 @@ function dispatch(route, user) {
   }
 
   switch (route.name) {
-    case 'overview':   overviewView.render(view, app); break;
-    case 'directives': directivesView.render(view, app); break;
-    case 'activity':   activityView.render(view, app); break;
-    case 'omega-1':    personnelView.renderList(view, app, 'omega-1'); break;
-    case 'ethics':     personnelView.renderList(view, app, 'ethics-committee'); break;
-    case 'command':    personnelView.renderList(view, app, 'command'); break;
-    case 'dossier':    personnelView.renderDossier(view, app, route.params.id); break;
-    case 'admin':      adminView.render(view, app); break;
-    default:           overviewView.render(view, app);
+    case 'overview':     overviewView.render(view, app); break;
+    case 'surveillance': surveillanceView.renderList(view, app); break;
+    case 'subject':      surveillanceView.renderSubject(view, app, route.params.id); break;
+    case 'directives':   directivesView.render(view, app); break;
+    case 'activity':     activityView.render(view, app); break;
+    case 'omega-1':      personnelView.renderList(view, app, 'omega-1'); break;
+    case 'ethics':       personnelView.renderList(view, app, 'ethics-committee'); break;
+    case 'command':      personnelView.renderList(view, app, 'command'); break;
+    case 'dossier':      personnelView.renderDossier(view, app, route.params.id); break;
+    case 'admin':        adminView.render(view, app); break;
+    default:             overviewView.render(view, app);
   }
 }
 
@@ -155,6 +161,7 @@ function renderApp() {
 // --- Boot -------------------------------------------------------------------
 async function boot() {
   await ensureSeeded();
+  runMigrations();
   window.addEventListener('hashchange', renderApp);
   renderApp();
 }

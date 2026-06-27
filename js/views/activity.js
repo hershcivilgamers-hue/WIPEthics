@@ -11,12 +11,15 @@ import { esc, fmtDateTime, relTime } from '../ui.js';
 
 // Map raw action codes to a tone for the left rule.
 const TONE = {
-  LOGIN: 'info', REGISTRATION: 'warn', SYSTEM_INIT: 'muted',
+  LOGIN: 'info', LOGOUT: 'muted', REGISTRATION: 'warn', SYSTEM_INIT: 'muted', MIGRATION: 'muted',
   CREATE_RECORD: 'ok', EDIT_RECORD: 'info', SET_CLEARANCE: 'warn',
   ADD_STRIKE: 'bad', ADD_NOTE: 'info', SET_LEAVE: 'warn', END_LEAVE: 'ok',
   REMOVE_RECORD: 'bad', RESTORE_RECORD: 'ok', PURGE_RECORD: 'bad',
   APPROVE_REGISTRATION: 'ok', REJECT_REGISTRATION: 'muted',
   ISSUE_DIRECTIVE: 'info', RESET_SYSTEM: 'bad',
+  CREATE_SUBJECT: 'ok', EDIT_SUBJECT: 'info', ADD_SURVEILLANCE_LOG: 'info',
+  SET_SUBJECT_STATUS: 'info', RECLASSIFY_SUBJECT: 'warn', CLOSE_SUBJECT: 'muted',
+  REMOVE_SUBJECT: 'bad', SUBJECT_ACCESS_DENIED: 'bad',
 };
 
 function label(action) {

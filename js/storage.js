@@ -21,6 +21,7 @@ function emptyDb() {
     meta: { version: CONFIG.version, seededAt: null },
     users: [],
     directives: [],
+    subjects: [],
     audit: [],
     session: { userId: null },
   };
@@ -120,6 +121,7 @@ export function clearDb() {
 // Convenience getters so views read `users()` rather than reaching into db.
 export const users = () => loadDb().users;
 export const directives = () => loadDb().directives;
+export const subjects = () => loadDb().subjects;
 export const audit = () => loadDb().audit;
 export const meta = () => loadDb().meta;
 export const session = () => loadDb().session;
@@ -149,6 +151,19 @@ export function upsertDirective(directive) {
   else list.push(directive);
   saveDb();
   return directive;
+}
+
+export function getSubject(id) {
+  return subjects().find((s) => s.id === id) || null;
+}
+
+export function upsertSubject(subject) {
+  const list = subjects();
+  const idx = list.findIndex((s) => s.id === subject.id);
+  if (idx >= 0) list[idx] = subject;
+  else list.push(subject);
+  saveDb();
+  return subject;
 }
 
 // --- ID generator -----------------------------------------------------------

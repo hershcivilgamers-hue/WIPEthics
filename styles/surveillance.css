@@ -1,0 +1,72 @@
+/* ===========================================================================
+   surveillance.css — Surveillance registry and subject-file styling.
+
+   Most of the module reuses the shared components (cards, tables, badges,
+   timeline, dossier header). This file holds only what is specific to
+   surveillance: classification tags, threat emphasis, the access-denied panel,
+   and the sealed-record rows in the registry.
+   =========================================================================== */
+
+/* --- Subject classification tag --- */
+.subj-kind {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: var(--radius);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  border: 1px solid var(--line-strong);
+  color: var(--text-2);
+}
+.subj-kind--info { color: #9cc0ec; border-color: rgba(95, 143, 208, .5); background: rgba(95, 143, 208, .1); }
+.subj-kind--bad  { color: #f0a59b; border-color: rgba(207, 68, 54, .55); background: rgba(207, 68, 54, .12); }
+.subj-kind--muted { color: var(--text-2); background: var(--surface-3); }
+
+/* --- Critical threat gets a solid, unmissable treatment --- */
+.threat--critical {
+  background: var(--bad);
+  color: #1a0a08;
+  border-color: var(--bad);
+  font-weight: 800;
+}
+
+/* --- Assessment text --- */
+.subj-summary {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+/* --- Sealed rows in the registry (above the operator's clearance) --- */
+.row-locked { background: repeating-linear-gradient(45deg, rgba(207, 68, 54, .03) 0 8px, transparent 8px 16px); }
+.row-locked:hover { background: repeating-linear-gradient(45deg, rgba(207, 68, 54, .03) 0 8px, transparent 8px 16px); }
+.locked-cell {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: .12em;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+
+/* --- Access-denied panel (hard gate on direct access) --- */
+.denied {
+  max-width: 520px;
+  margin: var(--s7) auto;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid rgba(207, 68, 54, .4);
+  border-radius: var(--radius-lg);
+  padding: var(--s7) var(--s5);
+}
+.denied__mark {
+  font-family: var(--mono);
+  font-size: 28px;
+  letter-spacing: .3em;
+  color: var(--bad);
+  margin-bottom: var(--s3);
+}
+.denied__title { font-size: 22px; font-weight: 700; margin-bottom: var(--s3); }
+.denied__text { color: var(--text-2); font-size: 14px; line-height: 1.6; margin-bottom: var(--s4); }

@@ -17,9 +17,10 @@ export const NAV = [
   {
     group: 'CAIRO',
     items: [
-      { name: 'overview',   hash: '#/overview',   label: 'Command Overview' },
-      { name: 'directives', hash: '#/directives', label: 'Standing Orders', feature: 'directives' },
-      { name: 'activity',   hash: '#/activity',   label: 'Activity Log',    feature: 'activityLog' },
+      { name: 'overview',     hash: '#/overview',     label: 'Command Overview' },
+      { name: 'surveillance', hash: '#/surveillance', label: 'Surveillance',    feature: 'surveillance' },
+      { name: 'directives',   hash: '#/directives',   label: 'Standing Orders', feature: 'directives' },
+      { name: 'activity',     hash: '#/activity',     label: 'Activity Log',    feature: 'activityLog' },
     ],
   },
   {
@@ -53,10 +54,11 @@ const GUARDS = {
 function featureBlocked(name) {
   if (name === 'directives') return !CONFIG.features.directives;
   if (name === 'activity') return !CONFIG.features.activityLog;
+  if (name === 'surveillance' || name === 'subject') return !CONFIG.features.surveillance;
   return false;
 }
 
-const TOP_LEVEL = ['overview', 'directives', 'activity', 'omega-1', 'ethics', 'command', 'admin'];
+const TOP_LEVEL = ['overview', 'surveillance', 'directives', 'activity', 'omega-1', 'ethics', 'command', 'admin'];
 
 // Parse the current location hash into a route { name, params }.
 export function parseHash() {
@@ -66,6 +68,9 @@ export function parseHash() {
   if (parts.length === 0) return { name: 'overview', params: {} };
   if (parts[0] === 'personnel' && parts[1]) {
     return { name: 'dossier', params: { id: parts[1] } };
+  }
+  if (parts[0] === 'subject' && parts[1]) {
+    return { name: 'subject', params: { id: parts[1] } };
   }
   if (TOP_LEVEL.includes(parts[0])) {
     return { name: parts[0], params: {} };

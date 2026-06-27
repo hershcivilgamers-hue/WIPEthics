@@ -174,6 +174,89 @@ const DIRECTIVE_SPECS = [
   },
 ];
 
+// --- Surveillance subjects --------------------------------------------------
+// Sensitivity (`clearance`) is deliberately spread across tiers so the access
+// gate is demonstrable: TGT-090 is CL5-only, TGT-118 is CL4·S+, the POIs are
+// visible lower down.
+const SUBJECT_SPECS = [
+  {
+    ref: 'POI-2207', alias: 'Cassette', kind: 'poi', org: 'omega-1',
+    threat: 'moderate', clearance: 'CL3', status: 'active', daysAgo: 26,
+    lastKnownLocation: 'Metro corridor, Sector 12',
+    createdBy: 'O1-1',
+    summary: 'Suspected courier moving anomalous media between two unaffiliated groups of interest. Non-hostile to date; observe and map contacts.',
+    logs: [
+      { daysAgo: 26, type: 'intel',    by: 'O1-1', text: 'Watch opened following recovered handoff footage.' },
+      { daysAgo: 11, type: 'sighting', by: 'O1-7', text: 'Observed at transit hub; met one unidentified contact for under two minutes.' },
+      { daysAgo: 3,  type: 'note',     by: 'O1-1', text: 'Pattern suggests weekly cadence. Maintain passive watch.' },
+    ],
+  },
+  {
+    ref: 'TGT-118', alias: 'Hollow King', kind: 'target', org: 'omega-1',
+    threat: 'critical', clearance: 'CL4-S', status: 'located', daysAgo: 40,
+    lastKnownLocation: 'Disused rail depot (under confirmation)',
+    createdBy: 'O1-1',
+    summary: 'High-priority acquisition target linked to two containment breaches. Approach only with task-force authorisation.',
+    logs: [
+      { daysAgo: 40, type: 'intel',  by: 'O1-1', text: 'Designated acquisition target by Omega-1 command.' },
+      { daysAgo: 9,  type: 'status', by: 'O1-1', text: 'Location narrowed to depot district; surveillance assets repositioned.' },
+      { daysAgo: 1,  type: 'sighting', by: 'O1-7', text: 'Probable visual confirmation pending corroboration.' },
+    ],
+  },
+  {
+    ref: 'POI-2231', alias: 'Ledger', kind: 'poi', org: 'ethics-committee',
+    threat: 'low', clearance: 'CL4-J', status: 'active', daysAgo: 18,
+    lastKnownLocation: 'Internal — pending interview',
+    createdBy: 'EC-1',
+    summary: 'Witness in an open ethics review whose account conflicts with the incident record. Under watch pending tribunal scheduling.',
+    logs: [
+      { daysAgo: 18, type: 'note',  by: 'EC-1', text: 'Flagged for observation by the Committee pending review EC-CASE scheduling.' },
+      { daysAgo: 5,  type: 'intel', by: 'EC-3', text: 'Account inconsistencies catalogued for tribunal reference.' },
+    ],
+  },
+  {
+    ref: 'TGT-090', alias: 'Surgeon', kind: 'target', org: 'command',
+    threat: 'high', clearance: 'CL5', status: 'active', daysAgo: 55,
+    lastKnownLocation: '[SEALED]',
+    createdBy: 'CMD-1',
+    summary: 'Command-restricted acquisition target. Details sealed at CL5. Cross-organisational coordination via Site Command only.',
+    logs: [
+      { daysAgo: 55, type: 'intel',  by: 'CMD-1', text: 'Target designated under Command seal; access restricted to CL5.' },
+      { daysAgo: 7,  type: 'status', by: 'CMD-1', text: 'Coordination tasking issued to both organisations on a need-to-know basis.' },
+    ],
+  },
+];
+
+// Build the surveillance subject records. Exported so a migration can backfill
+// installations that were seeded before surveillance existed.
+export function buildSeedSubjects() {
+  return SUBJECT_SPECS.map((s) => {
+    const created = iso(s.daysAgo);
+    return {
+      id: newId('sub'),
+      ref: s.ref,
+      alias: s.alias,
+      realName: s.realName ?? '[UNIDENTIFIED]',
+      kind: s.kind,
+      org: s.org,
+      threat: s.threat,
+      clearance: s.clearance,
+      status: s.status,
+      summary: s.summary,
+      lastKnownLocation: s.lastKnownLocation ?? '',
+      logs: (s.logs || []).map((l) => ({
+        id: newId('log'), ts: iso(l.daysAgo), by: l.by, type: l.type, text: l.text,
+      })),
+      createdBy: s.createdBy,
+      createdAt: created,
+      updatedAt: created,
+      version: 1,
+      deleted: false,
+      deletedAt: null,
+    };
+  });
+}
+
 // Build the full dataset and persist it. No-op if already seeded.
 export async function ensureSeeded() {
   const db = loadDb();
@@ -203,8 +286,11 @@ export async function ensureSeeded() {
     };
   });
 
+  db.subjects = buildSeedSubjects();
+
   db.meta.seededAt = new Date().toISOString();
+  db.meta.surveillanceSeededAt = new Date().toISOString();
   saveDb();
-  logAction(null, 'SYSTEM_INIT', 'CAIRO dataset initialised with seed personnel and directives.');
+  logAction(null, 'SYSTEM_INIT', 'CAIRO dataset initialised with seed personnel, directives and surveillance subjects.');
   return db;
 }

@@ -81,6 +81,34 @@ export const ACCOUNT_STATUS = {
 // Number of active strikes that flags a record for command review.
 export const STRIKE_LIMIT = 3;
 
+// --- Surveillance: subject classification -----------------------------------
+// A POI is watched; a TARGET is actively pursued / to be contained.
+export const SUBJECT_CLASS = {
+  poi:    { code: 'poi',    label: 'Person of Interest', short: 'POI',    tone: 'info' },
+  target: { code: 'target', label: 'Acquisition Target', short: 'TARGET', tone: 'bad' },
+};
+export const SUBJECT_CLASS_ORDER = ['poi', 'target'];
+
+// --- Surveillance: threat assessment ----------------------------------------
+export const THREAT_LEVELS = {
+  low:      { code: 'low',      label: 'Low',      tone: 'ok',    weight: 1 },
+  moderate: { code: 'moderate', label: 'Moderate', tone: 'warn',  weight: 2 },
+  high:     { code: 'high',     label: 'High',     tone: 'bad',   weight: 3 },
+  critical: { code: 'critical', label: 'Critical', tone: 'bad',   weight: 4 },
+};
+export const THREAT_ORDER = ['low', 'moderate', 'high', 'critical'];
+
+// --- Surveillance: case status ----------------------------------------------
+export const SUBJECT_STATUS = {
+  active:    { code: 'active',    label: 'Active Watch', tone: 'ok' },
+  located:   { code: 'located',   label: 'Located',      tone: 'info' },
+  detained:  { code: 'detained',  label: 'Detained',     tone: 'warn' },
+  contained: { code: 'contained', label: 'Contained',    tone: 'muted' },
+  cold:      { code: 'cold',      label: 'Cold',         tone: 'muted' },
+  closed:    { code: 'closed',    label: 'Closed',       tone: 'muted' },
+};
+export const SUBJECT_STATUS_ORDER = ['active', 'located', 'detained', 'contained', 'cold', 'closed'];
+
 // --- Helpers ----------------------------------------------------------------
 export const clearanceWeight = (code) => CLEARANCES[code]?.weight ?? 0;
 export const orgName = (code) => ORGS[code]?.name ?? code;

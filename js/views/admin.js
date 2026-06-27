@@ -10,8 +10,8 @@
 
 import { ORGS, RANKS, CLEARANCE_ORDER, CLEARANCES } from '../constants.js';
 import {
-  users, directives, getUser, upsertUser, getDirective, upsertDirective,
-  newId, loadDb, saveDb, clearDb, storageBackend,
+  users, directives, subjects, getUser, upsertUser, getDirective, upsertDirective,
+  getSubject, upsertSubject, newId, loadDb, saveDb, clearDb, storageBackend,
 } from '../storage.js';
 import { canSetClearance, isCL5 } from '../permissions.js';
 import { ensureSeeded } from '../seed.js';
@@ -211,8 +211,9 @@ function drawClearance(panel, app) {
 function drawRecycle(panel, app) {
   const delUsers = users().filter((u) => u.deleted);
   const delDirs = directives().filter((d) => d.deleted);
+  const delSubjects = subjects().filter((s) => s.deleted);
 
-  if (!delUsers.length && !delDirs.length) {
+  if (!delUsers.length && !delDirs.length && !delSubjects.length) {
     panel.innerHTML = '<div class="card"><div class="card__body empty">The recycle bin is empty.</div></div>';
     return;
   }
@@ -235,8 +236,18 @@ function drawRecycle(panel, app) {
       </div>
     </div>`).join('');
 
+  const subjRows = delSubjects.map((s) => `
+    <div class="bin-row">
+      <div><span class="mono">${esc(s.ref)}</span> \u00b7 ${esc(s.alias)} ${orgTag(s.org)}<div class="bin-row__meta">Removed ${fmtDateTime(s.deletedAt)}</div></div>
+      <div class="bin-row__actions">
+        <button class="btn btn--xs" data-restore-s="${esc(s.id)}">Restore</button>
+        <button class="btn btn--xs btn--danger" data-purge-s="${esc(s.id)}">Purge</button>
+      </div>
+    </div>`).join('');
+
   panel.innerHTML = `
     ${delUsers.length ? `<div class="card"><div class="card__title">Removed personnel</div><div class="card__body">${userRows}</div></div>` : ''}
+    ${delSubjects.length ? `<div class="card"><div class="card__title">Removed surveillance subjects</div><div class="card__body">${subjRows}</div></div>` : ''}
     ${delDirs.length ? `<div class="card"><div class="card__title">Removed directives</div><div class="card__body">${dirRows}</div></div>` : ''}
   `;
 
@@ -270,6 +281,21 @@ function drawRecycle(panel, app) {
     logAction(app.user, 'PURGE_RECORD', `Directive ${d.ref} permanently deleted.`);
     toast('Directive purged.', 'success'); app.refresh();
   }));
+  panel.querySelectorAll('[data-restore-s]').forEach((b) => b.addEventListener('click', () => {
+    const s = getSubject(b.dataset.restoreS); if (!s) return;
+    s.deleted = false; s.deletedAt = null; s.version += 1; upsertSubject(s);
+    logAction(app.user, 'RESTORE_RECORD', `Subject ${s.ref} restored.`);
+    toast('Subject restored.', 'success'); app.refresh();
+  }));
+  panel.querySelectorAll('[data-purge-s]').forEach((b) => b.addEventListener('click', async () => {
+    const s = getSubject(b.dataset.purgeS); if (!s) return;
+    const ok = await confirmDialog({ title: 'Purge permanently', message: `Permanently delete subject ${s.ref} \u00b7 ${s.alias}?`, confirmLabel: 'Purge', danger: true });
+    if (!ok) return;
+    const db = loadDb(); db.subjects = db.subjects.filter((x) => x.id !== s.id);
+    saveDb();
+    logAction(app.user, 'PURGE_RECORD', `Subject ${s.ref} permanently deleted.`);
+    toast('Subject purged.', 'success'); app.refresh();
+  }));
 }
 
 // --- System -----------------------------------------------------------------
@@ -279,6 +305,7 @@ function drawSystem(panel, app) {
   const counts = {
     users: db.users.length,
     directives: db.directives.length,
+    subjects: (db.subjects || []).length,
     audit: db.audit.length,
   };
 
@@ -288,7 +315,7 @@ function drawSystem(panel, app) {
       <div class="card__body">
         <div class="kv"><span class="kv__k">Backend</span><span class="kv__v">${backend === 'localStorage' ? '<span class="badge badge--ok">localStorage</span> persistent on this browser' : '<span class="badge badge--warn">in-memory</span> not persisted (storage unavailable)'}</span></div>
         <div class="kv"><span class="kv__k">Seeded</span><span class="kv__v">${fmtDateTime(db.meta.seededAt)}</span></div>
-        <div class="kv"><span class="kv__k">Records</span><span class="kv__v">${counts.users} personnel \u00b7 ${counts.directives} directives \u00b7 ${counts.audit} log entries</span></div>
+        <div class="kv"><span class="kv__k">Records</span><span class="kv__v">${counts.users} personnel \u00b7 ${counts.subjects} subjects \u00b7 ${counts.directives} directives \u00b7 ${counts.audit} log entries</span></div>
       </div>
     </div>
     <div class="card">
