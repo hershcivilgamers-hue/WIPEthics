@@ -22,6 +22,7 @@ function emptyDb() {
     users: [],
     directives: [],
     subjects: [],
+    cases: [],
     audit: [],
     session: { userId: null },
   };
@@ -122,6 +123,7 @@ export function clearDb() {
 export const users = () => loadDb().users;
 export const directives = () => loadDb().directives;
 export const subjects = () => loadDb().subjects;
+export const cases = () => loadDb().cases;
 export const audit = () => loadDb().audit;
 export const meta = () => loadDb().meta;
 export const session = () => loadDb().session;
@@ -164,6 +166,19 @@ export function upsertSubject(subject) {
   else list.push(subject);
   saveDb();
   return subject;
+}
+
+export function getCase(id) {
+  return cases().find((c) => c.id === id) || null;
+}
+
+export function upsertCase(record) {
+  const list = cases();
+  const idx = list.findIndex((c) => c.id === record.id);
+  if (idx >= 0) list[idx] = record;
+  else list.push(record);
+  saveDb();
+  return record;
 }
 
 // --- ID generator -----------------------------------------------------------

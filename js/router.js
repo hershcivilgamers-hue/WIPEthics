@@ -18,6 +18,7 @@ export const NAV = [
     group: 'CAIRO',
     items: [
       { name: 'overview',     hash: '#/overview',     label: 'Command Overview' },
+      { name: 'search',       hash: '#/search',       label: 'Search' },
       { name: 'surveillance', hash: '#/surveillance', label: 'Surveillance',    feature: 'surveillance' },
       { name: 'directives',   hash: '#/directives',   label: 'Standing Orders', feature: 'directives' },
       { name: 'activity',     hash: '#/activity',     label: 'Activity Log',    feature: 'activityLog' },
@@ -32,7 +33,8 @@ export const NAV = [
   {
     group: 'Ethics Committee',
     items: [
-      { name: 'ethics', hash: '#/ethics', label: 'Personnel Files' },
+      { name: 'ethics',    hash: '#/ethics',    label: 'Personnel Files' },
+      { name: 'tribunals', hash: '#/tribunals', label: 'Case Docket', feature: 'tribunals' },
     ],
   },
   {
@@ -52,13 +54,14 @@ const GUARDS = {
 
 // Routes disabled by a CONFIG feature flag.
 function featureBlocked(name) {
-  if (name === 'directives') return !CONFIG.features.directives;
+  if (name === 'directives' || name === 'directive') return !CONFIG.features.directives;
   if (name === 'activity') return !CONFIG.features.activityLog;
   if (name === 'surveillance' || name === 'subject') return !CONFIG.features.surveillance;
+  if (name === 'tribunals' || name === 'case') return !CONFIG.features.tribunals;
   return false;
 }
 
-const TOP_LEVEL = ['overview', 'surveillance', 'directives', 'activity', 'omega-1', 'ethics', 'command', 'admin'];
+const TOP_LEVEL = ['overview', 'search', 'surveillance', 'tribunals', 'directives', 'activity', 'omega-1', 'ethics', 'command', 'admin'];
 
 // Parse the current location hash into a route { name, params }.
 export function parseHash() {
@@ -71,6 +74,12 @@ export function parseHash() {
   }
   if (parts[0] === 'subject' && parts[1]) {
     return { name: 'subject', params: { id: parts[1] } };
+  }
+  if (parts[0] === 'case' && parts[1]) {
+    return { name: 'case', params: { id: parts[1] } };
+  }
+  if (parts[0] === 'directive' && parts[1]) {
+    return { name: 'directive', params: { id: parts[1] } };
   }
   if (TOP_LEVEL.includes(parts[0])) {
     return { name: parts[0], params: {} };

@@ -10,8 +10,8 @@
 
 import { ORGS, RANKS, CLEARANCE_ORDER, CLEARANCES } from '../constants.js';
 import {
-  users, directives, subjects, getUser, upsertUser, getDirective, upsertDirective,
-  getSubject, upsertSubject, newId, loadDb, saveDb, clearDb, storageBackend,
+  users, directives, subjects, cases, getUser, upsertUser, getDirective, upsertDirective,
+  getSubject, upsertSubject, getCase, upsertCase, newId, loadDb, saveDb, clearDb, storageBackend,
 } from '../storage.js';
 import { canSetClearance, isCL5 } from '../permissions.js';
 import { ensureSeeded } from '../seed.js';
@@ -212,8 +212,9 @@ function drawRecycle(panel, app) {
   const delUsers = users().filter((u) => u.deleted);
   const delDirs = directives().filter((d) => d.deleted);
   const delSubjects = subjects().filter((s) => s.deleted);
+  const delCases = cases().filter((c) => c.deleted);
 
-  if (!delUsers.length && !delDirs.length && !delSubjects.length) {
+  if (!delUsers.length && !delDirs.length && !delSubjects.length && !delCases.length) {
     panel.innerHTML = '<div class="card"><div class="card__body empty">The recycle bin is empty.</div></div>';
     return;
   }
@@ -245,9 +246,19 @@ function drawRecycle(panel, app) {
       </div>
     </div>`).join('');
 
+  const caseRows = delCases.map((c) => `
+    <div class="bin-row">
+      <div><span class="mono">${esc(c.ref)}</span> \u00b7 ${esc(c.title)}<div class="bin-row__meta">Removed ${fmtDateTime(c.deletedAt)}</div></div>
+      <div class="bin-row__actions">
+        <button class="btn btn--xs" data-restore-c="${esc(c.id)}">Restore</button>
+        <button class="btn btn--xs btn--danger" data-purge-c="${esc(c.id)}">Purge</button>
+      </div>
+    </div>`).join('');
+
   panel.innerHTML = `
     ${delUsers.length ? `<div class="card"><div class="card__title">Removed personnel</div><div class="card__body">${userRows}</div></div>` : ''}
     ${delSubjects.length ? `<div class="card"><div class="card__title">Removed surveillance subjects</div><div class="card__body">${subjRows}</div></div>` : ''}
+    ${delCases.length ? `<div class="card"><div class="card__title">Removed tribunal cases</div><div class="card__body">${caseRows}</div></div>` : ''}
     ${delDirs.length ? `<div class="card"><div class="card__title">Removed directives</div><div class="card__body">${dirRows}</div></div>` : ''}
   `;
 
@@ -296,6 +307,21 @@ function drawRecycle(panel, app) {
     logAction(app.user, 'PURGE_RECORD', `Subject ${s.ref} permanently deleted.`);
     toast('Subject purged.', 'success'); app.refresh();
   }));
+  panel.querySelectorAll('[data-restore-c]').forEach((b) => b.addEventListener('click', () => {
+    const c = getCase(b.dataset.restoreC); if (!c) return;
+    c.deleted = false; c.deletedAt = null; c.version += 1; upsertCase(c);
+    logAction(app.user, 'RESTORE_RECORD', `Case ${c.ref} restored.`);
+    toast('Case restored.', 'success'); app.refresh();
+  }));
+  panel.querySelectorAll('[data-purge-c]').forEach((b) => b.addEventListener('click', async () => {
+    const c = getCase(b.dataset.purgeC); if (!c) return;
+    const ok = await confirmDialog({ title: 'Purge permanently', message: `Permanently delete case ${c.ref} \u00b7 ${c.title}?`, confirmLabel: 'Purge', danger: true });
+    if (!ok) return;
+    const db = loadDb(); db.cases = db.cases.filter((x) => x.id !== c.id);
+    saveDb();
+    logAction(app.user, 'PURGE_RECORD', `Case ${c.ref} permanently deleted.`);
+    toast('Case purged.', 'success'); app.refresh();
+  }));
 }
 
 // --- System -----------------------------------------------------------------
@@ -306,6 +332,7 @@ function drawSystem(panel, app) {
     users: db.users.length,
     directives: db.directives.length,
     subjects: (db.subjects || []).length,
+    cases: (db.cases || []).length,
     audit: db.audit.length,
   };
 
@@ -315,7 +342,7 @@ function drawSystem(panel, app) {
       <div class="card__body">
         <div class="kv"><span class="kv__k">Backend</span><span class="kv__v">${backend === 'localStorage' ? '<span class="badge badge--ok">localStorage</span> persistent on this browser' : '<span class="badge badge--warn">in-memory</span> not persisted (storage unavailable)'}</span></div>
         <div class="kv"><span class="kv__k">Seeded</span><span class="kv__v">${fmtDateTime(db.meta.seededAt)}</span></div>
-        <div class="kv"><span class="kv__k">Records</span><span class="kv__v">${counts.users} personnel \u00b7 ${counts.subjects} subjects \u00b7 ${counts.directives} directives \u00b7 ${counts.audit} log entries</span></div>
+        <div class="kv"><span class="kv__k">Records</span><span class="kv__v">${counts.users} personnel \u00b7 ${counts.subjects} subjects \u00b7 ${counts.cases} cases \u00b7 ${counts.directives} directives \u00b7 ${counts.audit} log entries</span></div>
       </div>
     </div>
     <div class="card">

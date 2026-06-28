@@ -16,6 +16,7 @@ import {
   canDeletePersonnel, accessLevel, isCL5,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
+import { exportPersonnel } from '../export.js';
 import {
   esc, fmtDate, fmtDateTime, clearanceBadge, statusBadge, accountBadge,
   orgTag, monogram, redacted, toast, openModal, confirmDialog,
@@ -197,7 +198,10 @@ export function renderDossier(host, app, id) {
     </div>` : '');
 
   host.innerHTML = `
-    <button class="btn btn--ghost btn--sm" id="back">\u2190 ${esc(ORGS[u.org].short)} roster</button>
+    <div class="file-actions">
+      <button class="btn btn--ghost btn--sm" id="back">\u2190 ${esc(ORGS[u.org].short)} roster</button>
+      <button class="btn btn--sm" id="export-personnel">\u2913 Export record</button>
+    </div>
 
     <header class="dossier-head">
       <div class="avatar avatar--${ORGS[u.org].tone}">${esc(monogram(u.codename))}</div>
@@ -241,6 +245,7 @@ export function renderDossier(host, app, id) {
   `;
 
   host.querySelector('#back').addEventListener('click', () => app.navigate(`#/${u.org === 'ethics-committee' ? 'ethics' : u.org}`));
+  host.querySelector('#export-personnel').addEventListener('click', () => exportPersonnel(app, u));
 
   const dispatch = {
     edit: () => openEdit(app, u),

@@ -13,13 +13,15 @@ import { runMigrations } from './migrations.js';
 import { currentUser, endSession } from './state.js';
 import { logAction } from './audit.js';
 import { NAV, parseHash, isRouteAllowed } from './router.js';
-import { getUser, getSubject } from './storage.js';
+import { getUser, getSubject, getCase } from './storage.js';
 import { esc, clearanceBadge, toast } from './ui.js';
 
 import * as loginView from './views/login.js';
 import * as overviewView from './views/overview.js';
+import * as searchView from './views/search.js';
 import * as personnelView from './views/personnel.js';
 import * as surveillanceView from './views/surveillance.js';
+import * as tribunalsView from './views/tribunals.js';
 import * as directivesView from './views/directives.js';
 import * as activityView from './views/activity.js';
 import * as adminView from './views/admin.js';
@@ -88,6 +90,10 @@ function renderShell(user, route) {
     activeName = target ? navNameForOrg(target.org) : '';
   } else if (route.name === 'subject') {
     activeName = 'surveillance';
+  } else if (route.name === 'case') {
+    activeName = 'tribunals';
+  } else if (route.name === 'directive') {
+    activeName = 'directives';
   }
 
   const banner = `CLASSIFIED \u00b7 ${esc(CONFIG.facility)} \u00b7 OPERATOR CLEARANCE ${esc(clearanceWord(user))} \u00b7 ACCESS LOGGED`;
@@ -100,6 +106,9 @@ function renderShell(user, route) {
         <div class="shell__main">
           <header class="topbar">
             <div class="topbar__title">${esc(CONFIG.systemName)} <span class="topbar__sub">${esc(CONFIG.systemSubtitle)}</span></div>
+            <div class="topbar__search-wrap">
+              <input id="topbar-search" class="topbar__search" type="search" placeholder="Search records\u2026" value="${esc(searchView.getQuery())}" autocomplete="off" aria-label="Search records" />
+            </div>
             <div class="topbar__op">
               <div class="op-chip">
                 <span class="op-chip__id mono">${esc(user.designation)}</span>
@@ -122,6 +131,17 @@ function renderShell(user, route) {
     renderApp();
   });
 
+  const topbarSearch = root.querySelector('#topbar-search');
+  if (topbarSearch) {
+    const submit = () => {
+      searchView.setQuery(topbarSearch.value);
+      if (route.name !== 'search') app.navigate('#/search');
+      else dispatch(parseHash(), user);
+    };
+    topbarSearch.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+    topbarSearch.addEventListener('search', submit);
+  }
+
   dispatch(route, user);
 }
 
@@ -136,9 +156,13 @@ function dispatch(route, user) {
 
   switch (route.name) {
     case 'overview':     overviewView.render(view, app); break;
+    case 'search':       searchView.render(view, app); break;
     case 'surveillance': surveillanceView.renderList(view, app); break;
     case 'subject':      surveillanceView.renderSubject(view, app, route.params.id); break;
+    case 'tribunals':    tribunalsView.renderList(view, app); break;
+    case 'case':         tribunalsView.renderCase(view, app, route.params.id); break;
     case 'directives':   directivesView.render(view, app); break;
+    case 'directive':    directivesView.renderDirective(view, app, route.params.id); break;
     case 'activity':     activityView.render(view, app); break;
     case 'omega-1':      personnelView.renderList(view, app, 'omega-1'); break;
     case 'ethics':       personnelView.renderList(view, app, 'ethics-committee'); break;

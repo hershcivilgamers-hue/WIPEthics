@@ -9,13 +9,13 @@
 
 import { ORGS, ORG_ORDER, CLEARANCE_ORDER, CLEARANCES, clearanceWeight } from '../constants.js';
 import { directives, getDirective, upsertDirective, newId } from '../storage.js';
-import { canManageDirectives } from '../permissions.js';
+import { canManageDirectives, canReadDirective } from '../permissions.js';
 import { logAction } from '../audit.js';
-import { esc, fmtDate, clearanceBadge, orgTag, toast, openModal, confirmDialog } from '../ui.js';
+import { exportDirective } from '../export.js';
+import { esc, fmtDate, fmtDateTime, clearanceBadge, orgTag, monogram, toast, openModal, confirmDialog } from '../ui.js';
 
 export function render(host, app) {
   const actor = app.user;
-  const viewerWeight = clearanceWeight(actor.clearance);
   const all = directives().filter((d) => !d.deleted);
 
   const groups = ORG_ORDER.map((org) => {
@@ -25,10 +25,10 @@ export function render(host, app) {
     const canManage = canManageDirectives(actor, org);
 
     const cards = list.map((d) => {
-      const visible = viewerWeight >= clearanceWeight(d.clearance);
+      const visible = canReadDirective(actor, d);
       const rescinded = d.status === 'rescinded';
       return `
-        <article class="directive ${rescinded ? 'directive--rescinded' : ''}">
+        <article class="directive ${rescinded ? 'directive--rescinded' : ''}" data-open="${esc(d.id)}" tabindex="0">
           <div class="directive__top">
             <span class="mono directive__ref">${esc(d.ref)}</span>
             ${clearanceBadge(d.clearance)}
@@ -40,8 +40,11 @@ export function render(host, app) {
             : `<p class="directive__locked">\u25a0\u25a0\u25a0 Content restricted \u2014 requires ${esc(CLEARANCES[d.clearance].label)} \u25a0\u25a0\u25a0</p>`}
           <div class="directive__foot">
             <span>Issued ${fmtDate(d.createdAt)} \u00b7 <span class="mono">${esc(d.issuedBy)}</span></span>
-            ${canManage && !rescinded ? `<button class="btn btn--xs btn--ghost" data-rescind="${esc(d.id)}">Rescind</button>` : ''}
-            ${canManage && rescinded ? `<button class="btn btn--xs btn--ghost" data-reactivate="${esc(d.id)}">Reinstate</button>` : ''}
+            <span class="directive__actions">
+              ${canManage && !rescinded ? `<button class="btn btn--xs btn--ghost" data-rescind="${esc(d.id)}">Rescind</button>` : ''}
+              ${canManage && rescinded ? `<button class="btn btn--xs btn--ghost" data-reactivate="${esc(d.id)}">Reinstate</button>` : ''}
+              <span class="row-go">Open \u2192</span>
+            </span>
           </div>
         </article>`;
     }).join('');
@@ -67,9 +70,83 @@ export function render(host, app) {
     ${groups || '<div class="card"><div class="card__body empty">No directives on record.</div></div>'}
   `;
 
-  host.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', () => openIssue(app, b.dataset.add)));
-  host.querySelectorAll('[data-rescind]').forEach((b) => b.addEventListener('click', () => setStatus(app, b.dataset.rescind, 'rescinded')));
-  host.querySelectorAll('[data-reactivate]').forEach((b) => b.addEventListener('click', () => setStatus(app, b.dataset.reactivate, 'active')));
+  const go = (id) => app.navigate(`#/directive/${id}`);
+  host.querySelectorAll('[data-open]').forEach((card) => {
+    card.addEventListener('click', () => go(card.dataset.open));
+    card.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(card.dataset.open); });
+  });
+  host.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); openIssue(app, b.dataset.add); }));
+  host.querySelectorAll('[data-rescind]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); setStatus(app, b.dataset.rescind, 'rescinded'); }));
+  host.querySelectorAll('[data-reactivate]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); setStatus(app, b.dataset.reactivate, 'active'); }));
+}
+
+// ===========================================================================
+// DIRECTIVE MEMO (detail view)
+// ===========================================================================
+export function renderDirective(host, app, id) {
+  const actor = app.user;
+  const d = getDirective(id);
+
+  if (!d || d.deleted) {
+    host.innerHTML = `
+      <div class="page-head"><div><h1 class="page-title">Directive not found</h1>
+      <div class="page-sub">This directive does not exist or has been rescinded from record.</div></div></div>
+      <button class="btn btn--ghost" id="back">\u2190 Standing Orders</button>`;
+    host.querySelector('#back').addEventListener('click', () => app.navigate('#/directives'));
+    return;
+  }
+
+  const canRead = canReadDirective(actor, d);
+  const canManage = canManageDirectives(actor, d.org);
+  const rescinded = d.status === 'rescinded';
+
+  const bodyBlock = canRead
+    ? `<div class="memo__body">${esc(d.body)}</div>`
+    : `<div class="memo__withheld">\u25a0\u25a0\u25a0 Content restricted \u2014 requires ${esc(CLEARANCES[d.clearance].label)} to read \u25a0\u25a0\u25a0</div>`;
+
+  host.innerHTML = `
+    <div class="file-actions">
+      <button class="btn btn--ghost btn--sm" id="back">\u2190 Standing Orders</button>
+      <button class="btn btn--sm" id="export-directive">\u2913 Export memorandum</button>
+    </div>
+
+    <header class="dossier-head">
+      <div class="avatar avatar--${ORGS[d.org].tone}">${esc(monogram(d.ref))}</div>
+      <div class="dossier-id">
+        <div class="dossier-codename">${esc(d.title)}</div>
+        <div class="dossier-line">
+          <span class="mono">${esc(d.ref)}</span>
+          ${orgTag(d.org)}
+          ${clearanceBadge(d.clearance)}
+          ${rescinded ? '<span class="badge badge--muted">Rescinded</span>' : '<span class="badge badge--ok">In force</span>'}
+        </div>
+      </div>
+    </header>
+
+    ${canManage ? `<div class="actionbar">
+      ${!rescinded ? '<button class="btn btn--sm btn--danger" data-act="rescind">Rescind</button>' : '<button class="btn btn--sm" data-act="reinstate">Reinstate</button>'}
+    </div>` : ''}
+
+    <section class="card memo">
+      <div class="memo__head">
+        <div class="memo__row"><span class="memo__k">From</span><span class="memo__v">${esc(ORGS[d.org].name)}</span></div>
+        <div class="memo__row"><span class="memo__k">To</span><span class="memo__v">All ${esc(ORGS[d.org].short)} personnel at clearance</span></div>
+        <div class="memo__row"><span class="memo__k">Reference</span><span class="memo__v mono">${esc(d.ref)}</span></div>
+        <div class="memo__row"><span class="memo__k">Subject</span><span class="memo__v">${esc(d.title)}</span></div>
+        <div class="memo__row"><span class="memo__k">Classification</span><span class="memo__v">${clearanceBadge(d.clearance)}</span></div>
+        <div class="memo__row"><span class="memo__k">Issued</span><span class="memo__v">${fmtDate(d.createdAt)} \u00b7 <span class="mono">${esc(d.issuedBy)}</span></span></div>
+      </div>
+      <div class="memo__rule"></div>
+      ${bodyBlock}
+    </section>
+  `;
+
+  host.querySelector('#back').addEventListener('click', () => app.navigate('#/directives'));
+  host.querySelector('#export-directive').addEventListener('click', () => exportDirective(app, d));
+  const rescindBtn = host.querySelector('[data-act="rescind"]');
+  if (rescindBtn) rescindBtn.addEventListener('click', () => setStatus(app, d.id, 'rescinded'));
+  const reinstateBtn = host.querySelector('[data-act="reinstate"]');
+  if (reinstateBtn) reinstateBtn.addEventListener('click', () => setStatus(app, d.id, 'active'));
 }
 
 async function setStatus(app, id, status) {

@@ -391,3 +391,20 @@
 
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* --- Organisation-wide search results --- */
+.toolbar__search--wide { flex: 1; }
+.search-group { margin-bottom: var(--s5); }
+.search-group__head { display: flex; align-items: center; gap: var(--s2); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-3); margin-bottom: var(--s2); padding-bottom: var(--s2); border-bottom: 1px solid var(--line); }
+.search-group__count { background: var(--surface-3); color: var(--text-2); border-radius: 999px; padding: 0 8px; font-size: 10.5px; font-weight: 600; }
+.search-group__note { font-size: 11.5px; color: var(--text-3); margin-top: var(--s2); font-style: italic; }
+.search-empty { color: var(--text-3); text-align: center; padding: var(--s7) var(--s4); font-size: 13.5px; }
+.result { display: flex; align-items: center; gap: var(--s3); padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 6px; text-decoration: none; color: var(--text); transition: border-color .12s, background .12s; }
+.result:hover { border-color: var(--line-strong); background: var(--surface-2); }
+.result__type { font-size: 9.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-3); width: 76px; flex-shrink: 0; }
+.result__ref { font-size: 12.5px; width: 112px; flex-shrink: 0; color: var(--text-2); }
+.result__name { flex: 1; font-size: 13.5px; }
+.result__meta { display: flex; align-items: center; gap: var(--s2); flex-shrink: 0; }
+.result .row-go { color: var(--text-3); font-size: 12px; flex-shrink: 0; }
+.result:hover .row-go { color: var(--amber); }
+.search-excluded { margin-top: var(--s4); padding: var(--s3) var(--s4); border: 1px dashed var(--line-strong); border-radius: var(--radius); font-size: 11.5px; color: var(--text-3); letter-spacing: .02em; }

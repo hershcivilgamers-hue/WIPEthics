@@ -18,6 +18,7 @@ import {
   canViewSubject, canManageSubject, canClassifySubjectAt, canManageOrg,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
+import { exportSubject } from '../export.js';
 import {
   esc, fmtDate, fmtDateTime, relTime, clearanceBadge, orgTag,
   monogram, toast, openModal, confirmDialog,
@@ -219,7 +220,10 @@ export function renderSubject(host, app, id) {
     </li>`).join('') : '<div class="empty">No surveillance entries recorded.</div>';
 
   host.innerHTML = `
-    <button class="btn btn--ghost btn--sm" id="back">\u2190 Registry</button>
+    <div class="file-actions">
+      <button class="btn btn--ghost btn--sm" id="back">\u2190 Registry</button>
+      <button class="btn btn--sm" id="export-subject">\u2913 Export record</button>
+    </div>
 
     <header class="dossier-head">
       <div class="avatar avatar--${SUBJECT_CLASS[s.kind]?.tone === 'bad' ? 'omega' : 'ethics'}">${esc(monogram(s.alias))}</div>
@@ -276,6 +280,7 @@ export function renderSubject(host, app, id) {
   `;
 
   host.querySelector('#back').addEventListener('click', () => app.navigate('#/surveillance'));
+  host.querySelector('#export-subject').addEventListener('click', () => exportSubject(app, s));
 
   const dispatch = {
     log: () => openLog(app, s),

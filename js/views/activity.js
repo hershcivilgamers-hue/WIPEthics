@@ -20,6 +20,10 @@ const TONE = {
   CREATE_SUBJECT: 'ok', EDIT_SUBJECT: 'info', ADD_SURVEILLANCE_LOG: 'info',
   SET_SUBJECT_STATUS: 'info', RECLASSIFY_SUBJECT: 'warn', CLOSE_SUBJECT: 'muted',
   REMOVE_SUBJECT: 'bad', SUBJECT_ACCESS_DENIED: 'bad',
+  OPEN_CASE: 'ok', EDIT_CASE: 'info', ADD_CASE_ENTRY: 'info', ISSUE_SUMMONS: 'warn',
+  SET_PANEL: 'info', CITE_SUBJECT: 'info', SET_CASE_STATUS: 'info', RECLASSIFY_CASE: 'warn',
+  ENTER_RULING: 'ok', REMOVE_CASE: 'bad', CASE_ACCESS_DENIED: 'bad',
+  EXPORT_CASE: 'muted', EXPORT_SUBJECT: 'muted', EXPORT_PERSONNEL: 'muted', EXPORT_DIRECTIVE: 'muted',
 };
 
 function label(action) {

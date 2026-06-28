@@ -73,6 +73,15 @@ export function canManageDirectives(actor, org) {
   return canManageOrg(actor, org);
 }
 
+// A directive carries a minimum clearance to read its body. The directive's
+// existence (reference, title, org) is open on the board; the body is gated.
+// This is the single source of truth for that gate, used by the board, the
+// memo detail view and the export.
+export function canReadDirective(actor, directive) {
+  if (!actor || !directive) return false;
+  return w(actor) >= clearanceWeight(directive.clearance);
+}
+
 export function canAccessAdmin(actor) {
   return isCL5(actor);
 }
@@ -126,6 +135,27 @@ export function canManageSubject(actor, subject) {
 
 // You cannot classify a subject at a sensitivity higher than your own clearance
 // — you can't mark something more secret than you are cleared to see.
-export function canClassifySubjectAt(actor, clearance) {
+export function canClassifyAt(actor, clearance) {
   return clearanceWeight(clearance) <= w(actor);
+}
+export const canClassifySubjectAt = canClassifyAt;
+
+// --- Ethics tribunals -------------------------------------------------------
+// The Committee convenes and runs proceedings. Managing a case (create, edit,
+// docket entries, summons, panel, status) follows the standard management rule
+// applied to the Ethics Committee: CL4·Senior with a stake, or Command.
+export function canManageTribunal(actor) {
+  return canManageOrg(actor, 'ethics-committee');
+}
+
+// Entering a binding ruling is a stricter, CL5-only act (the Chairman or
+// Command) — the verdict carries more weight than running the proceeding.
+export function canRuleTribunal(actor) {
+  return isCL5(actor);
+}
+
+// A case carries a sensitivity, gated as a hard wall like a surveillance record.
+export function canViewCase(actor, record) {
+  if (!actor || !record) return false;
+  return w(actor) >= clearanceWeight(record.clearance);
 }

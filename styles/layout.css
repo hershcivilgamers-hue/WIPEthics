@@ -227,3 +227,19 @@
   .auth { grid-template-columns: minmax(0, 440px); }
   .auth__demo { order: 2; }
 }
+
+/* --- Global search box in the topbar --- */
+.topbar__search-wrap { flex: 1; display: flex; justify-content: center; padding: 0 var(--s4); }
+.topbar__search {
+  width: 100%;
+  max-width: 440px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 7px 12px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+}
+.topbar__search:focus { outline: none; border-color: var(--amber); }
+.topbar__search::placeholder { color: var(--text-3); }

@@ -109,6 +109,34 @@ export const SUBJECT_STATUS = {
 };
 export const SUBJECT_STATUS_ORDER = ['active', 'located', 'detained', 'contained', 'cold', 'closed'];
 
+// --- Ethics tribunals: proceeding type --------------------------------------
+export const CASE_KIND = {
+  review:   { code: 'review',   label: 'Containment Review', short: 'Review',   tone: 'info' },
+  tribunal: { code: 'tribunal', label: 'Full Tribunal',      short: 'Tribunal', tone: 'bad' },
+  inquiry:  { code: 'inquiry',  label: 'Inquiry',            short: 'Inquiry',  tone: 'warn' },
+};
+export const CASE_KIND_ORDER = ['review', 'tribunal', 'inquiry'];
+
+// --- Ethics tribunals: case status ------------------------------------------
+export const CASE_STATUS = {
+  open:         { code: 'open',         label: 'Open',          tone: 'info' },
+  'in-session': { code: 'in-session',   label: 'In Session',    tone: 'warn' },
+  deliberation: { code: 'deliberation', label: 'Deliberation',  tone: 'warn' },
+  ruled:        { code: 'ruled',        label: 'Ruled',         tone: 'ok' },
+  dismissed:    { code: 'dismissed',    label: 'Dismissed',     tone: 'muted' },
+  closed:       { code: 'closed',       label: 'Closed',        tone: 'muted' },
+};
+export const CASE_STATUS_ORDER = ['open', 'in-session', 'deliberation', 'ruled', 'dismissed', 'closed'];
+
+// --- Ethics tribunals: ruling finding ---------------------------------------
+export const RULING_FINDING = {
+  upheld:     { code: 'upheld',     label: 'Complaint Upheld',   tone: 'bad' },
+  dismissed:  { code: 'dismissed',  label: 'Dismissed',          tone: 'ok' },
+  referred:   { code: 'referred',   label: 'Referred Onward',    tone: 'warn' },
+  'no-action': { code: 'no-action', label: 'No Further Action',  tone: 'muted' },
+};
+export const RULING_FINDING_ORDER = ['upheld', 'dismissed', 'referred', 'no-action'];
+
 // --- Helpers ----------------------------------------------------------------
 export const clearanceWeight = (code) => CLEARANCES[code]?.weight ?? 0;
 export const orgName = (code) => ORGS[code]?.name ?? code;

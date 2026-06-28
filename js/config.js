@@ -27,6 +27,7 @@ export const CONFIG = {
   features: {
     directives: true,
     surveillance: true,
+    tribunals: true,
     activityLog: true,
     recycleBin: true,
     selfRegistration: true,

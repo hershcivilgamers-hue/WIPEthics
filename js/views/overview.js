@@ -8,8 +8,8 @@
 
 import { CONFIG } from '../config.js';
 import { ORGS, ORG_ORDER, STRIKE_LIMIT } from '../constants.js';
-import { users, directives, subjects } from '../storage.js';
-import { canApproveRegistrations, canManageOrg, canViewSubject, canManageSubject } from '../permissions.js';
+import { users, directives, subjects, cases } from '../storage.js';
+import { canApproveRegistrations, canManageOrg, canViewSubject, canManageSubject, canViewCase, canRuleTribunal } from '../permissions.js';
 import { esc, clearanceBadge, orgTag } from '../ui.js';
 
 export function render(host, app) {
@@ -29,6 +29,13 @@ export function render(host, app) {
   const liveStatuses = ['active', 'located', 'detained'];
   const activeTargets = visibleSubjects.filter((s) => s.kind === 'target' && liveStatuses.includes(s.status));
   const criticalWatch = visibleSubjects.filter((s) => s.threat === 'critical' && liveStatuses.includes(s.status) && canManageSubject(actor, s));
+
+  // Tribunal signals (only cases this operator is cleared to see).
+  const tribunalsOn = CONFIG.features.tribunals;
+  const visibleCases = tribunalsOn ? cases().filter((c) => !c.deleted && canViewCase(actor, c)) : [];
+  const openStatuses = ['open', 'in-session', 'deliberation'];
+  const openCases = visibleCases.filter((c) => openStatuses.includes(c.status));
+  const awaitingRuling = visibleCases.filter((c) => c.status === 'deliberation' && !c.ruling);
 
   // --- Requires You ---
   const queue = [];
@@ -60,6 +67,14 @@ export function render(host, app) {
       hash: `#/subject/${s.id}`,
     });
   });
+  if (canRuleTribunal(actor) && awaitingRuling.length) {
+    queue.push({
+      tone: 'warn',
+      title: `${awaitingRuling.length} case${awaitingRuling.length > 1 ? 's are' : ' is'} in deliberation awaiting ruling`,
+      sub: 'Enter the Committee ruling on the case docket.',
+      hash: '#/tribunals',
+    });
+  }
 
   const queueHtml = queue.length ? queue.map((q) => `
     <button class="req" data-nav="${esc(q.hash)}">
@@ -100,6 +115,7 @@ export function render(host, app) {
     <div class="metric-row">
       ${metric(roster.length, 'Personnel on roster')}
       ${surveillanceOn ? metric(activeTargets.length, 'Active targets', activeTargets.length ? 'bad' : '') : ''}
+      ${tribunalsOn ? metric(openCases.length, 'Open cases', openCases.length ? 'warn' : '') : ''}
       ${metric(activeDirectives.length, 'Active directives')}
       ${metric(onLeave.length, 'On leave', onLeave.length ? 'warn' : '')}
       ${metric(flagged.length, 'At strike limit', flagged.length ? 'bad' : '')}

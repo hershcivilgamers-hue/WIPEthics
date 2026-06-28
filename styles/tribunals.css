@@ -1,0 +1,104 @@
+/* ===========================================================================
+   tribunals.css — Ethics Committee case docket and case-file styling.
+
+   Reuses cards, tables, badges, the dossier header, the timeline and the
+   access-denied panel. This file holds only what is specific to tribunals:
+   case-type tags, cross-reference links, summons, the ruling block, and the
+   checkbox lists used to seat a panel or cite subjects.
+   =========================================================================== */
+
+/* --- Case type tag --- */
+.case-kind {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: var(--radius);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  border: 1px solid var(--line-strong);
+  color: var(--text-2);
+}
+.case-kind--info { color: #9cc0ec; border-color: rgba(95, 143, 208, .5); background: rgba(95, 143, 208, .1); }
+.case-kind--bad  { color: #f0a59b; border-color: rgba(207, 68, 54, .55); background: rgba(207, 68, 54, .12); }
+.case-kind--warn { color: #f0c978; border-color: rgba(217, 164, 65, .5); background: rgba(217, 164, 65, .1); }
+.case-kind--muted { color: var(--text-2); background: var(--surface-3); }
+
+/* --- Cross-reference links (to dossiers / subjects) --- */
+.ref-link {
+  color: var(--text);
+  border-bottom: 1px dotted var(--line-strong);
+  transition: color .12s, border-color .12s;
+}
+.ref-link:hover { color: var(--amber); border-bottom-color: var(--amber); }
+
+.link-list { flex-direction: column; align-items: stretch; gap: var(--s1); }
+.link-row { font-size: 13px; padding: 2px 0; display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.link-row--sealed {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: .08em;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+.empty-inline { color: var(--text-3); font-size: 12.5px; }
+
+/* Stacked key/value (label above a multi-line value). */
+.kv--stack { grid-template-columns: 1fr; gap: var(--s1); }
+
+/* --- Summons --- */
+.summons {
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--line);
+  border-left: 2px solid rgba(217, 164, 65, .4);
+  padding-left: var(--s3);
+}
+.summons:last-child { border-bottom: none; }
+.summons__who { font-weight: 600; font-size: 13.5px; }
+.summons__reason { font-size: 13px; color: var(--text-2); margin-top: 2px; }
+.summons__meta { font-size: 11.5px; color: var(--text-3); margin-top: 3px; }
+
+/* --- Ruling block --- */
+.card--ruling { border-color: rgba(79, 157, 107, .4); }
+.card--ruling > .card__title { background: rgba(79, 157, 107, .1); }
+.ruling__label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--text-3);
+  font-weight: 600;
+  margin-top: var(--s2);
+}
+.ruling__text { font-size: 13.5px; line-height: 1.55; margin: 2px 0 var(--s2); white-space: pre-wrap; }
+.ruling__meta { font-size: 11.5px; color: var(--text-3); margin-top: var(--s2); }
+
+/* --- Checkbox lists (seat panel / cite subjects) --- */
+.check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--s2);
+  background: var(--surface-2);
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 13.5px;
+}
+.check:hover { background: var(--surface-3); }
+.check input { width: 15px; height: 15px; accent-color: var(--amber); flex-shrink: 0; }
+
+/* --- Proceedings timeline dot types (extend the shared timeline) --- */
+.tl__dot--filing { background: var(--info); }
+.tl__dot--testimony { background: var(--ok); }
+.tl__dot--motion { background: var(--amber); }
+.tl__dot--ruling { background: var(--bad); }

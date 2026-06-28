@@ -18,6 +18,7 @@ import { logAction } from './audit.js';
 export const DEMO_LOGINS = [
   { username: 'director', password: 'Thaumiel-5',   note: 'CL5 \u00b7 Command \u2014 full access' },
   { username: 'vanguard', password: 'LeftHand-4',   note: 'CL4\u00b7S \u00b7 Omega-1 \u2014 task-force command' },
+  { username: 'warrant',  password: 'Warrant-4',    note: 'CL4\u00b7J \u00b7 Omega-1 \u2014 junior command (Lieutenant)' },
   { username: 'advocate', password: 'Conscience-4', note: 'CL4\u00b7J \u00b7 Ethics \u2014 junior member' },
   { username: 'bailiff',  password: 'Operative-3',  note: 'CL3 \u00b7 Omega-1 \u2014 operative (sees redaction)' },
 ];
@@ -85,6 +86,16 @@ const SEED_SPECS = [
       event(600, 'transfer', 'Transferred into MTF Omega-1 from Site security.'),
       event(300, 'promotion', 'Promoted to Commander; assumed task-force lead.'),
       event(12, 'directive', 'Re-issued O1-SO-001 — Standing Orders, Field Conduct.'),
+    ],
+  },
+  {
+    designation: 'O1-3', codename: 'Warrant', org: 'omega-1', rank: 'Lieutenant',
+    clearance: 'CL4-J', username: 'warrant', password: 'Warrant-4',
+    awards: [{ id: 'a7', title: 'Field Conduct Commendation', date: iso(70), note: 'Exemplary conduct during containment escort.' }],
+    events: [
+      event(260, 'transfer', 'Joined Omega-1 as Operative.'),
+      event(70, 'promotion', 'Promoted to Lieutenant; junior command authority assigned.'),
+      event(5, 'deployment', 'Led containment escort under task-force command.'),
     ],
   },
   {
@@ -257,6 +268,89 @@ export function buildSeedSubjects() {
   });
 }
 
+// --- Ethics tribunal cases --------------------------------------------------
+// Cases cross-reference personnel (respondent, panel) and surveillance subjects
+// by their stable references, resolved to ids at build time.
+const CASE_SPECS = [
+  {
+    ref: 'EC-CASE-26-002', title: 'Operative Disciplinary Tribunal \u2014 Probate',
+    kind: 'tribunal', clearance: 'CL3', status: 'ruled', daysAgo: 30,
+    respondent: 'O1-9', panel: ['EC-1', 'EC-3'], subjects: [],
+    summary: 'Referral from Omega-1 command following a third active strike against the named operative. The Committee convened to determine whether the pattern warranted escalation.',
+    summons: [{ who: 'O1-9', daysAgo: 28, reason: 'Appear before the Committee to answer for repeated conduct infractions.' }],
+    entries: [
+      { daysAgo: 30, type: 'filing',    by: 'EC-1', text: 'Case opened on referral from Omega-1 command.' },
+      { daysAgo: 28, type: 'testimony', by: 'EC-3', text: 'Respondent testimony heard; mitigating circumstances noted for the record.' },
+      { daysAgo: 26, type: 'ruling',    by: 'EC-1', text: 'Panel ruling entered and served.' },
+    ],
+    ruling: { daysAgo: 26, by: 'EC-1', finding: 'upheld', rationale: 'A pattern of infractions was established on the record and not adequately rebutted.', measures: 'Final written warning; probation extended ninety days; reassignment review deferred pending conduct.' },
+  },
+  {
+    ref: 'EC-CASE-26-009', title: 'Witness Conduct Inquiry \u2014 Ledger',
+    kind: 'inquiry', clearance: 'CL4-J', status: 'deliberation', daysAgo: 16,
+    respondent: null, respondentName: '[EXTERNAL WITNESS]', panel: ['EC-1', 'EC-5'], subjects: ['POI-2231'],
+    summary: 'Inquiry into discrepancies between a witness account and the incident record, referred from an open surveillance watch. The Committee is in deliberation.',
+    summons: [],
+    entries: [
+      { daysAgo: 16, type: 'filing', by: 'EC-1', text: 'Inquiry opened into witness account discrepancies referred from surveillance.' },
+      { daysAgo: 6,  type: 'motion', by: 'EC-5', text: 'Motion to admit the surveillance log as a supporting record; granted.' },
+    ],
+    ruling: null,
+  },
+  {
+    ref: 'EC-CASE-26-014', title: 'Containment Attrition Review \u2014 Sector 12',
+    kind: 'review', clearance: 'CL4-J', status: 'in-session', daysAgo: 8,
+    respondent: 'O1-1', panel: ['EC-1', 'EC-3'], subjects: [],
+    summary: 'Review under EC-DIR-014 following Class-D attrition above threshold during a Sector 12 containment operation. Commanding officer summoned to provide account.',
+    summons: [{ who: 'O1-1', daysAgo: 7, reason: 'Provide command account of the Sector 12 containment operation.' }],
+    entries: [
+      { daysAgo: 8, type: 'filing',    by: 'EC-1', text: 'Review opened under EC-DIR-014 following attrition above threshold.' },
+      { daysAgo: 3, type: 'testimony', by: 'EC-3', text: 'Commanding officer account recorded; further evidence requested.' },
+    ],
+    ruling: null,
+  },
+];
+
+// Build tribunal case records, resolving references against the supplied
+// personnel and subjects. Exported so a migration can backfill old installs.
+export function buildSeedCases(userList, subjectList) {
+  const userByDesig = (d) => userList.find((u) => u.designation === d);
+  const subByRef = (r) => subjectList.find((s) => s.ref === r);
+
+  return CASE_SPECS.map((c) => {
+    const created = iso(c.daysAgo);
+    const respondent = c.respondent ? userByDesig(c.respondent) : null;
+    return {
+      id: newId('case'),
+      ref: c.ref,
+      title: c.title,
+      kind: c.kind,
+      clearance: c.clearance,
+      status: c.status,
+      summary: c.summary,
+      respondentId: respondent ? respondent.id : null,
+      respondentName: respondent ? null : (c.respondentName || '[UNNAMED]'),
+      panelIds: (c.panel || []).map(userByDesig).filter(Boolean).map((u) => u.id),
+      linkedSubjectIds: (c.subjects || []).map(subByRef).filter(Boolean).map((s) => s.id),
+      summons: (c.summons || []).map((m) => {
+        const t = userByDesig(m.who);
+        return { id: newId('sum'), ts: iso(m.daysAgo), by: 'EC-1', targetId: t ? t.id : null, targetName: t ? null : m.who, reason: m.reason };
+      }),
+      entries: (c.entries || []).map((e) => ({ id: newId('ent'), ts: iso(e.daysAgo), by: e.by, type: e.type, text: e.text })),
+      ruling: c.ruling ? {
+        ts: iso(c.ruling.daysAgo), by: c.ruling.by, finding: c.ruling.finding,
+        rationale: c.ruling.rationale, measures: c.ruling.measures,
+      } : null,
+      createdBy: 'EC-1',
+      createdAt: created,
+      updatedAt: created,
+      version: 1,
+      deleted: false,
+      deletedAt: null,
+    };
+  });
+}
+
 // Build the full dataset and persist it. No-op if already seeded.
 export async function ensureSeeded() {
   const db = loadDb();
@@ -287,10 +381,12 @@ export async function ensureSeeded() {
   });
 
   db.subjects = buildSeedSubjects();
+  db.cases = buildSeedCases(db.users, db.subjects);
 
   db.meta.seededAt = new Date().toISOString();
   db.meta.surveillanceSeededAt = new Date().toISOString();
+  db.meta.tribunalsSeededAt = new Date().toISOString();
   saveDb();
-  logAction(null, 'SYSTEM_INIT', 'CAIRO dataset initialised with seed personnel, directives and surveillance subjects.');
+  logAction(null, 'SYSTEM_INIT', 'CAIRO dataset initialised with seed personnel, directives, surveillance subjects and tribunal cases.');
   return db;
 }
