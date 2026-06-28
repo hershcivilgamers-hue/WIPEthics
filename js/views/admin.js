@@ -8,12 +8,13 @@
 //   • System        — backend status, dataset export, full reset.
 // =============================================================================
 
-import { ORGS, RANKS, CLEARANCE_ORDER, CLEARANCES } from '../constants.js';
+import { ORGS, RANKS, CLEARANCE_ORDER, CLEARANCES, rankUp } from '../constants.js';
 import {
   users, directives, subjects, cases, getUser, upsertUser, getDirective, upsertDirective,
-  getSubject, upsertSubject, getCase, upsertCase, newId, loadDb, saveDb, clearDb, storageBackend,
+  getSubject, upsertSubject, getCase, upsertCase, promoReqs, getPromoReq, upsertPromoReq,
+  deletePromoReq, newId, loadDb, saveDb, clearDb, storageBackend,
 } from '../storage.js';
-import { canSetClearance, isCL5 } from '../permissions.js';
+import { canSetClearance, canManagePromoReqs, isCL5 } from '../permissions.js';
 import { ensureSeeded } from '../seed.js';
 import { logAction } from '../audit.js';
 import {
@@ -33,6 +34,7 @@ export function render(host, app) {
   const tabs = [
     ['registrations', 'Registrations'],
     ['clearance', 'Clearance'],
+    ['promotions', 'Promotion Reqs'],
     ['recycle', 'Recycle Bin'],
     ['system', 'System'],
   ];
@@ -66,6 +68,7 @@ export function render(host, app) {
 function drawPanel(panel, app) {
   if (activeTab === 'registrations') return drawRegistrations(panel, app);
   if (activeTab === 'clearance') return drawClearance(panel, app);
+  if (activeTab === 'promotions') return drawPromoReqs(panel, app);
   if (activeTab === 'recycle') return drawRecycle(panel, app);
   return drawSystem(panel, app);
 }
@@ -203,6 +206,118 @@ function drawClearance(panel, app) {
     upsertUser(target);
     logAction(app.user, 'SET_CLEARANCE', `${target.designation} set to ${next}.`);
     toast(`${target.designation} \u2192 ${CLEARANCES[next].label}.`, 'success');
+    app.refresh();
+  }));
+}
+
+// --- Promotion requirements -------------------------------------------------
+// CL5 edits the requirement set for each rank transition. Sets are keyed by
+// (org, fromRank); editing here changes what every operator's dossier shows for
+// that transition. Per-file progress lives on each operator, not here.
+function transitionsFor(org) {
+  const ladder = RANKS[org] || [];
+  // Every rank except the most senior (index 0) has a promotion target.
+  const out = [];
+  for (let i = ladder.length - 1; i >= 1; i--) {
+    out.push({ fromRank: ladder[i], toRank: ladder[i - 1] });
+  }
+  return out;
+}
+
+function findSet(org, fromRank) {
+  return promoReqs().find((r) => r.org === org && r.fromRank === fromRank) || null;
+}
+
+function drawPromoReqs(panel, app) {
+  if (!canManagePromoReqs(app.user)) {
+    panel.innerHTML = '<div class="card"><div class="card__body empty">Promotion requirements are managed at CL5.</div></div>';
+    return;
+  }
+
+  const orgsWithLadders = ['omega-1', 'ethics-committee', 'command'].filter((o) => (RANKS[o] || []).length >= 2);
+
+  panel.innerHTML = `
+    <div class="card">
+      <div class="card__body">
+        <p class="muted" style="margin:0">Define the requirement checklist for each rank transition. An operator's
+        file shows the set for their next rank, and tracks which items are checked. Changing a set here updates every
+        operator on that transition; their individual progress is preserved by item.</p>
+      </div>
+    </div>
+    ${orgsWithLadders.map((org) => `
+      <div class="card">
+        <div class="card__title">${orgTag(org)} ${esc(ORGS[org].name)}</div>
+        <div class="card__body">
+          ${transitionsFor(org).map((t) => {
+            const set = findSet(org, t.fromRank);
+            const items = set?.items || [];
+            const rows = items.map((it) => `
+              <div class="preq-item">
+                <input class="preq-item__text" value="${esc(it.text)}" data-edit="${esc((set?.id || '') + '|' + it.id)}" aria-label="Requirement text" />
+                <button class="btn btn--xs btn--ghost" data-del="${esc((set?.id || '') + '|' + it.id)}" title="Remove">\u2715</button>
+              </div>`).join('');
+            return `
+              <div class="preq-transition">
+                <div class="preq-transition__head"><span class="mono">${esc(t.fromRank)}</span> <span class="promo-arrow">\u2192</span> <span class="mono">${esc(t.toRank)}</span></div>
+                <div class="preq-items">${rows || '<div class="muted preq-empty">No requirements yet.</div>'}</div>
+                <div class="preq-add">
+                  <input class="preq-add__input" placeholder="Add a requirement\u2026" data-add-input="${esc(org + '|' + t.fromRank + '|' + t.toRank)}" />
+                  <button class="btn btn--xs" data-add="${esc(org + '|' + t.fromRank + '|' + t.toRank)}">Add</button>
+                </div>
+              </div>`;
+          }).join('')}
+        </div>
+      </div>`).join('')}
+  `;
+
+  // Edit an item's text (saved on change / blur).
+  panel.querySelectorAll('[data-edit]').forEach((inp) => inp.addEventListener('change', () => {
+    const [setId, itemId] = inp.dataset.edit.split('|');
+    const set = getPromoReq(setId);
+    if (!set) return;
+    const item = (set.items || []).find((x) => x.id === itemId);
+    if (!item) return;
+    const text = inp.value.trim();
+    if (!text) return; // empty edits are ignored; use Remove to delete
+    item.text = text;
+    set.updatedAt = new Date().toISOString();
+    set.version = (set.version || 1) + 1;
+    upsertPromoReq(set);
+    logAction(app.user, 'SET_PROMO_REQ', `Edited a ${ORGS[set.org].short} ${set.fromRank} \u2192 ${set.toRank} requirement.`);
+    toast('Requirement updated.', 'success');
+  }));
+
+  // Remove an item.
+  panel.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
+    const [setId, itemId] = b.dataset.del.split('|');
+    const set = getPromoReq(setId);
+    if (!set) return;
+    const ok = await confirmDialog({ title: 'Remove requirement?', message: 'This removes the item from the transition for all operators.', confirmLabel: 'Remove', danger: true });
+    if (!ok) return;
+    set.items = (set.items || []).filter((x) => x.id !== itemId);
+    set.updatedAt = new Date().toISOString();
+    set.version = (set.version || 1) + 1;
+    if (set.items.length === 0) deletePromoReq(set.id);
+    else upsertPromoReq(set);
+    logAction(app.user, 'REMOVE_PROMO_REQ', `Removed a ${ORGS[set.org].short} ${set.fromRank} \u2192 ${set.toRank} requirement.`);
+    app.refresh();
+  }));
+
+  // Add an item (creating the set if it doesn't exist yet).
+  panel.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', () => {
+    const [org, fromRank, toRank] = b.dataset.add.split('|');
+    const input = panel.querySelector(`[data-add-input="${b.dataset.add}"]`);
+    const text = (input?.value || '').trim();
+    if (!text) { toast('Enter the requirement text first.', 'warn'); return; }
+    let set = findSet(org, fromRank);
+    if (!set) {
+      set = { id: newId('preq'), org, fromRank, toRank, items: [], createdBy: app.user.designation, updatedAt: new Date().toISOString(), version: 1 };
+    }
+    set.items = [...(set.items || []), { id: newId('rq'), text }];
+    set.updatedAt = new Date().toISOString();
+    set.version = (set.version || 1) + 1;
+    upsertPromoReq(set);
+    logAction(app.user, 'SET_PROMO_REQ', `Added a ${ORGS[org].short} ${fromRank} \u2192 ${toRank} requirement.`);
     app.refresh();
   }));
 }

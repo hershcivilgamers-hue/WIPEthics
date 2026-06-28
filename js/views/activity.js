@@ -14,6 +14,8 @@ const TONE = {
   LOGIN: 'info', LOGOUT: 'muted', REGISTRATION: 'warn', SYSTEM_INIT: 'muted', MIGRATION: 'muted',
   CREATE_RECORD: 'ok', EDIT_RECORD: 'info', SET_CLEARANCE: 'warn',
   ADD_STRIKE: 'bad', ADD_NOTE: 'info', SET_LEAVE: 'warn', END_LEAVE: 'ok',
+  PROMOTE: 'ok', DEMOTE: 'bad', PROMO_CHECK: 'muted',
+  SET_PROMO_REQ: 'warn', REMOVE_PROMO_REQ: 'muted',
   REMOVE_RECORD: 'bad', RESTORE_RECORD: 'ok', PURGE_RECORD: 'bad',
   APPROVE_REGISTRATION: 'ok', REJECT_REGISTRATION: 'muted',
   ISSUE_DIRECTIVE: 'info', RESET_SYSTEM: 'bad',

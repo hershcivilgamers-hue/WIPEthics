@@ -56,6 +56,7 @@ async function buildUser(spec) {
     requestedOrg: spec.requestedOrg ?? null,
     awards: spec.awards ?? [],
     strikes: spec.strikes ?? [],
+    promoChecks: spec.promoChecks ?? [],
     leave: spec.leave ?? null,
     notes: spec.notes ?? [],
     events: spec.events ?? [],
@@ -93,7 +94,7 @@ const SEED_SPECS = [
     clearance: 'CL4-J', username: 'warrant', password: 'Warrant-4',
     awards: [{ id: 'a7', title: 'Field Conduct Commendation', date: iso(70), note: 'Exemplary conduct during containment escort.' }],
     events: [
-      event(260, 'transfer', 'Joined Omega-1 as Operative.'),
+      event(260, 'transfer', 'Joined Omega-1 as Specialist.'),
       event(70, 'promotion', 'Promoted to Lieutenant; junior command authority assigned.'),
       event(5, 'deployment', 'Led containment escort under task-force command.'),
     ],
@@ -103,13 +104,13 @@ const SEED_SPECS = [
     clearance: 'CL4-J', username: 'tariff', status: 'loa',
     leave: { type: 'LoA', from: iso(9), to: iso(-12), reason: 'Recovery — field injury sustained during containment sweep.' },
     events: [
-      event(380, 'transfer', 'Joined Omega-1 as Operative.'),
+      event(380, 'transfer', 'Joined Omega-1 as Specialist.'),
       event(140, 'promotion', 'Promoted to Lieutenant.'),
       event(9, 'leave', 'Placed on Leave of Absence pending recovery.'),
     ],
   },
   {
-    designation: 'O1-7', codename: 'Bailiff', org: 'omega-1', rank: 'Operative',
+    designation: 'O1-7', codename: 'Bailiff', org: 'omega-1', rank: 'Sergeant',
     clearance: 'CL3', username: 'bailiff', password: 'Operative-3',
     events: [
       event(210, 'transfer', 'Inducted into Omega-1 following recruitment review.'),
@@ -117,7 +118,7 @@ const SEED_SPECS = [
     ],
   },
   {
-    designation: 'O1-9', codename: 'Probate', org: 'omega-1', rank: 'Recruit',
+    designation: 'O1-9', codename: 'Probate', org: 'omega-1', rank: 'Private',
     clearance: 'CL3', username: 'probate', status: 'active',
     strikes: [
       { id: 's1', reason: 'Late to deployment muster.', date: iso(40), by: 'O1-1' },
@@ -140,8 +141,8 @@ const SEED_SPECS = [
     ],
   },
   {
-    designation: 'EC-3', codename: 'Counsel', org: 'ethics-committee', rank: 'Senior Member',
-    clearance: 'CL4-S', username: 'counsel',
+    designation: 'EC-3', codename: 'Counsel', org: 'ethics-committee', rank: 'Member',
+    clearance: 'CL5', username: 'counsel',
     events: [
       event(720, 'appointment', 'Seated as Member.'),
       event(180, 'promotion', 'Confirmed as Senior Member.'),
@@ -352,6 +353,33 @@ export function buildSeedCases(userList, subjectList) {
 }
 
 // Build the full dataset and persist it. No-op if already seeded.
+// Default Omega-1 promotion-requirement sets for the lower ladder, where most
+// personnel sit. CL5 can edit, add or remove these in Administration.
+function reqItems(...texts) {
+  return texts.map((t) => ({ id: newId('rq'), text: t }));
+}
+export function buildSeedPromoReqs(by) {
+  const now = new Date().toISOString();
+  const T = [
+    ['Private', 'Specialist', ['Complete induction and basic orientation.', 'Log three supervised field deployments.']],
+    ['Specialist', 'Lance Corporal', ['Pass marksmanship and equipment qualification.', 'Maintain a clean conduct record for thirty days.']],
+    ['Lance Corporal', 'Corporal', ['Complete the small-unit tactics course.', 'Receive a positive deployment after-action review.']],
+    ['Corporal', 'Sergeant', ['Serve as fireteam second on two operations.', 'Pass the NCO readiness assessment.']],
+    ['Sergeant', 'Command Sergeant', ['Lead a deployment as acting NCO.', 'Complete the senior NCO leadership board.']],
+    ['Command Sergeant', 'Lieutenant', ['Secure a written endorsement from a CL4 officer.', 'Pass the junior command commissioning board.']],
+  ];
+  return T.map(([fromRank, toRank, items]) => ({
+    id: newId('preq'),
+    org: 'omega-1',
+    fromRank,
+    toRank,
+    items: reqItems(...items),
+    createdBy: by || 'SYSTEM',
+    updatedAt: now,
+    version: 1,
+  }));
+}
+
 export async function ensureSeeded() {
   const db = loadDb();
   if (db.meta.seededAt) return db;
@@ -382,10 +410,12 @@ export async function ensureSeeded() {
 
   db.subjects = buildSeedSubjects();
   db.cases = buildSeedCases(db.users, db.subjects);
+  db.promoReqs = buildSeedPromoReqs('CMD-1');
 
   db.meta.seededAt = new Date().toISOString();
   db.meta.surveillanceSeededAt = new Date().toISOString();
   db.meta.tribunalsSeededAt = new Date().toISOString();
+  db.meta.promoReqsSeededAt = new Date().toISOString();
   saveDb();
   logAction(null, 'SYSTEM_INIT', 'CAIRO dataset initialised with seed personnel, directives, surveillance subjects and tribunal cases.');
   return db;

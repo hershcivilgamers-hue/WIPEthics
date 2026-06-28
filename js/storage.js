@@ -23,6 +23,7 @@ function emptyDb() {
     directives: [],
     subjects: [],
     cases: [],
+    promoReqs: [],
     audit: [],
     session: { userId: null },
   };
@@ -124,6 +125,7 @@ export const users = () => loadDb().users;
 export const directives = () => loadDb().directives;
 export const subjects = () => loadDb().subjects;
 export const cases = () => loadDb().cases;
+export const promoReqs = () => loadDb().promoReqs;
 export const audit = () => loadDb().audit;
 export const meta = () => loadDb().meta;
 export const session = () => loadDb().session;
@@ -179,6 +181,26 @@ export function upsertCase(record) {
   else list.push(record);
   saveDb();
   return record;
+}
+
+// Promotion-requirement sets — one per (org, fromRank) transition.
+export function getPromoReq(id) {
+  return promoReqs().find((r) => r.id === id) || null;
+}
+
+export function upsertPromoReq(record) {
+  const list = promoReqs();
+  const idx = list.findIndex((r) => r.id === record.id);
+  if (idx >= 0) list[idx] = record;
+  else list.push(record);
+  saveDb();
+  return record;
+}
+
+export function deletePromoReq(id) {
+  const db2 = loadDb();
+  db2.promoReqs = db2.promoReqs.filter((r) => r.id !== id);
+  saveDb();
 }
 
 // --- ID generator -----------------------------------------------------------

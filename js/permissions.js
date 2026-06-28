@@ -18,7 +18,7 @@
 //   • Nobody may grant a clearance higher than their own.
 // =============================================================================
 
-import { clearanceWeight } from './constants.js';
+import { clearanceWeight, rankIndex, rankUp, rankDown } from './constants.js';
 
 const w = (user) => clearanceWeight(user?.clearance);
 
@@ -53,6 +53,43 @@ export function canSetRank(actor, target) {
   if (!actor || !target) return false;
   if (actor.id === target.id) return false;
   return canManageOrg(actor, target.org);
+}
+
+// --- Promotion & demotion ---------------------------------------------------
+// Distinct from canSetRank (the CL5/admin override). These model the in-org
+// promotion process:
+//   • CL5 may promote or demote anyone, in any organisation, by one step.
+//   • Otherwise the actor must be CL4 or above (weight >= 4) AND hold a rank in
+//     the SAME organisation as the target. Such an actor may only move someone
+//     to a rank that stays at least one step below their own — i.e. they can
+//     promote operators who are currently at least two ranks beneath them, and
+//     demote operators who are currently beneath them.
+// (Ranks are ordered high->low, so a LOWER index is more senior.)
+export function canPromote(actor, target) {
+  if (!actor || !target || actor.id === target.id) return false;
+  if (!rankUp(target.org, target.rank)) return false; // already at the top, or unranked
+  if (isCL5(actor)) return true;
+  if (w(actor) < 4) return false;
+  if (actor.org !== target.org) return false;
+  const ai = rankIndex(actor.org, actor.rank);
+  if (ai < 0) return false;
+  return rankIndex(target.org, target.rank) >= ai + 2;
+}
+
+export function canDemote(actor, target) {
+  if (!actor || !target || actor.id === target.id) return false;
+  if (!rankDown(target.org, target.rank)) return false; // already at the bottom, or unranked
+  if (isCL5(actor)) return true;
+  if (w(actor) < 4) return false;
+  if (actor.org !== target.org) return false;
+  const ai = rankIndex(actor.org, actor.rank);
+  if (ai < 0) return false;
+  return rankIndex(target.org, target.rank) >= ai + 1;
+}
+
+// The promotion-requirements registry is CL5-editable.
+export function canManagePromoReqs(actor) {
+  return isCL5(actor);
 }
 
 export function canIssueStrike(actor, target) {

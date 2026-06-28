@@ -114,12 +114,41 @@ dossier to see the redaction bars in action.
 
 **Clearance tiers** (lowest to highest): CL3 → CL4·Junior → CL4·Senior → CL5.
 
-**Managing records** (edit, rank, strike, leave) requires **CL4·Senior or
-above** *and* a stake in that organisation — meaning the same organisation, or
-Command, which spans both.
+**Managing records** (edit, strike, leave, and the direct rank/clearance
+override) requires **CL4·Senior or above** *and* a stake in that organisation —
+meaning the same organisation, or Command, which spans both. The step-by-step
+promotion path below is more permissive (CL4·Junior officers can promote their
+juniors); the override is the CL5/senior shortcut.
 
 **Clearance changes and registration approvals are CL5-only.** Nobody can raise
 their own clearance, strike themselves, or delete their own record.
+
+**Rank ladders.** Each organisation has its own ladder, listed most-senior first.
+
+- **Omega-1** (10 ranks): Commander, Major *(CL4·Senior)* · Captain, Lieutenant
+  *(CL4·Junior)* · Command Sergeant, Sergeant, Corporal, Lance Corporal,
+  Specialist, Private *(CL3)*.
+- **Ethics Committee** (3 ranks): Chairman, Member *(CL5)* · Assistant
+  *(CL4·Junior)*.
+- **Command**: Director, Liaison.
+
+A rank carries a clearance tier, and **promotion or demotion realigns the
+operator's clearance to the new rank's tier** automatically.
+
+**Promotion & demotion.** Distinct from the CL5 clearance override:
+
+- **CL5** may promote or demote anyone, one step at a time.
+- Otherwise the actor must be **CL4 or above and hold a rank in the same
+  organisation**, and may only move someone to a rank that stays **at least one
+  step below their own** — so a Lieutenant can promote a Sergeant to Command
+  Sergeant, but not a Command Sergeant to Lieutenant (that would make them
+  peers). Only CL5 can promote *into* Lieutenant and above.
+
+**Promotion requirements.** Each rank transition has a checklist (CL5 edits these
+under Administration → Promotion Reqs). An operator's file shows the checklist
+for their **next** rank with progress; anyone who can promote them can tick items
+off. Promoting or demotion **resets the checklist**, because the next-rank
+transition — and therefore its requirements — changes.
 
 **Redaction.** When you open a dossier, how much you see depends on your
 clearance relative to that operator:

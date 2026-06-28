@@ -9,11 +9,12 @@
 
 import {
   ORGS, RANKS, STATUS_ORDER, CLEARANCE_ORDER, CLEARANCES, STRIKE_LIMIT,
+  rankUp, rankDown, clearanceForRank,
 } from '../constants.js';
-import { users, getUser, upsertUser, newId } from '../storage.js';
+import { users, getUser, upsertUser, promoReqs, newId } from '../storage.js';
 import {
   canEditPersonnel, canSetClearance, canSetRank, canIssueStrike,
-  canDeletePersonnel, accessLevel, isCL5,
+  canDeletePersonnel, canPromote, canDemote, accessLevel, isCL5,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { exportPersonnel } from '../export.js';
@@ -186,6 +187,7 @@ export function renderDossier(host, app, id) {
   const strikesBlock = sectionStrikes(u, full);
   const leaveBlock = onLeave ? sectionLeave(u, full) : '';
   const notesBlock = sectionNotes(u, full);
+  const promoBlock = nameOnly ? '' : sectionPromotion(u, actor);
 
   const redactBanner = nameOnly ? `
     <div class="redact-banner">
@@ -235,6 +237,7 @@ export function renderDossier(host, app, id) {
         <div class="card__body">${identityRows}</div>
       </section>
       <div class="dossier-col">
+        ${promoBlock}
         ${leaveBlock}
         ${strikesBlock}
         ${awardsBlock}
@@ -254,11 +257,130 @@ export function renderDossier(host, app, id) {
     note: () => openNote(app, u),
     leave: () => onLeave ? returnFromLeave(app, u) : openLeave(app, u),
     delete: () => removeRecord(app, u),
+    promote: () => promote(app, u),
+    demote: () => demote(app, u),
   };
   host.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => dispatch[b.dataset.act]()));
+  host.querySelectorAll('[data-req]').forEach((b) => b.addEventListener('change', () => toggleRequirement(app, u, b.dataset.req)));
 }
 
 // --- Dossier sub-sections ---------------------------------------------------
+// Promotion requirements for the operator's next rank, with progress and the
+// promote/demote controls. The checklist resets whenever the rank changes,
+// because the next-rank transition (and therefore its requirements) changes.
+function sectionPromotion(u, actor) {
+  if (!u.rank) {
+    return `<section class="card"><div class="card__title">Promotion</div>
+      <div class="card__body"><p class="muted">No rank is assigned to this operator.</p></div></section>`;
+  }
+
+  const next = rankUp(u.org, u.rank);
+  const set = next ? promoReqs().find((r) => r.org === u.org && r.fromRank === u.rank) : null;
+  const items = set?.items || [];
+  const checked = new Set(u.promoChecks || []);
+  const met = items.filter((it) => checked.has(it.id)).length;
+  const canEdit = canPromote(actor, u);
+  const canDown = canDemote(actor, u);
+  const allMet = items.length > 0 && met === items.length;
+
+  let listHTML;
+  if (!next) {
+    listHTML = '<p class="muted">This operator holds the most senior rank in the ladder.</p>';
+  } else if (!items.length) {
+    listHTML = '<p class="muted">No requirements are defined for this transition.</p>';
+  } else {
+    listHTML = `<ul class="reqs">${items.map((it) => {
+      const done = checked.has(it.id);
+      const control = canEdit
+        ? `<input type="checkbox" class="req__box" data-req="${esc(it.id)}" ${done ? 'checked' : ''} aria-label="Mark requirement met" />`
+        : `<span class="req__mark ${done ? 'req__mark--done' : ''}">${done ? '\u2713' : '\u25cb'}</span>`;
+      return `<li class="req ${done ? 'req--done' : ''}">${control}<span class="req__text">${esc(it.text)}</span></li>`;
+    }).join('')}</ul>`;
+  }
+
+  const head = next
+    ? `<span class="promo-next"><span class="mono">${esc(u.rank)}</span> <span class="promo-arrow">\u2192</span> <span class="mono">${esc(next)}</span></span>
+       ${items.length ? `<span class="promo-progress ${allMet ? 'promo-progress--met' : ''}">${met}/${items.length} met</span>` : ''}`
+    : `<span class="promo-next"><span class="mono">${esc(u.rank)}</span> \u00b7 most senior rank</span>`;
+
+  const actions = [
+    (next && canEdit) ? '<button class="btn btn--sm" data-act="promote">Promote</button>' : '',
+    canDown ? '<button class="btn btn--sm btn--ghost" data-act="demote">Demote</button>' : '',
+  ].filter(Boolean).join('');
+
+  return `
+    <section class="card promo">
+      <div class="card__title">Promotion Requirements</div>
+      <div class="card__body">
+        <div class="promo-head">${head}</div>
+        ${listHTML}
+        ${actions ? `<div class="promo-actions">${actions}</div>` : ''}
+      </div>
+    </section>`;
+}
+
+async function promote(app, u) {
+  const next = rankUp(u.org, u.rank);
+  if (!next) { toast('Already at the most senior rank.', 'warn'); return; }
+  if (!canPromote(app.user, u)) { toast('You are not permitted to promote this operator.', 'error'); return; }
+
+  // If a checklist exists and isn't complete, confirm before overriding it.
+  const set = promoReqs().find((r) => r.org === u.org && r.fromRank === u.rank);
+  const items = set?.items || [];
+  const met = items.filter((it) => (u.promoChecks || []).includes(it.id)).length;
+  if (items.length && met < items.length) {
+    const ok = await confirmDialog({
+      title: 'Promote before all requirements met?',
+      message: `${met} of ${items.length} requirements are checked for ${u.rank} \u2192 ${next}. Promote anyway?`,
+      confirmLabel: 'Promote',
+    });
+    if (!ok) return;
+  }
+
+  const fromRank = u.rank;
+  const newClr = clearanceForRank(u.org, next);
+  const done = mutate(app, u.id, u.version, (fresh) => {
+    fresh.rank = next;
+    if (newClr) fresh.clearance = newClr;
+    fresh.promoChecks = [];
+    addEvent(fresh, 'promotion', `Promoted ${fromRank} \u2192 ${next}${newClr ? ` \u00b7 clearance ${CLEARANCES[newClr].label}` : ''}.`);
+  }, { action: 'PROMOTE', detail: `${u.designation} promoted ${fromRank} \u2192 ${next}.` });
+  if (done) toast(`Promoted to ${next}.`, 'success');
+}
+
+async function demote(app, u) {
+  const down = rankDown(u.org, u.rank);
+  if (!down) { toast('Already at the most junior rank.', 'warn'); return; }
+  if (!canDemote(app.user, u)) { toast('You are not permitted to demote this operator.', 'error'); return; }
+
+  const ok = await confirmDialog({
+    title: 'Demote operator?',
+    message: `Reduce ${u.designation} from ${u.rank} to ${down}? Their promotion checklist will reset.`,
+    confirmLabel: 'Demote',
+    danger: true,
+  });
+  if (!ok) return;
+
+  const fromRank = u.rank;
+  const newClr = clearanceForRank(u.org, down);
+  const done = mutate(app, u.id, u.version, (fresh) => {
+    fresh.rank = down;
+    if (newClr) fresh.clearance = newClr;
+    fresh.promoChecks = [];
+    addEvent(fresh, 'demotion', `Reduced in rank ${fromRank} \u2192 ${down}${newClr ? ` \u00b7 clearance ${CLEARANCES[newClr].label}` : ''}.`);
+  }, { action: 'DEMOTE', detail: `${u.designation} reduced ${fromRank} \u2192 ${down}.` });
+  if (done) toast(`Reduced to ${down}.`, 'success');
+}
+
+function toggleRequirement(app, u, reqId) {
+  if (!canPromote(app.user, u)) { toast('You are not permitted to update this checklist.', 'error'); app.refresh(); return; }
+  mutate(app, u.id, u.version, (fresh) => {
+    const set = new Set(fresh.promoChecks || []);
+    if (set.has(reqId)) set.delete(reqId); else set.add(reqId);
+    fresh.promoChecks = [...set];
+  }, { action: 'PROMO_CHECK', detail: `Updated promotion checklist for ${u.designation}.` });
+}
+
 function sectionService(u) {
   const items = (u.events || []).map((e) => `
     <li class="tl__item">

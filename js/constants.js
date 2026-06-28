@@ -51,12 +51,67 @@ export const ORGS = {
 export const ORG_ORDER = ['omega-1', 'ethics-committee', 'command'];
 
 // --- Rank ladders (per organisation) ----------------------------------------
-// Index order is the promotion order, lowest first.
+// Ordered HIGH -> LOW: index 0 is the most senior rank. The next promotion
+// from a given rank is therefore the entry at (rankIndex - 1); the next
+// demotion is (rankIndex + 1).
 export const RANKS = {
-  'omega-1':          ['Recruit', 'Operative', 'Sergeant', 'Lieutenant', 'Commander'],
-  'ethics-committee': ['Assistant', 'Member', 'Senior Member', 'Chairman'],
-  'command':          ['Liaison', 'Director'],
+  'omega-1': [
+    'Commander',         // Sr CL4
+    'Major',             // Sr CL4
+    'Captain',           // Jr CL4
+    'Lieutenant',        // Jr CL4
+    'Command Sergeant',  // CL3
+    'Sergeant',          // CL3
+    'Corporal',          // CL3
+    'Lance Corporal',    // CL3
+    'Specialist',        // CL3
+    'Private',           // CL3
+  ],
+  'ethics-committee': [
+    'Chairman',          // CL5
+    'Member',            // CL5
+    'Assistant',         // Jr CL4
+  ],
+  'command': ['Director', 'Liaison'],
 };
+
+// The clearance tier each rank carries. Promotion/demotion keeps an operator's
+// clearance aligned to their rank's tier. (Command ranks are administrative and
+// keep their separately-assigned clearance.)
+export const RANK_CLEARANCE = {
+  'omega-1': {
+    'Commander': 'CL4-S', 'Major': 'CL4-S',
+    'Captain': 'CL4-J', 'Lieutenant': 'CL4-J',
+    'Command Sergeant': 'CL3', 'Sergeant': 'CL3', 'Corporal': 'CL3',
+    'Lance Corporal': 'CL3', 'Specialist': 'CL3', 'Private': 'CL3',
+  },
+  'ethics-committee': {
+    'Chairman': 'CL5', 'Member': 'CL5', 'Assistant': 'CL4-J',
+  },
+};
+
+// Index of a rank within its ladder (-1 if unknown). Lower index = more senior.
+export function rankIndex(org, rank) {
+  const ladder = RANKS[org] || [];
+  return ladder.indexOf(rank);
+}
+// The rank one step up (more senior), or null at the top / if unknown.
+export function rankUp(org, rank) {
+  const i = rankIndex(org, rank);
+  if (i <= 0) return null;
+  return RANKS[org][i - 1];
+}
+// The rank one step down (more junior), or null at the bottom / if unknown.
+export function rankDown(org, rank) {
+  const ladder = RANKS[org] || [];
+  const i = rankIndex(org, rank);
+  if (i < 0 || i >= ladder.length - 1) return null;
+  return ladder[i + 1];
+}
+// The clearance tier a rank carries, or null if the org doesn't map ranks.
+export function clearanceForRank(org, rank) {
+  return RANK_CLEARANCE[org]?.[rank] || null;
+}
 
 // --- Personnel status (the operational lifecycle of a record) ---------------
 export const STATUSES = {
