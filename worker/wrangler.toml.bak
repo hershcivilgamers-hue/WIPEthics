@@ -15,7 +15,7 @@ compatibility_date = "2026-06-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "cairo-aic"
-database_id = "7402770b-c4be-4066-8925-0a518b380855"
+database_id = "PASTE_DATABASE_ID_HERE"
 
 [vars]
 # The origin the app is served from, e.g. "https://yourname.github.io" or your
