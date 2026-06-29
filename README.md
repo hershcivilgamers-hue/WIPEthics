@@ -51,6 +51,9 @@ cairo-aic/
         ├── search.js       Organisation-wide, access-bound record search.
         ├── personnel.js    Roster list and the personnel dossier.
         ├── surveillance.js Subject registry (POIs / Targets) and subject files.
+        ├── compartments.js Need-To-Know compartments: roster and read-in control.
+        ├── operations.js   Operational activity logging + the readiness board.
+        ├── recruitment.js  Omega-1 scouting pipeline (scouting/greenlit/tryout).
         ├── tribunals.js    Ethics case docket and the court-style case file.
         ├── directives.js   Standing-orders board and the directive memo view.
         ├── activity.js     The audit feed.
@@ -183,6 +186,49 @@ cannot see. Two thresholds separate doing from deciding: **running** a case
 CL4·Senior or Command, while **entering a binding ruling** is **CL5 only** — the
 Chairman or Command. Viewing the docket is open to any operator cleared for the
 case's sensitivity, so an operative can read a case that concerns them.
+
+**Need-To-Know compartments** add a second, *independent* axis of access on top
+of the clearance ladder. A compartment is a named caveat (a codeword such as
+IRONWOOD); a subject, case or directive may be filed into one. To see a
+compartmented record you must clear its clearance level **and** be *read into*
+the compartment — the two gates stack, neither substitutes for the other. This is
+deliberately orthogonal: a CL3 operative read into a compartment can read its
+material, while a higher-cleared operator who is not read in cannot. The demo
+shows exactly this — sign in as `bailiff` (CL3, read into IRONWOOD) and open the
+Omega-1 field-conduct directive, then as `warrant` (CL4·Junior, **not** read in)
+and watch the same directive's body come back withheld behind the caveat despite
+the higher clearance. **CL5 is a universal read override**, consistent with the
+rest of the system. Compartmented subjects and cases are **hard-gated** — if you
+are not read in they are absent from your registry entirely, not merely masked.
+Administering a compartment — opening it, sealing it, and reading operators in or
+out — follows the standard management rule for the owning organisation
+(CL4·Senior with a stake, or Command). A read-in must meet the compartment's
+**clearance floor**, a **sealed** compartment takes no new read-ins (existing ones
+keep access), and roster changes are atomic. In server mode the Worker re-derives
+every operator's read-in status on read and re-authorises each change on write,
+so the roster is never something the browser can assert for itself.
+
+**Readiness** (operational activity logging) is a unit board showing every
+operator's readiness state — Current, Overdue or Activity Breach — **derived**
+from how recently they last logged activity, never set as a field, so it can't be
+faked. Logging is self-service: an operator records their own check-ins
+regardless of clearance, while setting a duty posture (On Operation, Stood Down,
+On Leave) or logging on another operator's behalf needs the org-management right.
+The board is visible within an operator's own organisation, to Command and to
+CL5; a banner flags anyone in breach. The demo seeds operators across all three
+states so the board is immediately legible.
+
+**Recruitment** is Omega-1's scouting pipeline, run by the unit's **CL4 cadre**
+(any CL4 with a stake, not only the senior managers). A candidate moves through
+three stages: **Scouting** — any CL4 opens a scouting target (name, SteamID,
+department, rank) and the thread is reviewed, with a deny closing it; **Greenlit**
+— a CL4 yes/no vote, where a majority of Yes advances the candidate; and
+**Tryout** — on approval the approver is prompted to open the operator's
+personnel file, after which the candidate is archived as approved (a deny archives
+it as denied at any stage). The server enforces the parts that matter: a ballot
+write may only change the actor's own vote, stage transitions follow the pipeline,
+and a candidate cannot leave Greenlit without a genuine majority. The demo seeds a
+candidate in each live stage plus an archived one.
 
 **Search** (the box in the top bar, or *Search* in the sidebar) runs one query
 across personnel, surveillance subjects, tribunal cases and directives — and it

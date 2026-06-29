@@ -14,6 +14,9 @@ const COLS = {
   directives: ['id','org','deleted','version','updated_at','data'],
   subjects:   ['id','org','deleted','version','updated_at','data'],
   cases:      ['id','deleted','version','updated_at','data'],
+  compartments: ['id','org','deleted','version','updated_at','data'],
+  activity:   ['id','org','deleted','version','updated_at','data'],
+  recruits:   ['id','org','deleted','version','updated_at','data'],
   promo_reqs: ['id','org','data'],
 };
 const val = (col, r) => {
@@ -28,7 +31,7 @@ const val = (col, r) => {
     default: return 'NULL';
   }
 };
-const source = { users: db.users, directives: db.directives, subjects: db.subjects, cases: db.cases, promo_reqs: db.promoReqs };
+const source = { users: db.users, directives: db.directives, subjects: db.subjects, cases: db.cases, compartments: db.compartments, activity: db.activity, recruits: db.recruits, promo_reqs: db.promoReqs };
 
 let out = `-- CAIRO.AIC seed data (generated from the app seed). Apply AFTER schema.sql:\n`;
 out += `--   wrangler d1 execute cairo-aic --remote --file=./seed.sql\n\n`;
@@ -42,4 +45,4 @@ for (const [table, rows] of Object.entries(source)) {
 }
 out += `INSERT INTO meta (key, value) VALUES ('seededAt', '${new Date().toISOString()}');\n`;
 writeFileSync(new URL('../worker/seed.sql', import.meta.url), out);
-console.log('seed.sql written:', { users: db.users.length, directives: db.directives.length, subjects: db.subjects.length, cases: db.cases.length, promo_reqs: db.promoReqs.length });
+console.log('seed.sql written:', { users: db.users.length, directives: db.directives.length, subjects: db.subjects.length, cases: db.cases.length, compartments: db.compartments.length, activity: db.activity.length, recruits: db.recruits.length, promo_reqs: db.promoReqs.length });

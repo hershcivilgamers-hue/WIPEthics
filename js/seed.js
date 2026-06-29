@@ -380,6 +380,144 @@ export function buildSeedPromoReqs(by) {
   }));
 }
 
+// --- Need-To-Know compartments ----------------------------------------------
+// Demonstrates the orthogonality of compartments and clearance: IRONWOOD reads
+// in a CL3 operator (Bailiff) while leaving a higher-cleared one (Warrant)
+// outside it; AZURE WAKE gates a senior surveillance target; GLASS COURT is a
+// sealed Committee compartment. Members are resolved from designations at build
+// time. Each compartment also tags a record (set in ensureSeeded) so the caveat
+// banners and withheld bodies are visible from first load.
+const COMPARTMENT_SPECS = [
+  {
+    ref: 'NTK-IRONWOOD', name: 'IRONWOOD', codeword: 'IRONWOOD', org: 'omega-1',
+    clearance: 'CL3', status: 'active',
+    description: 'Field-conduct standing orders handling for the active task force. Read-in is by operational need, independent of clearance tier.',
+    members: ['O1-1', 'O1-7'],
+    events: [{ daysAgo: 60, type: 'opened', text: 'Compartment opened by Site Command.' }],
+  },
+  {
+    ref: 'NTK-AZURE-WAKE', name: 'AZURE WAKE', codeword: 'AZURE WAKE', org: 'omega-1',
+    clearance: 'CL4-J', status: 'active',
+    description: 'Acquisition handling for a senior pursuit target. Indoctrination restricted to the pursuit cell.',
+    members: ['O1-1', 'O1-3'],
+    events: [{ daysAgo: 21, type: 'opened', text: 'Compartment opened on target escalation.' }],
+  },
+  {
+    ref: 'NTK-GLASS-COURT', name: 'GLASS COURT', codeword: 'GLASS COURT', org: 'ethics-committee',
+    clearance: 'CL4-J', status: 'sealed',
+    description: 'Sealed witness-conduct compartment. Frozen pending close of the related inquiry; existing read-ins retain access.',
+    members: ['EC-1', 'EC-5'],
+    events: [
+      { daysAgo: 16, type: 'opened', text: 'Compartment opened for the witness inquiry.' },
+      { daysAgo: 4,  type: 'sealed', text: 'Sealed pending deliberation; no further read-ins.' },
+    ],
+  },
+];
+
+export function buildSeedCompartments(userList) {
+  const idFor = (d) => (userList.find((u) => u.designation === d) || {}).id || null;
+  return COMPARTMENT_SPECS.map((c) => {
+    const created = iso(c.daysAgo ?? 60);
+    return {
+      id: newId('cmp'),
+      ref: c.ref,
+      name: c.name,
+      codeword: c.codeword,
+      org: c.org,
+      clearance: c.clearance,
+      description: c.description,
+      status: c.status,
+      members: (c.members || []).map(idFor).filter(Boolean),
+      events: (c.events || []).map((e) => ({ id: newId('cev'), at: iso(e.daysAgo), type: e.type, text: e.text })),
+      createdBy: 'CMD-1',
+      createdAt: created,
+      updatedAt: created,
+      version: 1,
+      deleted: false,
+      deletedAt: null,
+    };
+  });
+}
+
+// --- Operational activity seed ----------------------------------------------
+// Records spread across readiness states so the board shows Current / Overdue /
+// Breach from first load. lastActiveAt drives the derived readiness.
+const ACTIVITY_SPECS = [
+  { who: 'O1-1', duty: 'none',     last: 2,  entries: [['check-in', 2, 'Reported fit for duty; task-force lead.'], ['deployment', 6, 'Led Sector 12 containment escort.']] },
+  { who: 'O1-3', duty: 'deployed', last: 4,  entries: [['deployment', 4, 'Forward on acquisition watch.'], ['check-in', 12, 'Routine readiness check-in.']] },
+  { who: 'O1-7', duty: 'none',     last: 18, entries: [['check-in', 18, 'Close-protection refresher complete.']] },
+  { who: 'O1-9', duty: 'none',     last: 40, entries: [['note', 40, 'Last contact before conduct review.']] },
+  { who: 'O1-4', duty: 'leave',    last: 9,  entries: [['standdown', 9, 'Placed on Leave of Absence — recovery.']] },
+  { who: 'EC-3', duty: 'none',     last: 3,  entries: [['check-in', 3, 'Committee session attendance logged.']] },
+];
+export function buildSeedActivity(userList) {
+  const byD = (d) => userList.find((u) => u.designation === d);
+  return ACTIVITY_SPECS.map((s) => {
+    const u = byD(s.who);
+    if (!u) return null;
+    const entries = (s.entries || []).map(([type, daysAgo, text]) => ({ id: newId('act'), ts: iso(daysAgo), type, by: u.designation, text }));
+    return {
+      id: newId('actr'), userId: u.id, org: u.org,
+      entries, duty: s.duty || 'none', lastActiveAt: iso(s.last),
+      createdBy: u.designation, createdAt: iso(60), updatedAt: iso(s.last),
+      version: 1, deleted: false, deletedAt: null,
+    };
+  }).filter(Boolean);
+}
+
+// --- Recruitment seed (Omega-1 scouting pipeline) ---------------------------
+const RECRUIT_SPECS = [
+  {
+    ref: 'SCT-0042', name: 'Rourke, T.', steamId: 'STEAM_0:1:44290183', department: 'Security', rank: 'Trooper',
+    org: 'omega-1', stage: 'scouting',
+    comments: [['O1-3', 6, 'scouting', 'Strong showing on the last two joint patrols. Flagged for scouting.']],
+    votes: {},
+  },
+  {
+    ref: 'SCT-0039', name: 'Vane, L.', steamId: 'STEAM_0:0:51120947', department: 'Containment', rank: 'Specialist',
+    org: 'omega-1', stage: 'greenlit',
+    comments: [['O1-3', 12, 'scouting', 'Scouted from containment detail; consistent conduct.'], ['O1-1', 5, 'greenlit', 'Put up for greenlight vote.']],
+    votes: { O1_1: 'yes', O1_3: 'yes' }, // resolved to user ids at build time
+  },
+  {
+    ref: 'SCT-0036', name: 'Hadley, R.', steamId: 'STEAM_0:1:60884412', department: 'Response', rank: 'Corporal',
+    org: 'omega-1', stage: 'tryout',
+    comments: [['O1-1', 18, 'scouting', 'Scouted after the Sector 9 callout.'], ['O1-1', 11, 'greenlit', 'Greenlit on a clear majority.'], ['O1-3', 4, 'tryout', 'Tryout scheduled; awaiting assessment.']],
+    votes: { O1_1: 'yes', O1_3: 'yes' },
+  },
+  {
+    ref: 'SCT-0031', name: 'Croft, M.', steamId: 'STEAM_0:0:33910228', department: 'Security', rank: 'Trooper',
+    org: 'omega-1', stage: 'archived', archiveStatus: 'denied',
+    comments: [['O1-3', 40, 'scouting', 'Scouted, but conduct flags surfaced during review.'], ['O1-1', 33, 'scouting', 'Denied at scouting — insufficient record.']],
+    votes: {},
+  },
+];
+export function buildSeedRecruits(userList) {
+  const idOf = (d) => (userList.find((u) => u.designation === d) || {}).id || null;
+  // Vote keys in the specs use safe placeholders (O1_1) -> resolve to user ids.
+  const resolveVotes = (votes) => {
+    const out = {};
+    for (const [k, v] of Object.entries(votes || {})) {
+      const id = idOf(k.replace('_', '-'));
+      if (id) out[id] = v;
+    }
+    return out;
+  };
+  return RECRUIT_SPECS.map((r) => {
+    const created = iso(45);
+    return {
+      id: newId('rec'), ref: r.ref, name: r.name, steamId: r.steamId,
+      department: r.department, rank: r.rank, org: r.org,
+      stage: r.stage, archiveStatus: r.archiveStatus ?? null,
+      comments: (r.comments || []).map(([by, daysAgo, stage, text]) => ({ id: newId('rc'), by, ts: iso(daysAgo), stage, text })),
+      votes: resolveVotes(r.votes),
+      personnelFileId: null,
+      createdBy: r.comments?.[0]?.[0] || 'O1-1', createdAt: created, updatedAt: iso(4),
+      version: 1, deleted: false, deletedAt: null,
+    };
+  });
+}
+
 export async function ensureSeeded() {
   const db = loadDb();
   if (db.meta.seededAt) return db;
@@ -410,11 +548,27 @@ export async function ensureSeeded() {
 
   db.subjects = buildSeedSubjects();
   db.cases = buildSeedCases(db.users, db.subjects);
+  db.compartments = buildSeedCompartments(db.users);
+  db.activity = buildSeedActivity(db.users);
+  db.recruits = buildSeedRecruits(db.users);
   db.promoReqs = buildSeedPromoReqs('CMD-1');
+
+  // Tag a record into each operational compartment so the Need-To-Know caveats
+  // are visible on first load. Records reference a compartment by its id.
+  const compIdByRef = (r) => (db.compartments.find((c) => c.ref === r) || {}).id || null;
+  const tagSubject = (ref, compRef) => { const s = db.subjects.find((x) => x.ref === ref); if (s) s.compartment = compIdByRef(compRef); };
+  const tagDirective = (ref, compRef) => { const d = db.directives.find((x) => x.ref === ref); if (d) d.compartment = compIdByRef(compRef); };
+  const tagCase = (ref, compRef) => { const c = db.cases.find((x) => x.ref === ref); if (c) c.compartment = compIdByRef(compRef); };
+  tagSubject('TGT-118', 'NTK-AZURE-WAKE');
+  tagDirective('O1-SO-001', 'NTK-IRONWOOD');
+  tagCase('EC-CASE-26-009', 'NTK-GLASS-COURT');
 
   db.meta.seededAt = new Date().toISOString();
   db.meta.surveillanceSeededAt = new Date().toISOString();
   db.meta.tribunalsSeededAt = new Date().toISOString();
+  db.meta.compartmentsSeededAt = new Date().toISOString();
+  db.meta.activitySeededAt = new Date().toISOString();
+  db.meta.recruitsSeededAt = new Date().toISOString();
   db.meta.promoReqsSeededAt = new Date().toISOString();
   saveDb();
   logAction(null, 'SYSTEM_INIT', 'CAIRO dataset initialised with seed personnel, directives, surveillance subjects and tribunal cases.');

@@ -9,7 +9,10 @@
 // =============================================================================
 
 import { CONFIG } from './config.js';
-import { canViewCommandRoster, canAccessAdmin } from './permissions.js';
+import { canViewCommandRoster, canAccessAdmin, canManageOrg } from './permissions.js';
+
+// Recruitment is for operators who manage at least one organisation.
+const canSeeRecruitment = (u) => canManageOrg(u, 'omega-1') || canManageOrg(u, 'ethics-committee') || canManageOrg(u, 'command');
 
 // Sidebar structure, grouped by organisation. `feature` ties an item to a
 // CONFIG feature flag; `guard` ties it to a permission check.
@@ -20,8 +23,11 @@ export const NAV = [
       { name: 'overview',     hash: '#/overview',     label: 'Command Overview' },
       { name: 'search',       hash: '#/search',       label: 'Search' },
       { name: 'surveillance', hash: '#/surveillance', label: 'Surveillance',    feature: 'surveillance' },
+      { name: 'compartments', hash: '#/compartments', label: 'Need-To-Know',    feature: 'compartments' },
+      { name: 'operations',   hash: '#/operations',   label: 'Readiness',       feature: 'operations' },
       { name: 'directives',   hash: '#/directives',   label: 'Standing Orders', feature: 'directives' },
       { name: 'activity',     hash: '#/activity',     label: 'Activity Log',    feature: 'activityLog' },
+      { name: 'recruitment',  hash: '#/recruitment',  label: 'Recruitment',     feature: 'recruitment', guard: canSeeRecruitment },
     ],
   },
   {
@@ -50,6 +56,8 @@ export const NAV = [
 const GUARDS = {
   command: canViewCommandRoster,
   admin: canAccessAdmin,
+  recruitment: canSeeRecruitment,
+  recruit: canSeeRecruitment,
 };
 
 // Routes disabled by a CONFIG feature flag.
@@ -58,10 +66,13 @@ function featureBlocked(name) {
   if (name === 'activity') return !CONFIG.features.activityLog;
   if (name === 'surveillance' || name === 'subject') return !CONFIG.features.surveillance;
   if (name === 'tribunals' || name === 'case') return !CONFIG.features.tribunals;
+  if (name === 'compartments' || name === 'compartment') return !CONFIG.features.compartments;
+  if (name === 'operations') return !CONFIG.features.operations;
+  if (name === 'recruitment' || name === 'recruit') return !CONFIG.features.recruitment;
   return false;
 }
 
-const TOP_LEVEL = ['overview', 'search', 'surveillance', 'tribunals', 'directives', 'activity', 'omega-1', 'ethics', 'command', 'admin'];
+const TOP_LEVEL = ['overview', 'search', 'surveillance', 'compartments', 'operations', 'tribunals', 'directives', 'activity', 'recruitment', 'omega-1', 'ethics', 'command', 'admin'];
 
 // Parse the current location hash into a route { name, params }.
 export function parseHash() {
@@ -80,6 +91,12 @@ export function parseHash() {
   }
   if (parts[0] === 'directive' && parts[1]) {
     return { name: 'directive', params: { id: parts[1] } };
+  }
+  if (parts[0] === 'compartment' && parts[1]) {
+    return { name: 'compartment', params: { id: parts[1] } };
+  }
+  if (parts[0] === 'recruit' && parts[1]) {
+    return { name: 'recruit', params: { id: parts[1] } };
   }
   if (TOP_LEVEL.includes(parts[0])) {
     return { name: parts[0], params: {} };

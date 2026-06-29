@@ -19,9 +19,11 @@ export const CONFIG = {
   // Password hashing strength. Higher = slower = more secure.
   pbkdf2Iterations: 150000,
 
-  // Reserved for a future server backend (Cloudflare Worker / Firebase REST).
-  // Left null so the system runs fully standalone today.
-  apiBaseUrl: null,
+  // Server backend (Cloudflare Worker + D1). When set, the app authenticates
+  // against this API, loads the data the signed-in operator is cleared to see,
+  // and saves every change back through it — with permissions enforced
+  // server-side. Set to null to run fully standalone on localStorage instead.
+  apiBaseUrl: 'https://cairo-aic-api.hershcivilgamers.workers.dev',
 
   // Feature switches — flip to false to hide a module without deleting code.
   features: {
@@ -29,6 +31,9 @@ export const CONFIG = {
     surveillance: true,
     tribunals: true,
     activityLog: true,
+    compartments: true,
+    operations: true,
+    recruitment: true,
     recycleBin: true,
     selfRegistration: true,
   },

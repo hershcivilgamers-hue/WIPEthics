@@ -15,10 +15,11 @@
 import { makeCredential, verifyPassword } from '../../js/crypto.js';
 import { makeD1Repo } from './repo.js';
 import { authorizeWrite } from './gate.js';
-import { buildSnapshot, redactUser, redactDirective } from './redact.js';
+import { buildSnapshot, redactUser, redactDirective, redactCompartment } from './redact.js';
+import { canReadDirective, compartmentClears } from '../../js/permissions.js';
 
-const WRITABLE = new Set(['users', 'directives', 'subjects', 'cases', 'promo_reqs']);
-const SNAPSHOT = ['users', 'directives', 'subjects', 'cases', 'promo_reqs', 'audit'];
+const WRITABLE = new Set(['users', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'promo_reqs']);
+const SNAPSHOT = ['users', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'promo_reqs', 'audit'];
 
 function uid() { return (globalThis.crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`); }
 function randomToken() {
@@ -64,6 +65,24 @@ async function fullDb(repo) {
   const db = {};
   for (const c of SNAPSHOT) db[c === 'promo_reqs' ? 'promoReqs' : c] = await repo.listAll(c);
   return db;
+}
+
+// Lookup of live compartments (keyed by id), used to gate compartmented records
+// and to attach caveat markers on write responses.
+async function compMapFor(repo) {
+  const map = new Map();
+  for (const c of await repo.listAll('compartments')) {
+    if (c && !c.deleted) map.set(c.id, c);
+  }
+  return map;
+}
+
+// Map of operator id -> clearance, so the gate can enforce a compartment's
+// clearance floor when reading someone in.
+async function clearanceMap(repo) {
+  const out = {};
+  for (const u of await repo.listAll('users')) out[u.id] = u.clearance;
+  return out;
 }
 
 // --- handlers ---------------------------------------------------------------
@@ -125,9 +144,14 @@ async function getData(actor, repo, env) {
   return json(buildSnapshot(actor, db), 200, env);
 }
 
-function redactForActor(collection, actor, record) {
+function redactForActor(collection, actor, record, compMap) {
   if (collection === 'users') return redactUser(actor, record);
-  if (collection === 'directives') return redactDirective(actor, record);
+  if (collection === 'directives') return redactDirective(actor, record, compMap);
+  if (collection === 'compartments') return redactCompartment(actor, record);
+  if ((collection === 'subjects' || collection === 'cases') && record && record.compartment) {
+    const c = compMap && compMap.get(record.compartment);
+    return { ...record, compartmentName: c ? c.name : null };
+  }
   return record; // subjects/cases/promo_reqs are hard-gated wholesale
 }
 
@@ -136,16 +160,39 @@ async function writeRecord(collection, id, actor, request, repo, env) {
   const incoming = await request.json().catch(() => null);
   if (!incoming || incoming.id !== id) return json({ error: 'Malformed record.' }, 400, env);
 
-  // Optional audit hints from the client; never stored in the record.
-  const action = typeof incoming._action === 'string' ? incoming._action.slice(0, 40) : 'WRITE';
-  const detail = typeof incoming._detail === 'string' ? incoming._detail.slice(0, 200) : `${collection}:${id}`;
+  // Optional audit hints from the client; never stored in the record. The
+  // server prefers the label it derives from the diff (see gate.js).
+  const clientAction = typeof incoming._action === 'string' ? incoming._action.slice(0, 40) : null;
+  const clientDetail = typeof incoming._detail === 'string' ? incoming._detail.slice(0, 200) : null;
   delete incoming._action; delete incoming._detail;
 
+  // Strip the presentation-only fields the server itself adds when redacting on
+  // read (accessLevel on users, bodyWithheld on directives, the compartment
+  // caveat markers and roster counts). The client holds a redacted copy and
+  // sends it straight back on a write, so if these survived they would (a) make
+  // the gate's diff see a phantom change — turning a plain promotion into an
+  // illegal "rank change combined with other edits" — and (b) get persisted as
+  // junk. They are recomputed on every read regardless.
+  delete incoming.accessLevel;
+  delete incoming.bodyWithheld;
+  delete incoming.compartmentName;
+  delete incoming.compartmented;
+  delete incoming.membersCount;
+  delete incoming.access;
+
   const cur = await repo.getById(collection, id);
-  const verdict = authorizeWrite(collection, actor, cur, incoming);
+  // Context the authorizers need to reason beyond the single record: the live
+  // compartment map (Need-To-Know gating) and, for roster writes, every
+  // operator's clearance (the read-in floor check).
+  const compMap = await compMapFor(repo);
+  const ctx = { compMap };
+  if (collection === 'compartments') ctx.clearanceOf = await clearanceMap(repo);
+  const verdict = authorizeWrite(collection, actor, cur, incoming, ctx);
   if (!verdict.ok) return json({ error: verdict.error }, verdict.status, env);
 
-  // Integrity: the server owns credentials, timestamps and version numbers.
+  // Integrity: the server owns credentials, timestamps and version numbers,
+  // and preserves any field the actor isn't cleared to see so a partial edit
+  // can't blank it.
   if (collection === 'users') {
     if (cur) { incoming.salt = cur.salt; incoming.passwordHash = cur.passwordHash; }
     else if (!incoming.salt || !incoming.passwordHash) {
@@ -153,6 +200,10 @@ async function writeRecord(collection, id, actor, request, repo, env) {
       incoming.salt = salt; incoming.passwordHash = hash;
     }
     if (!incoming.username) return json({ error: 'A new operator needs an operator ID.' }, 400, env);
+  }
+  if (collection === 'directives' && cur
+      && !(canReadDirective(actor, cur) && compartmentClears(actor, cur, compMap))) {
+    incoming.body = cur.body; // editor manages metadata but cannot read/replace the body
   }
   incoming.updatedAt = new Date().toISOString();
 
@@ -165,8 +216,8 @@ async function writeRecord(collection, id, actor, request, repo, env) {
     await repo.insert(collection, incoming);
   }
 
-  await repo.addAudit({ id: uid(), ts: incoming.updatedAt, actor: actor.designation, action, detail });
-  return json({ record: redactForActor(collection, actor, incoming) }, 200, env);
+  await repo.addAudit({ id: uid(), ts: incoming.updatedAt, actor: actor.designation, action: verdict.action || clientAction || 'WRITE', detail: verdict.detail || clientDetail || `${collection}:${id}` });
+  return json({ record: redactForActor(collection, actor, incoming, compMap) }, 200, env);
 }
 
 async function deleteRecord(collection, id, actor, repo, env) {

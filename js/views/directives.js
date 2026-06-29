@@ -8,11 +8,43 @@
 // =============================================================================
 
 import { ORGS, ORG_ORDER, CLEARANCE_ORDER, CLEARANCES, clearanceWeight } from '../constants.js';
-import { directives, getDirective, upsertDirective, newId } from '../storage.js';
-import { canManageDirectives, canReadDirective } from '../permissions.js';
+import { directives, getDirective, upsertDirective, compartments, getCompartment, isServerMode, newId } from '../storage.js';
+import { canManageDirectives, canReadDirective, isCL5, readIntoCompartment } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { exportDirective } from '../export.js';
 import { esc, fmtDate, fmtDateTime, clearanceBadge, orgTag, monogram, toast, openModal, confirmDialog } from '../ui.js';
+
+// --- Need-To-Know caveat (kept local so ui.js stays domain-agnostic) --------
+function caveatName(d) {
+  if (!d || !d.compartment) return null;
+  return d.compartmentName || (getCompartment(d.compartment) || {}).name || 'COMPARTMENTED';
+}
+const caveatChip = (name) => `<span class="caveat-chip">\u25c8 ${esc(name)}</span>`;
+function caveatBanner(d) {
+  const n = caveatName(d);
+  return n ? `<div class="caveat-banner">\u25c8 NEED-TO-KNOW \u00b7 ${esc(n)} \u00b7 handling restricted to read-in personnel</div>` : '';
+}
+// Whether THIS viewer may read the body. In server mode the Worker has already
+// applied both the clearance gate and Need-To-Know, so a delivered body is
+// readable; standalone mode applies both gates locally.
+function bodyReadable(actor, d) {
+  if (isServerMode()) return !d.bodyWithheld && typeof d.body === 'string';
+  if (!canReadDirective(actor, d)) return false;
+  if (d.compartment && !isCL5(actor)) {
+    const c = getCompartment(d.compartment);
+    if (!c || !readIntoCompartment(actor, c)) return false;
+  }
+  return true;
+}
+function withheldReason(d) {
+  const n = caveatName(d);
+  if (n) return `\u25a0\u25a0\u25a0 Restricted \u2014 NEED-TO-KNOW: ${esc(n)} (and ${esc(CLEARANCES[d.clearance].label)}) \u25a0\u25a0\u25a0`;
+  return `\u25a0\u25a0\u25a0 Content restricted \u2014 requires ${esc(CLEARANCES[d.clearance].label)} \u25a0\u25a0\u25a0`;
+}
+function fileableCompartments(actor) {
+  return compartments().filter((c) => !c.deleted
+    && (isCL5(actor) || c.access === 'member' || readIntoCompartment(actor, c)));
+}
 
 export function render(host, app) {
   const actor = app.user;
@@ -25,19 +57,21 @@ export function render(host, app) {
     const canManage = canManageDirectives(actor, org);
 
     const cards = list.map((d) => {
-      const visible = canReadDirective(actor, d);
+      const visible = bodyReadable(actor, d);
       const rescinded = d.status === 'rescinded';
+      const cav = caveatName(d);
       return `
         <article class="directive ${rescinded ? 'directive--rescinded' : ''}" data-open="${esc(d.id)}" tabindex="0">
           <div class="directive__top">
             <span class="mono directive__ref">${esc(d.ref)}</span>
             ${clearanceBadge(d.clearance)}
+            ${cav ? caveatChip(cav) : ''}
             ${rescinded ? '<span class="badge badge--muted">Rescinded</span>' : '<span class="badge badge--ok">Active</span>'}
           </div>
           <h3 class="directive__title">${esc(d.title)}</h3>
           ${visible
             ? `<p class="directive__body">${esc(d.body)}</p>`
-            : `<p class="directive__locked">\u25a0\u25a0\u25a0 Content restricted \u2014 requires ${esc(CLEARANCES[d.clearance].label)} \u25a0\u25a0\u25a0</p>`}
+            : `<p class="directive__locked">${withheldReason(d)}</p>`}
           <div class="directive__foot">
             <span>Issued ${fmtDate(d.createdAt)} \u00b7 <span class="mono">${esc(d.issuedBy)}</span></span>
             <span class="directive__actions">
@@ -96,13 +130,14 @@ export function renderDirective(host, app, id) {
     return;
   }
 
-  const canRead = canReadDirective(actor, d);
+  const canRead = bodyReadable(actor, d);
   const canManage = canManageDirectives(actor, d.org);
   const rescinded = d.status === 'rescinded';
+  const cav = caveatName(d);
 
   const bodyBlock = canRead
     ? `<div class="memo__body">${esc(d.body)}</div>`
-    : `<div class="memo__withheld">\u25a0\u25a0\u25a0 Content restricted \u2014 requires ${esc(CLEARANCES[d.clearance].label)} to read \u25a0\u25a0\u25a0</div>`;
+    : `<div class="memo__withheld">${withheldReason(d)}</div>`;
 
   host.innerHTML = `
     <div class="file-actions">
@@ -118,10 +153,13 @@ export function renderDirective(host, app, id) {
           <span class="mono">${esc(d.ref)}</span>
           ${orgTag(d.org)}
           ${clearanceBadge(d.clearance)}
+          ${cav ? caveatChip(cav) : ''}
           ${rescinded ? '<span class="badge badge--muted">Rescinded</span>' : '<span class="badge badge--ok">In force</span>'}
         </div>
       </div>
     </header>
+
+    ${caveatBanner(d)}
 
     ${canManage ? `<div class="actionbar">
       ${!rescinded ? '<button class="btn btn--sm btn--danger" data-act="rescind">Rescind</button>' : '<button class="btn btn--sm" data-act="reinstate">Reinstate</button>'}
@@ -133,7 +171,7 @@ export function renderDirective(host, app, id) {
         <div class="memo__row"><span class="memo__k">To</span><span class="memo__v">All ${esc(ORGS[d.org].short)} personnel at clearance</span></div>
         <div class="memo__row"><span class="memo__k">Reference</span><span class="memo__v mono">${esc(d.ref)}</span></div>
         <div class="memo__row"><span class="memo__k">Subject</span><span class="memo__v">${esc(d.title)}</span></div>
-        <div class="memo__row"><span class="memo__k">Classification</span><span class="memo__v">${clearanceBadge(d.clearance)}</span></div>
+        <div class="memo__row"><span class="memo__k">Classification</span><span class="memo__v">${clearanceBadge(d.clearance)}${cav ? ` \u00b7 ${caveatChip(cav)}` : ''}</span></div>
         <div class="memo__row"><span class="memo__k">Issued</span><span class="memo__v">${fmtDate(d.createdAt)} \u00b7 <span class="mono">${esc(d.issuedBy)}</span></span></div>
       </div>
       <div class="memo__rule"></div>
@@ -171,6 +209,9 @@ function openIssue(app, org) {
   const nums = directives().filter((d) => d.org === org).length + 1;
   const suggested = `${prefix}-${String(nums).padStart(3, '0')}`;
   const clrOpts = allowed.map((c) => `<option value="${c}">${esc(CLEARANCES[c].label)}</option>`).join('');
+  const comps = fileableCompartments(app.user);
+  const compOpts = ['<option value="">\u2014 None (uncompartmented) \u2014</option>',
+    ...comps.map((c) => `<option value="${esc(c.id)}">${esc(c.name)} (${esc(c.codeword || c.name)})</option>`)].join('');
 
   openModal({
     title: `Issue directive \u2014 ${ORGS[org].short}`,
@@ -179,6 +220,8 @@ function openIssue(app, org) {
       <div class="field"><label>Reference</label><input id="di-ref" type="text" value="${esc(suggested)}" /></div>
       <div class="field"><label>Title</label><input id="di-title" type="text" placeholder="Directive title" /></div>
       <div class="field"><label>Minimum clearance to read</label><select id="di-clr">${clrOpts}</select></div>
+      <div class="field"><label>Need-To-Know compartment</label><select id="di-comp">${compOpts}</select>
+        <div class="field__hint">Only compartments you are read into are listed.</div></div>
       <div class="field"><label>Body</label><textarea id="di-body" rows="5" placeholder="State the directive\u2026"></textarea></div>
       <div id="di-err" class="auth__error" hidden></div>
     `,
@@ -188,6 +231,7 @@ function openIssue(app, org) {
           const ref = d.querySelector('#di-ref').value.trim();
           const title = d.querySelector('#di-title').value.trim();
           const clr = d.querySelector('#di-clr').value;
+          const comp = d.querySelector('#di-comp').value || null;
           const bodyText = d.querySelector('#di-body').value.trim();
           const err = d.querySelector('#di-err');
           err.hidden = true;
@@ -195,6 +239,7 @@ function openIssue(app, org) {
           const now = new Date().toISOString();
           upsertDirective({
             id: newId('dir'), ref, org, clearance: clr, title, body: bodyText,
+            compartment: comp,
             issuedBy: app.user.designation, status: 'active',
             createdAt: now, updatedAt: now, version: 1, deleted: false, deletedAt: null,
           });

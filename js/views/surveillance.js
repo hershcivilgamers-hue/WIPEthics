@@ -13,9 +13,10 @@ import {
   SUBJECT_STATUS, SUBJECT_STATUS_ORDER, CLEARANCE_ORDER, CLEARANCES,
   ORGS, ORG_ORDER, clearanceWeight,
 } from '../constants.js';
-import { subjects, getSubject, upsertSubject, newId } from '../storage.js';
+import { subjects, getSubject, upsertSubject, compartments, getCompartment, newId } from '../storage.js';
 import {
   canViewSubject, canManageSubject, canClassifySubjectAt, canManageOrg,
+  isCL5, readIntoCompartment,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { exportSubject } from '../export.js';
@@ -39,6 +40,28 @@ const subjStatusBadge = (s) => {
   const m = SUBJECT_STATUS[s] || { label: s, tone: 'muted' };
   return `<span class="badge badge--${m.tone}">${esc(m.label)}</span>`;
 };
+
+// --- Need-To-Know caveat (kept local so ui.js stays domain-agnostic) --------
+function caveatName(rec) {
+  if (!rec || !rec.compartment) return null;
+  return rec.compartmentName || (getCompartment(rec.compartment) || {}).name || 'COMPARTMENTED';
+}
+function caveatBanner(rec) {
+  const n = caveatName(rec);
+  return n ? `<div class="caveat-banner">\u25c8 NEED-TO-KNOW \u00b7 ${esc(n)} \u00b7 handling restricted to read-in personnel</div>` : '';
+}
+// Compartments this actor may file a record into (must be able to clear them).
+function fileableCompartments(actor) {
+  return compartments().filter((c) => !c.deleted
+    && (isCL5(actor) || c.access === 'member' || readIntoCompartment(actor, c)));
+}
+function compartmentField(actor, selectedId) {
+  const comps = fileableCompartments(actor);
+  const opts = ['<option value="">\u2014 None (uncompartmented) \u2014</option>',
+    ...comps.map((c) => `<option value="${esc(c.id)}" ${c.id === selectedId ? 'selected' : ''}>${esc(c.name)} (${esc(c.codeword || c.name)})</option>`)].join('');
+  return `<div class="field"><label>Need-To-Know compartment</label><select id="su-comp">${opts}</select>
+    <div class="field__hint">Only compartments you are read into are listed.</div></div>`;
+}
 
 // --- Shared mutation helper (version-stamped, audited) ----------------------
 function mutate(app, id, expectedVersion, patch, { action, detail }) {
@@ -240,6 +263,8 @@ export function renderSubject(host, app, id) {
       </div>
     </header>
 
+    ${caveatBanner(s)}
+
     ${canManage ? `<div class="actionbar">
       <button class="btn btn--sm" data-act="log">Add log entry</button>
       <button class="btn btn--sm" data-act="status">Set status</button>
@@ -318,6 +343,7 @@ function openCreate(app) {
     ${selectField('su-clr', 'Sensitivity (min. clearance to view)', allowedClr, allowedClr[0], (c) => CLEARANCES[c].label)}
     <div class="field"><label>Last known location</label><input id="su-loc" type="text" placeholder="optional" /></div>
     <div class="field"><label>Assessment</label><textarea id="su-summary" rows="3" placeholder="Why is this subject under watch?"></textarea></div>
+    ${compartmentField(actor, '')}
     <div id="su-err" class="auth__error" hidden></div>
   `;
 
@@ -336,6 +362,7 @@ function openCreate(app) {
           const clr = d.querySelector('#su-clr').value;
           const loc = d.querySelector('#su-loc').value.trim();
           const summary = d.querySelector('#su-summary').value.trim();
+          const comp = d.querySelector('#su-comp').value || null;
           const err = d.querySelector('#su-err');
           err.hidden = true;
 
@@ -348,6 +375,7 @@ function openCreate(app) {
           upsertSubject({
             id: newId('sub'), ref, alias, realName: '[UNIDENTIFIED]', kind, org,
             threat, clearance: clr, status: 'active', summary, lastKnownLocation: loc,
+            compartment: comp,
             logs: [{ id: newId('log'), ts: now, by: actor.designation, type: 'intel', text: `Record opened by ${actor.designation}.` }],
             createdBy: actor.designation, createdAt: now, updatedAt: now,
             version: 1, deleted: false, deletedAt: null,
@@ -373,6 +401,7 @@ function openEdit(app, s) {
     ${selectField('ed-kind', 'Classification', SUBJECT_CLASS_ORDER, s.kind, (k) => SUBJECT_CLASS[k].label)}
     <div class="field"><label>Last known location</label><input id="ed-loc" type="text" value="${esc(s.lastKnownLocation || '')}" /></div>
     <div class="field"><label>Assessment</label><textarea id="ed-summary" rows="4">${esc(s.summary || '')}</textarea></div>
+    ${compartmentField(app.user, s.compartment).replace('id="su-comp"', 'id="ed-comp"')}
   `;
   openModal({
     title: `Edit \u2014 ${s.ref}`,
@@ -385,8 +414,10 @@ function openEdit(app, s) {
           const kind = d.querySelector('#ed-kind').value;
           const loc = d.querySelector('#ed-loc').value.trim();
           const summary = d.querySelector('#ed-summary').value.trim();
+          const comp = d.querySelector('#ed-comp').value || null;
           mutate(app, s.id, s.version, (rec) => {
             rec.alias = alias; rec.kind = kind; rec.lastKnownLocation = loc; rec.summary = summary;
+            rec.compartment = comp;
           }, { action: 'EDIT_SUBJECT', detail: `${s.ref} record updated.` });
           c();
           toast('Record updated.', 'success');

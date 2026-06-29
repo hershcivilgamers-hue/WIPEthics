@@ -11,7 +11,8 @@
 import { ORGS, RANKS, CLEARANCE_ORDER, CLEARANCES, rankUp } from '../constants.js';
 import {
   users, directives, subjects, cases, getUser, upsertUser, getDirective, upsertDirective,
-  getSubject, upsertSubject, getCase, upsertCase, promoReqs, getPromoReq, upsertPromoReq,
+  getSubject, upsertSubject, getCase, upsertCase, compartments, getCompartment, upsertCompartment,
+  promoReqs, getPromoReq, upsertPromoReq,
   deletePromoReq, newId, loadDb, saveDb, clearDb, storageBackend,
 } from '../storage.js';
 import { canSetClearance, canManagePromoReqs, isCL5 } from '../permissions.js';
@@ -40,7 +41,9 @@ export function render(host, app) {
   ];
 
   const pendingCount = users().filter((u) => !u.deleted && u.accountStatus === 'pending').length;
-  const binCount = users().filter((u) => u.deleted).length + directives().filter((d) => d.deleted).length;
+  const binCount = users().filter((u) => u.deleted).length + directives().filter((d) => d.deleted).length
+    + subjects().filter((s) => s.deleted).length + cases().filter((c) => c.deleted).length
+    + compartments().filter((c) => c.deleted).length;
 
   host.innerHTML = `
     <div class="page-head">
@@ -328,8 +331,9 @@ function drawRecycle(panel, app) {
   const delDirs = directives().filter((d) => d.deleted);
   const delSubjects = subjects().filter((s) => s.deleted);
   const delCases = cases().filter((c) => c.deleted);
+  const delCompartments = compartments().filter((c) => c.deleted);
 
-  if (!delUsers.length && !delDirs.length && !delSubjects.length && !delCases.length) {
+  if (!delUsers.length && !delDirs.length && !delSubjects.length && !delCases.length && !delCompartments.length) {
     panel.innerHTML = '<div class="card"><div class="card__body empty">The recycle bin is empty.</div></div>';
     return;
   }
@@ -370,10 +374,20 @@ function drawRecycle(panel, app) {
       </div>
     </div>`).join('');
 
+  const compRows = delCompartments.map((c) => `
+    <div class="bin-row">
+      <div><span class="mono">${esc(c.ref)}</span> \u00b7 ${esc(c.name)} ${orgTag(c.org)}<div class="bin-row__meta">Removed ${fmtDateTime(c.deletedAt)}</div></div>
+      <div class="bin-row__actions">
+        <button class="btn btn--xs" data-restore-k="${esc(c.id)}">Restore</button>
+        <button class="btn btn--xs btn--danger" data-purge-k="${esc(c.id)}">Purge</button>
+      </div>
+    </div>`).join('');
+
   panel.innerHTML = `
     ${delUsers.length ? `<div class="card"><div class="card__title">Removed personnel</div><div class="card__body">${userRows}</div></div>` : ''}
     ${delSubjects.length ? `<div class="card"><div class="card__title">Removed surveillance subjects</div><div class="card__body">${subjRows}</div></div>` : ''}
     ${delCases.length ? `<div class="card"><div class="card__title">Removed tribunal cases</div><div class="card__body">${caseRows}</div></div>` : ''}
+    ${delCompartments.length ? `<div class="card"><div class="card__title">Removed compartments</div><div class="card__body">${compRows}</div></div>` : ''}
     ${delDirs.length ? `<div class="card"><div class="card__title">Removed directives</div><div class="card__body">${dirRows}</div></div>` : ''}
   `;
 
@@ -436,6 +450,21 @@ function drawRecycle(panel, app) {
     saveDb();
     logAction(app.user, 'PURGE_RECORD', `Case ${c.ref} permanently deleted.`);
     toast('Case purged.', 'success'); app.refresh();
+  }));
+  panel.querySelectorAll('[data-restore-k]').forEach((b) => b.addEventListener('click', () => {
+    const c = getCompartment(b.dataset.restoreK); if (!c) return;
+    c.deleted = false; c.deletedAt = null; c.version += 1; upsertCompartment(c);
+    logAction(app.user, 'RESTORE_COMPARTMENT', `Compartment ${c.name} restored.`);
+    toast('Compartment restored.', 'success'); app.refresh();
+  }));
+  panel.querySelectorAll('[data-purge-k]').forEach((b) => b.addEventListener('click', async () => {
+    const c = getCompartment(b.dataset.purgeK); if (!c) return;
+    const ok = await confirmDialog({ title: 'Purge permanently', message: `Permanently delete compartment ${c.name} (${c.ref})? Records filed under it will need re-tagging.`, confirmLabel: 'Purge', danger: true });
+    if (!ok) return;
+    const db = loadDb(); db.compartments = db.compartments.filter((x) => x.id !== c.id);
+    saveDb();
+    logAction(app.user, 'PURGE_RECORD', `Compartment ${c.name} permanently deleted.`);
+    toast('Compartment purged.', 'success'); app.refresh();
   }));
 }
 

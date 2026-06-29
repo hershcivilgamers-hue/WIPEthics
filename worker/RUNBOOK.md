@@ -150,5 +150,17 @@ ready, point me at your Worker URL (from Step 6) and I'll wire it in.
 - **Re-running**: `schema.sql` is safe to re-run (it uses `IF NOT EXISTS`).
   Don't re-run `seed.sql` on a database that already has data, or you'll get
   duplicate-key errors — it's meant for a fresh database.
+- **Adding a feature (e.g. Need-To-Know compartments).** When a new feature ships
+  it usually adds a new table and gate/redaction logic. To take it live:
+  1. `npx wrangler d1 execute cairo-aic --remote --file=./schema.sql` — safe to
+     re-run; it only creates the new tables (recently: `compartments`,
+     `activity`, `recruits`) and skips the ones that already exist.
+  2. `npx wrangler deploy` — pushes the new Worker code (gate + redaction).
+  That's it; the feature now works against your existing data. Note the **demo
+  compartments and the pre-tagged demo records only appear on a freshly seeded
+  database** — on your existing database the feature starts empty, and you create
+  compartments through the app's *Need-To-Know* screen. (Don't hand-run the
+  compartment `INSERT`s from a fresh `seed.sql`: their member IDs point at a fresh
+  seed's users, not yours.)
 - **This backend is separate from your existing Firebase system.** You're now on
   the Cloudflare path; the two aren't meant to run together.

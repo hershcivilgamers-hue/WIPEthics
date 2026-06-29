@@ -4,12 +4,13 @@
 
 import { CONFIG } from '../config.js';
 import { ORGS, ORG_ORDER } from '../constants.js';
-import { users, upsertUser, newId } from '../storage.js';
+import { users, upsertUser, newId, applyServerSnapshot } from '../storage.js';
 import { verifyPassword, makeCredential } from '../crypto.js';
-import { startSession } from '../state.js';
+import { startSession, setServerUser } from '../state.js';
 import { logAction } from '../audit.js';
 import { DEMO_LOGINS } from '../seed.js';
 import { esc, toast, openModal, closeModal } from '../ui.js';
+import * as api from '../api.js';
 
 function findByUsername(username) {
   const u = username.trim().toLowerCase();
@@ -93,6 +94,28 @@ export function render(host, app) {
       showError('Enter an operator ID and passphrase.');
       return;
     }
+
+    // Server mode: the Worker authenticates and decides what this operator is
+    // cleared to see. We then load that pre-filtered snapshot and hold the
+    // record it returns. (A pending/disabled account gets the same generic
+    // failure as bad credentials — the server does not reveal which.)
+    if (api.serverMode()) {
+      const submit = host.querySelector('#login-submit');
+      submit.disabled = true;
+      try {
+        const me = await api.login(username, password);
+        const snap = await api.fetchSnapshot();
+        applyServerSnapshot(snap);
+        setServerUser(me);
+        app.refresh();
+      } catch (e) {
+        submit.disabled = false;
+        if (e && e.status === 401) showError('Authentication failed. Check your credentials.');
+        else showError('Could not reach the server. Please try again.');
+      }
+      return;
+    }
+
     const user = findByUsername(username);
     if (!user) {
       showError('Authentication failed. Check your credentials.');
@@ -172,6 +195,24 @@ function openRegister(app) {
             err.hidden = false;
             return;
           }
+
+          // Server mode: submit the request to the Worker, which creates the
+          // pending account for Command to approve later. No local write.
+          if (api.serverMode()) {
+            try {
+              await api.register({ codename, username, password, requestedOrg: org });
+            } catch (e) {
+              err.textContent = e && e.status === 409
+                ? 'That operator ID is already in use.'
+                : 'Could not submit your request. Please try again.';
+              err.hidden = false;
+              return;
+            }
+            close();
+            toast('Request submitted. Command will review it shortly.', 'success');
+            return;
+          }
+
           const taken = users().some((u) => (u.username || '').toLowerCase() === username.toLowerCase());
           if (taken) {
             err.textContent = 'That operator ID is already in use.';

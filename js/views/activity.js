@@ -26,6 +26,11 @@ const TONE = {
   SET_PANEL: 'info', CITE_SUBJECT: 'info', SET_CASE_STATUS: 'info', RECLASSIFY_CASE: 'warn',
   ENTER_RULING: 'ok', REMOVE_CASE: 'bad', CASE_ACCESS_DENIED: 'bad',
   EXPORT_CASE: 'muted', EXPORT_SUBJECT: 'muted', EXPORT_PERSONNEL: 'muted', EXPORT_DIRECTIVE: 'muted',
+  CREATE_COMPARTMENT: 'ok', EDIT_COMPARTMENT: 'info', REMOVE_COMPARTMENT: 'bad', RESTORE_COMPARTMENT: 'ok',
+  READ_IN: 'warn', READ_OUT: 'muted', ROSTER_UPDATE: 'info', SEAL_COMPARTMENT: 'warn',
+  LOG_ACTIVITY: 'info', SET_DUTY_STATUS: 'warn',
+  OPEN_RECRUIT: 'ok', EDIT_RECRUIT: 'info', ADVANCE_RECRUIT: 'info', VOTE_RECRUIT: 'muted',
+  REJECT_RECRUIT: 'bad', INDUCT_RECRUIT: 'ok', REMOVE_RECRUIT: 'bad', RESTORE_RECRUIT: 'ok',
 };
 
 function label(action) {

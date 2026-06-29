@@ -192,6 +192,107 @@ export const RULING_FINDING = {
 };
 export const RULING_FINDING_ORDER = ['upheld', 'dismissed', 'referred', 'no-action'];
 
+// --- Need-To-Know compartments ----------------------------------------------
+// A compartment is an access caveat that sits ALONGSIDE the clearance ladder,
+// not on it. A record (subject / case / directive) may carry one compartment;
+// to see its content an operator must clear the normal clearance gate AND be
+// "read into" the compartment (or hold CL5, the universal read override). Who
+// may administer a compartment — open it, seal it, read operators in or out —
+// follows the standard management rule for the owning organisation.
+//
+// COMPARTMENT shape:
+//   { id, ref, name, codeword, org, clearance (floor), description, status,
+//     members:[userId], events:[{type,text,at}],
+//     createdBy, createdAt, updatedAt, version, deleted, deletedAt }
+//
+//   • active — open; operators may be read in (subject to the clearance floor).
+//   • sealed — frozen; existing read-ins keep access, but no new read-ins. Used
+//     when a compartment is wound down but its records must stay legible.
+export const COMPARTMENT_STATUS = {
+  active: { code: 'active', label: 'Active', tone: 'ok',    blurb: 'Open \u2014 operators may be read in.' },
+  sealed: { code: 'sealed', label: 'Sealed', tone: 'muted', blurb: 'Frozen \u2014 no new read-ins.' },
+};
+export const COMPARTMENT_STATUS_ORDER = ['active', 'sealed'];
+
+// --- Operational activity & readiness ---------------------------------------
+// Each operator has an activity record: a running log of operational check-ins
+// (deployments, training, status) plus an optional duty posture. Readiness is
+// DERIVED from the most recent entry's age against the thresholds below — so it
+// is always current and cannot be set as a field.
+//
+// ACTIVITY record shape:
+//   { id, userId, org, entries:[{id,type,text,by,at}], duty, lastActiveAt,
+//     createdBy, createdAt, updatedAt, version, deleted, deletedAt }
+export const ACTIVITY_TYPE = {
+  'check-in':  { code: 'check-in',  label: 'Check-in',   tone: 'ok' },
+  deployment:  { code: 'deployment', label: 'Deployment', tone: 'info' },
+  training:    { code: 'training',  label: 'Training',   tone: 'info' },
+  standdown:   { code: 'standdown', label: 'Stand-down', tone: 'muted' },
+  note:        { code: 'note',      label: 'Note',       tone: 'muted' },
+};
+export const ACTIVITY_TYPE_ORDER = ['check-in', 'deployment', 'training', 'standdown', 'note'];
+
+// Duty posture — a manager flags a current state that supersedes derived
+// readiness (e.g. away on a long operation, or deliberately stood down).
+export const DUTY_STATUS = {
+  none:         { code: 'none',         label: 'On roster',  tone: 'muted' },
+  deployed:     { code: 'deployed',     label: 'On Operation', tone: 'info' },
+  'stood-down': { code: 'stood-down',   label: 'Stood Down', tone: 'muted' },
+  leave:        { code: 'leave',        label: 'On Leave',   tone: 'warn' },
+};
+export const DUTY_STATUS_ORDER = ['none', 'deployed', 'stood-down', 'leave'];
+
+// Readiness states, derived from days since the last logged activity.
+export const READINESS = {
+  current: { code: 'current', label: 'Current',          tone: 'ok' },
+  overdue: { code: 'overdue', label: 'Overdue',          tone: 'warn' },
+  breach:  { code: 'breach',  label: 'Activity Breach',  tone: 'bad' },
+  unknown: { code: 'unknown', label: 'No Activity',      tone: 'muted' },
+};
+export const READINESS_OVERDUE_DAYS = 14;
+export const READINESS_BREACH_DAYS = 30;
+export function readinessFor(lastActiveAt, now = Date.now()) {
+  if (!lastActiveAt) return 'unknown';
+  const days = (now - new Date(lastActiveAt).getTime()) / 86400000;
+  if (days >= READINESS_BREACH_DAYS) return 'breach';
+  if (days >= READINESS_OVERDUE_DAYS) return 'overdue';
+  return 'current';
+}
+
+// --- Recruitment (Omega-1 scouting pipeline) --------------------------------
+// The regiment's intake process, run by the unit's CL4 cadre (any CL4, not only
+// senior managers). A candidate moves Scouting -> Greenlit -> Tryout, then is
+// archived as approved or denied. Greenlit is a CL4 yes/no vote; on a Tryout
+// approval the approver is prompted to open the operator's personnel file.
+//
+// RECRUIT record shape:
+//   { id, ref, name, steamId, department, rank, org, stage, archiveStatus,
+//     comments:[{id,by,at,text,stage}], votes:{userId:'yes'|'no'},
+//     personnelFileId, createdBy, createdAt, updatedAt, version, deleted,
+//     deletedAt }
+export const RECRUIT_STAGE = {
+  scouting: { code: 'scouting', label: 'Scouting', tone: 'info',  step: 0, blurb: 'Under scouting review \u2014 any CL4 may comment, deny, or advance.' },
+  greenlit: { code: 'greenlit', label: 'Greenlit', tone: 'warn',  step: 1, blurb: 'CL4 vote \u2014 a majority of Yes advances to tryout.' },
+  tryout:   { code: 'tryout',   label: 'Tryout',   tone: 'info',  step: 2, blurb: 'In tryout \u2014 approval opens the operator\u2019s personnel file.' },
+  archived: { code: 'archived', label: 'Archived', tone: 'muted', step: 3, blurb: 'Closed.' },
+};
+export const RECRUIT_STAGE_ORDER = ['scouting', 'greenlit', 'tryout', 'archived'];
+// The live pipeline columns (archived is shown separately).
+export const RECRUIT_PIPELINE = ['scouting', 'greenlit', 'tryout'];
+// Archive outcomes.
+export const RECRUIT_ARCHIVE = {
+  approved: { code: 'approved', label: 'Approved', tone: 'ok' },
+  denied:   { code: 'denied',   label: 'Denied',   tone: 'bad' },
+};
+
+// Count votes on a candidate -> { yes, no, total, majorityYes }.
+export function tallyVotes(votes) {
+  const vals = Object.values(votes || {});
+  const yes = vals.filter((v) => v === 'yes').length;
+  const no = vals.filter((v) => v === 'no').length;
+  return { yes, no, total: vals.length, majorityYes: yes > no && yes > 0 };
+}
+
 // --- Helpers ----------------------------------------------------------------
 export const clearanceWeight = (code) => CLEARANCES[code]?.weight ?? 0;
 export const orgName = (code) => ORGS[code]?.name ?? code;

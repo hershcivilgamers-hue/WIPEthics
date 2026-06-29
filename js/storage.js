@@ -1,14 +1,20 @@
 // =============================================================================
 // storage.js — Persistence.
 //
-// The entire dataset lives as one JSON blob under CONFIG.storageKey.
-// We try localStorage first; if it is unavailable (private mode, sandboxed
-// iframe, storage disabled) we fall back to an in-memory object so the system
-// still runs for the session. This mirrors the offline-safe pattern the live
-// CAIRO bundle uses, and keeps the app working everywhere.
+// Two modes, chosen by CONFIG.apiBaseUrl:
 //
-// Everything else in the app reads and writes through this module — no other
-// file touches localStorage directly.
+//   • Standalone (apiBaseUrl null): the entire dataset lives as one JSON blob
+//     under CONFIG.storageKey in localStorage, with an in-memory fallback for
+//     private/sandboxed contexts. This is the original offline-safe behaviour.
+//
+//   • Server (apiBaseUrl set): the in-memory working copy is filled from the
+//     Worker (already filtered to what the operator may see), and every change
+//     is pushed back per-record over the network — localStorage is not used.
+//     The network plumbing lives in api.js; the write/error orchestration in
+//     sync.js, which registers a handler here at boot.
+//
+// Either way, everything else in the app reads and writes through this module —
+// no other file touches localStorage or the network for data.
 // =============================================================================
 
 import { CONFIG } from './config.js';
@@ -23,13 +29,16 @@ function emptyDb() {
     directives: [],
     subjects: [],
     cases: [],
+    compartments: [],
+    activity: [],
+    recruits: [],
     promoReqs: [],
     audit: [],
     session: { userId: null },
   };
 }
 
-// --- Backend detection ------------------------------------------------------
+// --- Backend detection (standalone mode) ------------------------------------
 let backend = 'memory';
 let memoryStore = {};
 
@@ -66,25 +75,80 @@ function writeRaw(value) {
       window.localStorage.setItem(KEY, value);
       return;
     } catch (_) {
-      // Quota or access error mid-session: degrade to memory, don't crash.
       backend = 'memory';
     }
   }
   memoryStore[KEY] = value;
 }
 
+// --- Server mode ------------------------------------------------------------
+export function isServerMode() { return !!CONFIG.apiBaseUrl; }
+
+// A { write(collection, record), remove(collection, id) } handler, registered
+// by sync.js when running against the Worker.
+let sync = null;
+export function setSync(handler) { sync = handler; }
+
+// API collection name -> in-memory db key.
+function cacheKey(collection) { return collection === 'promo_reqs' ? 'promoReqs' : collection; }
+
+// Replace the working copy from a server snapshot (already redacted per viewer).
+export function applyServerSnapshot(snap) {
+  const base = emptyDb();
+  db = {
+    ...base,
+    users: snap.users || [],
+    directives: snap.directives || [],
+    subjects: snap.subjects || [],
+    cases: snap.cases || [],
+    compartments: snap.compartments || [],
+    activity: snap.activity || [],
+    recruits: snap.recruits || [],
+    promoReqs: snap.promoReqs || [],
+    audit: snap.audit || [],
+    meta: { ...base.meta, seededAt: 'server' },
+    session: { userId: null },
+  };
+  return db;
+}
+
+// Silently adopt a server-canonical record into the cache (no re-push), so the
+// local copy carries the server's version/timestamp after a successful save.
+export function applyServerRecord(collection, record) {
+  if (!record) return;
+  const list = loadDb()[cacheKey(collection)];
+  if (!list) return;
+  const idx = list.findIndex((r) => r.id === record.id);
+  if (idx >= 0) list[idx] = record; else list.push(record);
+}
+
+// Persist after a mutation: push to the server in server mode, else save local.
+function afterWrite(collection, record) {
+  if (isServerMode()) { if (sync) sync.write(collection, record); }
+  else saveDb();
+}
+function afterDelete(collection, id) {
+  if (isServerMode()) { if (sync) sync.remove(collection, id); }
+  else saveDb();
+}
+
 // --- Public API -------------------------------------------------------------
 
-// In-memory working copy of the database. Load once, mutate via save().
+// In-memory working copy of the database.
 let db = null;
 
 export function loadDb() {
   if (db) return db;
+  // In server mode the working copy is populated by applyServerSnapshot at boot
+  // / sign-in. Until then it's an empty shell (never read from localStorage).
+  if (isServerMode()) {
+    if (!db) db = emptyDb();
+    return db;
+  }
   const raw = readRaw();
   if (raw) {
     try {
       db = JSON.parse(raw);
-      // Defensive: ensure every top-level collection exists.
       const base = emptyDb();
       db = { ...base, ...db, meta: { ...base.meta, ...(db.meta || {}) } };
     } catch (_) {
@@ -96,21 +160,25 @@ export function loadDb() {
   return db;
 }
 
-// Persist the current working copy.
+// Persist the current working copy. No-op in server mode (writes go per-record
+// over the network instead).
 export function saveDb() {
   if (!db) return;
+  if (isServerMode()) return;
   writeRaw(JSON.stringify(db));
 }
 
-// Replace the whole database (used by seeding / reset).
+// Replace the whole database (used by seeding / reset in standalone mode).
 export function setDb(next) {
   db = next;
   saveDb();
   return db;
 }
 
-// Wipe everything and reload empty. Used by the "reset system" admin action.
+// Wipe everything and reload empty (standalone "reset system"). Inert in server
+// mode — the data lives on the server, not in this browser.
 export function clearDb() {
+  if (isServerMode()) return loadDb();
   if (backend === 'localStorage') {
     try { window.localStorage.removeItem(KEY); } catch (_) {}
   }
@@ -120,17 +188,18 @@ export function clearDb() {
 }
 
 // --- Collection accessors ---------------------------------------------------
-// Convenience getters so views read `users()` rather than reaching into db.
 export const users = () => loadDb().users;
 export const directives = () => loadDb().directives;
 export const subjects = () => loadDb().subjects;
 export const cases = () => loadDb().cases;
+export const compartments = () => loadDb().compartments;
+export const activity = () => loadDb().activity;
+export const recruits = () => loadDb().recruits;
 export const promoReqs = () => loadDb().promoReqs;
 export const audit = () => loadDb().audit;
 export const meta = () => loadDb().meta;
 export const session = () => loadDb().session;
 
-// Find / mutate a single user by id.
 export function getUser(id) {
   return users().find((u) => u.id === id) || null;
 }
@@ -140,7 +209,7 @@ export function upsertUser(user) {
   const idx = list.findIndex((u) => u.id === user.id);
   if (idx >= 0) list[idx] = user;
   else list.push(user);
-  saveDb();
+  afterWrite('users', user);
   return user;
 }
 
@@ -153,7 +222,7 @@ export function upsertDirective(directive) {
   const idx = list.findIndex((d) => d.id === directive.id);
   if (idx >= 0) list[idx] = directive;
   else list.push(directive);
-  saveDb();
+  afterWrite('directives', directive);
   return directive;
 }
 
@@ -166,7 +235,7 @@ export function upsertSubject(subject) {
   const idx = list.findIndex((s) => s.id === subject.id);
   if (idx >= 0) list[idx] = subject;
   else list.push(subject);
-  saveDb();
+  afterWrite('subjects', subject);
   return subject;
 }
 
@@ -179,7 +248,51 @@ export function upsertCase(record) {
   const idx = list.findIndex((c) => c.id === record.id);
   if (idx >= 0) list[idx] = record;
   else list.push(record);
-  saveDb();
+  afterWrite('cases', record);
+  return record;
+}
+
+// Need-To-Know compartments. Soft-deleted (recycle bin) like other records, so
+// there is no hard-delete accessor.
+export function getCompartment(id) {
+  return compartments().find((c) => c.id === id) || null;
+}
+
+export function upsertCompartment(record) {
+  const list = compartments();
+  const idx = list.findIndex((c) => c.id === record.id);
+  if (idx >= 0) list[idx] = record;
+  else list.push(record);
+  afterWrite('compartments', record);
+  return record;
+}
+
+// Operational activity — one record per operator, keyed by userId.
+export function getActivity(id) {
+  return activity().find((a) => a.id === id) || null;
+}
+export function getActivityForUser(userId) {
+  return activity().find((a) => a.userId === userId) || null;
+}
+export function upsertActivity(record) {
+  const list = activity();
+  const idx = list.findIndex((a) => a.id === record.id);
+  if (idx >= 0) list[idx] = record;
+  else list.push(record);
+  afterWrite('activity', record);
+  return record;
+}
+
+// Recruitment candidates.
+export function getRecruit(id) {
+  return recruits().find((r) => r.id === id) || null;
+}
+export function upsertRecruit(record) {
+  const list = recruits();
+  const idx = list.findIndex((r) => r.id === record.id);
+  if (idx >= 0) list[idx] = record;
+  else list.push(record);
+  afterWrite('recruits', record);
   return record;
 }
 
@@ -193,14 +306,14 @@ export function upsertPromoReq(record) {
   const idx = list.findIndex((r) => r.id === record.id);
   if (idx >= 0) list[idx] = record;
   else list.push(record);
-  saveDb();
+  afterWrite('promo_reqs', record);
   return record;
 }
 
 export function deletePromoReq(id) {
   const db2 = loadDb();
   db2.promoReqs = db2.promoReqs.filter((r) => r.id !== id);
-  saveDb();
+  afterDelete('promo_reqs', id);
 }
 
 // --- ID generator -----------------------------------------------------------

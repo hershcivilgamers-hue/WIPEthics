@@ -48,6 +48,41 @@ CREATE TABLE IF NOT EXISTS cases (
   data        TEXT NOT NULL
 );
 
+-- Need-To-Know compartments. An access caveat orthogonal to the clearance
+-- ladder; the roster of read-in operators lives inside `data.members`.
+CREATE TABLE IF NOT EXISTS compartments (
+  id          TEXT PRIMARY KEY,
+  org         TEXT,
+  deleted     INTEGER NOT NULL DEFAULT 0,
+  version     INTEGER NOT NULL DEFAULT 1,
+  updated_at  TEXT,
+  data        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_compartments_org ON compartments (org);
+
+-- Operational activity / readiness. One record per operator (data.userId links
+-- to the user); the running check-in log lives in data.entries.
+CREATE TABLE IF NOT EXISTS activity (
+  id          TEXT PRIMARY KEY,
+  org         TEXT,
+  deleted     INTEGER NOT NULL DEFAULT 0,
+  version     INTEGER NOT NULL DEFAULT 1,
+  updated_at  TEXT,
+  data        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_activity_org ON activity (org);
+
+-- Recruitment candidate pipeline (pre-personnel).
+CREATE TABLE IF NOT EXISTS recruits (
+  id          TEXT PRIMARY KEY,
+  org         TEXT,
+  deleted     INTEGER NOT NULL DEFAULT 0,
+  version     INTEGER NOT NULL DEFAULT 1,
+  updated_at  TEXT,
+  data        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_recruits_org ON recruits (org);
+
 CREATE TABLE IF NOT EXISTS promo_reqs (
   id          TEXT PRIMARY KEY,
   org         TEXT,

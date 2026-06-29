@@ -15,6 +15,8 @@
 
 import {
   accessLevel, canReadDirective, canViewSubject, canViewCase, isCL5,
+  compartmentClears, readIntoCompartment, canManageCompartment,
+  canViewActivity, canViewRecruitment,
 } from '../../js/permissions.js';
 
 // A user record with credential material and (per access level) sensitive
@@ -81,29 +83,90 @@ export function redactUser(actor, user) {
   };
 }
 
-// A directive's existence/reference/title is open; the body is gated (soft).
-export function redactDirective(actor, d) {
+// A directive's existence/reference/title is open; the body is gated (soft) by
+// BOTH the clearance floor and, if the directive is compartmented, Need-To-Know.
+// The caveat (codeword) is shown either way — like a handling marking on a cover
+// sheet — so a reader knows the body is withheld behind a compartment.
+export function redactDirective(actor, d, compMap) {
   const out = {
     id: d.id, ref: d.ref, org: d.org, clearance: d.clearance, title: d.title,
     issuedBy: d.issuedBy, status: d.status, createdAt: d.createdAt,
     updatedAt: d.updatedAt, version: d.version, deleted: !!d.deleted,
     deletedAt: d.deletedAt ?? null,
   };
-  if (canReadDirective(actor, d)) out.body = d.body;
+  if (d.compartment) {
+    out.compartment = d.compartment;
+    out.compartmented = true;
+    const c = compMap && (compMap.get ? compMap.get(d.compartment) : compMap[d.compartment]);
+    out.compartmentName = c ? c.name : null;
+  }
+  const clears = canReadDirective(actor, d) && compartmentClears(actor, d, compMap);
+  if (clears) out.body = d.body;
   else out.bodyWithheld = true;
   return out;
 }
 
+// A compartment, redacted by the viewer's relationship to it:
+//   • admin  (canManageCompartment) — full record incl. the read-in roster.
+//   • member (read in, not admin)   — description, but not the roster.
+//   • none   — existence + counts only (not shipped in the snapshot; see below).
+export function redactCompartment(actor, c) {
+  const access = canManageCompartment(actor, c)
+    ? 'admin'
+    : (readIntoCompartment(actor, c) ? 'member' : 'none');
+  const base = {
+    id: c.id, ref: c.ref, name: c.name, codeword: c.codeword ?? c.name,
+    org: c.org, clearance: c.clearance, status: c.status,
+    membersCount: Array.isArray(c.members) ? c.members.length : 0,
+    createdAt: c.createdAt, updatedAt: c.updatedAt, version: c.version,
+    deleted: !!c.deleted, deletedAt: c.deletedAt ?? null, access,
+  };
+  if (access === 'admin') {
+    return { ...base, description: c.description ?? '', members: c.members ?? [], events: c.events ?? [] };
+  }
+  if (access === 'member') {
+    return { ...base, description: c.description ?? '' };
+  }
+  return base;
+}
+
+// Attach the compartment codeword to a hard-gated record (subject/case) the
+// viewer is allowed to see, so the dossier can show the caveat banner.
+function withCaveat(record, compMap) {
+  if (!record || !record.compartment) return record;
+  const c = compMap && (compMap.get ? compMap.get(record.compartment) : compMap[record.compartment]);
+  return { ...record, compartmentName: c ? c.name : null };
+}
+
 // Build the snapshot the viewer is allowed to load. Subjects and cases are HARD
-// gated — omitted entirely below clearance. The audit log is oversight, CL5
-// only. promoReqs are configuration, visible to everyone (the dossier needs
-// them).
+// gated — omitted entirely below clearance OR if the viewer isn't read into the
+// record's compartment. Directives are soft-gated (existence open, body
+// withheld). The audit log is oversight, CL5 only. promoReqs are configuration,
+// visible to everyone. The compartments list is scoped to the ones the viewer
+// administers or is read into.
 export function buildSnapshot(actor, db) {
+  // Lookup of live compartments, keyed by id. A removed (soft-deleted)
+  // compartment drops out here, so its referencing records fail closed.
+  const compMap = new Map();
+  for (const c of (db.compartments || [])) {
+    if (!c.deleted) compMap.set(c.id, c);
+  }
+
   return {
     users: (db.users || []).filter((u) => !u.deleted).map((u) => redactUser(actor, u)),
-    directives: (db.directives || []).filter((d) => !d.deleted).map((d) => redactDirective(actor, d)),
-    subjects: (db.subjects || []).filter((s) => !s.deleted && canViewSubject(actor, s)),
-    cases: (db.cases || []).filter((c) => !c.deleted && canViewCase(actor, c)),
+    directives: (db.directives || []).filter((d) => !d.deleted).map((d) => redactDirective(actor, d, compMap)),
+    subjects: (db.subjects || [])
+      .filter((s) => !s.deleted && canViewSubject(actor, s) && compartmentClears(actor, s, compMap))
+      .map((s) => withCaveat(s, compMap)),
+    cases: (db.cases || [])
+      .filter((c) => !c.deleted && canViewCase(actor, c) && compartmentClears(actor, c, compMap))
+      .map((c) => withCaveat(c, compMap)),
+    compartments: (db.compartments || [])
+      .filter((c) => !c.deleted)
+      .map((c) => redactCompartment(actor, c))
+      .filter((c) => c.access !== 'none'),
+    activity: (db.activity || []).filter((a) => !a.deleted && canViewActivity(actor, a)),
+    recruits: (db.recruits || []).filter((r) => !r.deleted && canViewRecruitment(actor, r)),
     promoReqs: db.promoReqs || [],
     audit: isCL5(actor) ? (db.audit || []) : [],
   };

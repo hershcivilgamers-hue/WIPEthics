@@ -16,10 +16,11 @@ import {
   ORGS, clearanceWeight,
 } from '../constants.js';
 import {
-  cases, getCase, upsertCase, users, getUser, subjects, getSubject, newId,
+  cases, getCase, upsertCase, users, getUser, subjects, getSubject, compartments, getCompartment, newId,
 } from '../storage.js';
 import {
   canViewCase, canManageTribunal, canRuleTribunal, canClassifyAt, canViewSubject,
+  isCL5, readIntoCompartment,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { exportCase } from '../export.js';
@@ -43,6 +44,27 @@ const findingBadge = (f) => {
   const m = RULING_FINDING[f] || { label: f, tone: 'muted' };
   return `<span class="badge badge--${m.tone}">${esc(m.label)}</span>`;
 };
+
+// --- Need-To-Know caveat (kept local so ui.js stays domain-agnostic) --------
+function caveatName(rec) {
+  if (!rec || !rec.compartment) return null;
+  return rec.compartmentName || (getCompartment(rec.compartment) || {}).name || 'COMPARTMENTED';
+}
+function caveatBanner(rec) {
+  const n = caveatName(rec);
+  return n ? `<div class="caveat-banner">\u25c8 NEED-TO-KNOW \u00b7 ${esc(n)} \u00b7 handling restricted to read-in personnel</div>` : '';
+}
+function fileableCompartments(actor) {
+  return compartments().filter((c) => !c.deleted
+    && (isCL5(actor) || c.access === 'member' || readIntoCompartment(actor, c)));
+}
+function compartmentField(actor, id, selectedId) {
+  const comps = fileableCompartments(actor);
+  const opts = ['<option value="">\u2014 None (uncompartmented) \u2014</option>',
+    ...comps.map((c) => `<option value="${esc(c.id)}" ${c.id === selectedId ? 'selected' : ''}>${esc(c.name)} (${esc(c.codeword || c.name)})</option>`)].join('');
+  return `<div class="field"><label>Need-To-Know compartment</label><select id="${id}">${opts}</select>
+    <div class="field__hint">Only compartments you are read into are listed.</div></div>`;
+}
 
 // --- Reference resolution ---------------------------------------------------
 // Respondent / panel display. Personnel links route to the dossier, where that
@@ -270,6 +292,8 @@ export function renderCase(host, app, id) {
       </div>
     </header>
 
+    ${caveatBanner(c)}
+
     ${canManage ? `<div class="actionbar">
       <button class="btn btn--sm" data-act="entry">Add docket entry</button>
       <button class="btn btn--sm" data-act="summons">Issue summons</button>
@@ -367,6 +391,7 @@ function openCreate(app) {
     ${selectField('cs-clr', 'Sensitivity', allowedClr, allowedClr[allowedClr.length - 1], (c) => CLEARANCES[c].label)}
     <div class="field"><label>Respondent</label><select id="cs-resp">${personnelOptions(null)}</select></div>
     <div class="field"><label>Matter under review</label><textarea id="cs-summary" rows="3" placeholder="State the matter\u2026"></textarea></div>
+    ${compartmentField(actor, 'cs-comp', '')}
     <div id="cs-err" class="auth__error" hidden></div>
   `;
   openModal({
@@ -382,6 +407,7 @@ function openCreate(app) {
           const clr = d.querySelector('#cs-clr').value;
           const respId = d.querySelector('#cs-resp').value || null;
           const summary = d.querySelector('#cs-summary').value.trim();
+          const comp = d.querySelector('#cs-comp').value || null;
           const err = d.querySelector('#cs-err');
           err.hidden = true;
           if (!title) { err.textContent = 'A matter title is required.'; err.hidden = false; return; }
@@ -392,6 +418,7 @@ function openCreate(app) {
             id: newId('case'), ref, title, kind, clearance: clr, status: 'open', summary,
             respondentId: respId, respondentName: respId ? null : '[UNNAMED]',
             panelIds: [], linkedSubjectIds: [], summons: [],
+            compartment: comp,
             entries: [{ id: newId('ent'), ts: now, by: actor.designation, type: 'filing', text: `Case opened by ${actor.designation}.` }],
             ruling: null, createdBy: actor.designation, createdAt: now, updatedAt: now,
             version: 1, deleted: false, deletedAt: null,
@@ -411,6 +438,7 @@ function openEdit(app, c) {
     ${selectField('ed-kind', 'Type', CASE_KIND_ORDER, c.kind, (k) => CASE_KIND[k].label)}
     <div class="field"><label>Respondent</label><select id="ed-resp">${personnelOptions(c.respondentId)}</select></div>
     <div class="field"><label>Matter under review</label><textarea id="ed-summary" rows="4">${esc(c.summary || '')}</textarea></div>
+    ${compartmentField(app.user, 'ed-comp', c.compartment)}
   `;
   openModal({
     title: `Edit \u2014 ${c.ref}`,
@@ -423,9 +451,11 @@ function openEdit(app, c) {
           const kind = d.querySelector('#ed-kind').value;
           const respId = d.querySelector('#ed-resp').value || null;
           const summary = d.querySelector('#ed-summary').value.trim();
+          const comp = d.querySelector('#ed-comp').value || null;
           mutate(app, c.id, c.version, (rec) => {
             rec.title = title; rec.kind = kind; rec.summary = summary;
             rec.respondentId = respId; rec.respondentName = respId ? null : (rec.respondentName || '[UNNAMED]');
+            rec.compartment = comp;
           }, { action: 'EDIT_CASE', detail: `${c.ref} updated.` });
           x();
           toast('Case updated.', 'success');

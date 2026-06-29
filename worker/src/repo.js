@@ -12,6 +12,9 @@ const COLUMNS = {
   directives: ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
   subjects:   ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
   cases:      ['id', 'deleted', 'version', 'updated_at', 'data'],
+  compartments: ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
+  activity:   ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
+  recruits:   ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
   promo_reqs: ['id', 'org', 'data'],
 };
 

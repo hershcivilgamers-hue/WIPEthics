@@ -196,3 +196,96 @@ export function canViewCase(actor, record) {
   if (!actor || !record) return false;
   return w(actor) >= clearanceWeight(record.clearance);
 }
+
+// --- Need-To-Know compartments ----------------------------------------------
+// Compartments are an ORTHOGONAL access control, independent of (and stacked on
+// top of) the clearance ladder. An operator may hold CL5 and still not be read
+// into a given compartment; a CL3 operator may be read in where their work
+// requires it. A record may carry one compartment caveat — to see the
+// compartmented content the actor must clear BOTH the clearance gate AND the
+// compartment.
+//
+//   • CL5 is a universal READ override, consistent with CL5 already seeing every
+//     dossier, subject, case and the audit log. It does NOT auto-administer a
+//     compartment for an organisation it has no stake in.
+//   • Administering a compartment (open / seal / read in / read out) follows the
+//     standard management rule for the owning org (CL4·Senior with a stake, or
+//     Command).
+
+// Is this operator read into the compartment?
+export function readIntoCompartment(actor, compartment) {
+  if (!actor || !compartment) return false;
+  if (isCL5(actor)) return true;
+  return Array.isArray(compartment.members) && compartment.members.includes(actor.id);
+}
+
+// May this operator administer the compartment (edit it, seal it, change roster)?
+export function canManageCompartment(actor, compartment) {
+  return canManageOrg(actor, compartment?.org);
+}
+
+// May `actor` read `target` INTO `compartment`? Requires administration rights,
+// the compartment to be open, and the target to meet its clearance floor (you
+// cannot read in an operator who isn't even cleared to the compartment's level).
+export function canReadOperatorInto(actor, compartment, target) {
+  if (!canManageCompartment(actor, compartment)) return false;
+  if (!target || !compartment) return false;
+  if (compartment.status === 'sealed') return false;
+  return clearanceWeight(target.clearance) >= clearanceWeight(compartment.clearance);
+}
+
+// Does the actor clear the Need-To-Know gate for a record bearing an optional
+// `compartment` id, given a lookup of known compartments (a Map or plain
+// object)? Uncompartmented records always pass. A reference to a missing or
+// removed compartment fails CLOSED for everyone but CL5 — a deliberately
+// over-restrictive default: never leak compartmented content on stale metadata.
+export function compartmentClears(actor, record, compartmentsById) {
+  const cid = record?.compartment;
+  if (!cid) return true;
+  if (isCL5(actor)) return true;
+  let c = null;
+  if (compartmentsById) {
+    c = typeof compartmentsById.get === 'function' ? compartmentsById.get(cid) : compartmentsById[cid];
+  }
+  if (!c) return false; // dangling caveat — deny (CL5 has already passed above)
+  return readIntoCompartment(actor, c);
+}
+
+// --- Operational activity & readiness ---------------------------------------
+// Activity is operational-unit information: visible within the owning org, to
+// Command, to CL5, and to the operator themselves. Logging is self-service (an
+// operator logs their own check-ins regardless of clearance); a duty posture or
+// logging on another operator's behalf needs the org-management right.
+export function canManageActivity(actor, org) {
+  return canManageOrg(actor, org);
+}
+export function canLogActivity(actor, record) {
+  if (!actor || !record) return false;
+  return record.userId === actor.id || canManageOrg(actor, record.org);
+}
+export function canViewActivity(actor, record) {
+  if (!actor || !record) return false;
+  if (isCL5(actor)) return true;
+  if (record.userId === actor.id) return true;
+  return actor.org === record.org || actor.org === 'command';
+}
+
+// --- Recruitment ------------------------------------------------------------
+// The Omega-1 scouting pipeline is run by the unit's CL4 cadre: ANY CL4 with a
+// stake in the organisation may open scouting targets, comment, vote and advance
+// candidates (not only the senior CL4·S managers). Candidate records are
+// pre-personnel and sensitive — visible to that same CL4 cadre and to CL5.
+export function canParticipateRecruitment(actor, org) {
+  if (!actor) return false;
+  return w(actor) >= 4 && hasStakeIn(actor, org);
+}
+export function canViewRecruitment(actor, record) {
+  if (!actor || !record) return false;
+  if (isCL5(actor)) return true;
+  return canParticipateRecruitment(actor, record.org);
+}
+// Whether this actor can be the one to open a candidate's personnel file on a
+// tryout approval (creating personnel needs the org-management right).
+export function canInductRecruit(actor, record) {
+  return canManageOrg(actor, record?.org);
+}

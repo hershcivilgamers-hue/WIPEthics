@@ -10,17 +10,22 @@
 import { CONFIG } from './config.js';
 import { ensureSeeded } from './seed.js';
 import { runMigrations } from './migrations.js';
-import { currentUser, endSession } from './state.js';
+import { currentUser, endSession, setServerUser } from './state.js';
 import { logAction } from './audit.js';
 import { NAV, parseHash, isRouteAllowed } from './router.js';
-import { getUser, getSubject, getCase } from './storage.js';
+import { getUser, getSubject, getCase, applyServerSnapshot } from './storage.js';
 import { esc, clearanceBadge, toast } from './ui.js';
+import * as api from './api.js';
+import * as sync from './sync.js';
 
 import * as loginView from './views/login.js';
 import * as overviewView from './views/overview.js';
 import * as searchView from './views/search.js';
 import * as personnelView from './views/personnel.js';
 import * as surveillanceView from './views/surveillance.js';
+import * as compartmentsView from './views/compartments.js';
+import * as operationsView from './views/operations.js';
+import * as recruitmentView from './views/recruitment.js';
 import * as tribunalsView from './views/tribunals.js';
 import * as directivesView from './views/directives.js';
 import * as activityView from './views/activity.js';
@@ -90,6 +95,10 @@ function renderShell(user, route) {
     activeName = target ? navNameForOrg(target.org) : '';
   } else if (route.name === 'subject') {
     activeName = 'surveillance';
+  } else if (route.name === 'compartment') {
+    activeName = 'compartments';
+  } else if (route.name === 'recruit') {
+    activeName = 'recruitment';
   } else if (route.name === 'case') {
     activeName = 'tribunals';
   } else if (route.name === 'directive') {
@@ -126,6 +135,7 @@ function renderShell(user, route) {
 
   root.querySelector('#logout').addEventListener('click', () => {
     logAction(user, 'LOGOUT', `${user.designation} signed out.`);
+    if (api.serverMode()) api.logout();
     endSession();
     app.navigate('#/overview');
     renderApp();
@@ -159,6 +169,11 @@ function dispatch(route, user) {
     case 'search':       searchView.render(view, app); break;
     case 'surveillance': surveillanceView.renderList(view, app); break;
     case 'subject':      surveillanceView.renderSubject(view, app, route.params.id); break;
+    case 'compartments': compartmentsView.renderList(view, app); break;
+    case 'compartment':  compartmentsView.renderCompartment(view, app, route.params.id); break;
+    case 'operations':   operationsView.render(view, app); break;
+    case 'recruitment':  recruitmentView.renderList(view, app); break;
+    case 'recruit':      recruitmentView.renderRecruit(view, app, route.params.id); break;
     case 'tribunals':    tribunalsView.renderList(view, app); break;
     case 'case':         tribunalsView.renderCase(view, app, route.params.id); break;
     case 'directives':   directivesView.render(view, app); break;
@@ -184,8 +199,30 @@ function renderApp() {
 
 // --- Boot -------------------------------------------------------------------
 async function boot() {
-  await ensureSeeded();
-  runMigrations();
+  if (api.serverMode()) {
+    // Wire background sync to the Worker, then try to restore a saved session.
+    sync.init({
+      refresh: () => renderApp(),
+      toast,
+      onAuthLost: () => { api.setToken(null); setServerUser(null); renderApp(); },
+    });
+    api.loadToken();
+    if (api.getToken()) {
+      try {
+        const me = await api.fetchMe();
+        const snap = await api.fetchSnapshot();
+        applyServerSnapshot(snap);
+        setServerUser(me);
+      } catch (_) {
+        // Expired/invalid token, or the server is unreachable — fall to sign-in.
+        api.setToken(null);
+        setServerUser(null);
+      }
+    }
+  } else {
+    await ensureSeeded();
+    runMigrations();
+  }
   window.addEventListener('hashchange', renderApp);
   renderApp();
 }

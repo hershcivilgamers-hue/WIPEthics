@@ -466,11 +466,9 @@ function fieldSelect(id, label, options, selected) {
 }
 
 function openEdit(app, u) {
-  const ranks = RANKS[u.org] || [];
   const body = `
     <div class="field"><label>Codename</label><input id="ed-codename" type="text" value="${esc(u.codename)}" /></div>
     <div class="field"><label>Legal name</label><input id="ed-real" type="text" value="${esc(u.realName)}" /></div>
-    ${fieldSelect('ed-rank', 'Rank', ranks.length ? ranks : ['\u2014'], u.rank || ranks[0])}
     ${fieldSelect('ed-status', 'Status', STATUS_ORDER, u.status)}
   `;
   openModal({
@@ -481,13 +479,11 @@ function openEdit(app, u) {
       { label: 'Save changes', tone: 'primary', onClick: (c, d) => {
           const codename = d.querySelector('#ed-codename').value.trim() || u.codename;
           const realName = d.querySelector('#ed-real').value.trim() || u.realName;
-          const rank = d.querySelector('#ed-rank').value;
           const status = d.querySelector('#ed-status').value;
           mutate(app, u.id, u.version, (rec) => {
             const changes = [];
-            if (rec.rank !== rank) changes.push(`rank \u2192 ${rank}`);
             if (rec.status !== status) changes.push(`status \u2192 ${status}`);
-            rec.codename = codename; rec.realName = realName; rec.rank = rank; rec.status = status;
+            rec.codename = codename; rec.realName = realName; rec.status = status;
             if (changes.length) addEvent(rec, 'edit', `Record updated: ${changes.join(', ')}.`);
           }, { action: 'EDIT_RECORD', detail: `${u.designation} record updated.` });
           c();
