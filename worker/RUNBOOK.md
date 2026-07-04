@@ -193,6 +193,60 @@ the `wrangler d1 export` above is the real thing.
 
 ---
 
+## Resetting the database (start afresh for live)
+
+Because `schema.sql` uses `CREATE TABLE IF NOT EXISTS` and `seed.sql` uses
+`INSERT OR REPLACE`, simply re-running them does **not** wipe existing data — a
+clean start needs an explicit drop first. All commands run from `worker/`.
+
+**1. Back up first** — this is irreversible, so keep an escape hatch even for
+throwaway data:
+
+```
+npx wrangler d1 export cairo-aic --remote --output="backup-before-reset.sql"
+```
+
+**2. Drop every table:**
+
+```
+npx wrangler d1 execute cairo-aic --remote --file=./reset.sql
+```
+
+**3. Rebuild the schema:**
+
+```
+npx wrangler d1 execute cairo-aic --remote --file=./schema.sql
+```
+
+**4. Choose how to start.** Either seed the demonstration data (gives you
+sign-in accounts and the sample records to bootstrap from) —
+
+```
+npx wrangler d1 execute cairo-aic --remote --file=./seed.sql
+```
+
+— **or** skip the seed entirely for a completely empty system. If you skip it,
+you must create your first Command / CL5 account another way (see the go-live
+bootstrap section); with no accounts at all, no one can sign in.
+
+**5. Confirm the door is up and locked** (expect `401`):
+
+```
+curl.exe -i https://cairo-aic-api.hershcivilgamers.workers.dev/api/data
+```
+
+No Worker redeploy or site push is needed for a data reset — the code is
+unchanged. Existing sessions are gone (the `sessions` table was dropped), so
+everyone signs in again.
+
+> **If you seeded (step 4, first option):** the demonstration accounts are back
+> with their **known** passphrases. Immediately sign in as the seeded Command
+> CL5, change its passphrase, create your own real Command file, then neutralise
+> every demo account (set a new passphrase or suspend it) — exactly as in the
+> first-time bootstrap. Never leave a demo passphrase live.
+
+---
+
 ## Notes & troubleshooting
 
 - **CORS errors in the browser** (once wired): make sure `ALLOWED_ORIGIN` in
