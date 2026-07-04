@@ -191,7 +191,7 @@ export function renderDossier(host, app, id) {
 
   const serviceRecord = nameOnly ? '' : sectionService(u);
   const awardsBlock = nameOnly ? '' : sectionAwards(u);
-  const strikesBlock = sectionStrikes(u, full);
+  const strikesBlock = sectionStrikes(u, full, full && acts.strike);
   const leaveBlock = onLeave ? sectionLeave(u, full) : '';
   const notesBlock = sectionNotes(u, full);
   const promoBlock = nameOnly ? '' : sectionPromotion(u, actor);
@@ -274,6 +274,7 @@ export function renderDossier(host, app, id) {
   };
   host.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => dispatch[b.dataset.act]()));
   host.querySelectorAll('[data-revoke-training]').forEach((b) => b.addEventListener('click', () => revokeTraining(app, u, b.dataset.revokeTraining)));
+  host.querySelectorAll('[data-lift-strike]').forEach((b) => b.addEventListener('click', () => liftStrike(app, u, b.dataset.liftStrike)));
   host.querySelectorAll('[data-req]').forEach((b) => b.addEventListener('change', () => toggleRequirement(app, u, b.dataset.req)));
 }
 
@@ -506,7 +507,7 @@ async function revokeTraining(app, u, completionId) {
   toast('Completion revoked.', 'success'); app.refresh();
 }
 
-function sectionStrikes(u, full) {
+function sectionStrikes(u, full, canLift) {
   const count = (u.strikes || []).length;
   if (!count) return '';
   let body;
@@ -514,7 +515,8 @@ function sectionStrikes(u, full) {
     body = u.strikes.map((s) => `
       <div class="strike">
         <div class="strike__reason">${esc(s.reason)}</div>
-        <div class="strike__meta">${fmtDate(s.date)} \u00b7 issued by <span class="mono">${esc(s.by)}</span></div>
+        <div class="strike__meta">${fmtDate(s.date)} \u00b7 issued by <span class="mono">${esc(s.by)}</span>${s.liftedNote ? ` \u00b7 <span class="muted-text">${esc(s.liftedNote)}</span>` : ''}</div>
+        ${canLift ? `<button class="btn btn--xs" data-lift-strike="${esc(s.id)}">Lift</button>` : ''}
       </div>`).join('');
   } else {
     body = `<div class="restricted-line">${count} strike${count > 1 ? 's' : ''} on file \u2014 detail ${redacted(10)}</div>`;
@@ -765,6 +767,25 @@ function openStrike(app, u) {
         } },
     ],
   });
+}
+
+async function liftStrike(app, u, strikeId) {
+  const actor = app.user;
+  if (!canIssueStrike(actor, u)) { toast('You cannot amend this operator\u2019s record.', 'error'); return; }
+  const strike = (u.strikes || []).find((s) => s.id === strikeId);
+  if (!strike) return;
+  const ok = await confirmDialog({
+    title: 'Lift strike',
+    message: `Lift this strike against ${u.designation}? It will be removed from the disciplinary record on appeal.`,
+    confirmLabel: 'Lift strike',
+    danger: true,
+  });
+  if (!ok) return;
+  mutate(app, u.id, u.version, (rec) => {
+    rec.strikes = (rec.strikes || []).filter((s) => s.id !== strikeId);
+    addEvent(rec, 'strike', `Strike lifted on appeal: ${strike.reason}`);
+  }, { action: 'LIFT_STRIKE', detail: `Strike lifted for ${u.designation}.` });
+  toast('Strike lifted.', 'success');
 }
 
 function openNote(app, u) {

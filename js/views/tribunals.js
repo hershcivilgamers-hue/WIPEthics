@@ -135,7 +135,7 @@ export function renderList(host, app) {
       <td class="mono">${esc(c.ref)}</td>
       <td class="cell-name">${esc(c.title)}</td>
       <td>${kindTag(c.kind)}</td>
-      <td>${esc(c.respondentId ? personName(c.respondentId) : (c.respondentName || '\u2014'))}</td>
+      <td>${respondentLabel(c)}</td>
       <td>${caseStatusBadge(c.status)}</td>
       <td>${clearanceBadge(c.clearance)}</td>
       <td class="cell-right"><span class="row-go">Open \u2192</span></td>
@@ -240,7 +240,7 @@ export function renderCase(host, app, id) {
   // Summons.
   const summonsItems = (c.summons || []).length ? c.summons.map((m) => `
     <div class="summons">
-      <div class="summons__who">${m.targetId ? personLink(m.targetId, m.targetName) : `<span>${esc(m.targetName || '\u2014')}</span>`}</div>
+      <div class="summons__who">${summonsWho(m, { link: true })}</div>
       <div class="summons__reason">${esc(m.reason)}</div>
       <div class="summons__meta">Issued ${fmtDate(m.ts)} \u00b7 <span class="mono">${esc(m.by)}</span></div>
     </div>`).join('') : '<div class="empty">No summons issued.</div>';
@@ -315,7 +315,7 @@ export function renderCase(host, app, id) {
           <div class="kv"><span class="kv__k">Type</span><span class="kv__v">${esc(CASE_KIND[c.kind]?.label || c.kind)}</span></div>
           <div class="kv"><span class="kv__k">Status</span><span class="kv__v">${caseStatusBadge(c.status)}</span></div>
           <div class="kv"><span class="kv__k">Sensitivity</span><span class="kv__v">${clearanceBadge(c.clearance)}</span></div>
-          <div class="kv"><span class="kv__k">Respondent</span><span class="kv__v">${c.respondentId ? personLink(c.respondentId) : esc(c.respondentName || '\u2014')}</span></div>
+          <div class="kv"><span class="kv__k">Respondent</span><span class="kv__v">${respondentLabel(c, { link: true })}</span></div>
           <div class="kv"><span class="kv__k">Opened</span><span class="kv__v">${fmtDate(c.createdAt)} \u00b7 <span class="mono">${esc(c.createdBy || 'SYSTEM')}</span></span></div>
           <div class="kv"><span class="kv__k">Updated</span><span class="kv__v">${fmtDateTime(c.updatedAt)}</span></div>
           <div class="kv kv--stack"><span class="kv__k">Panel</span><span class="kv__v link-list">${panel}</span></div>
@@ -373,6 +373,27 @@ function personnelOptions(selectedId) {
   return `<option value="">\u2014 external / unnamed \u2014</option>${opts}`;
 }
 
+// Human-readable respondent: a linked operator, or a free-text person and/or
+// department, or a bare department when the matter concerns a whole section.
+function respondentLabel(c, { link = false } = {}) {
+  if (c.respondentId) return link ? personLink(c.respondentId) : esc(personName(c.respondentId));
+  const name = c.respondentName && c.respondentName !== '[UNNAMED]' ? c.respondentName : '';
+  const dept = c.respondentDept || '';
+  if (name && dept) return `${esc(name)} <span class="muted-text">\u2014 ${esc(dept)}</span>`;
+  if (name) return esc(name);
+  if (dept) return `${esc(dept)} <span class="badge badge--muted">Department</span>`;
+  return '\u2014';
+}
+function summonsWho(m, { link = false } = {}) {
+  if (m.targetId) return link ? personLink(m.targetId, m.targetName) : esc(personName(m.targetId));
+  const name = m.targetName || '';
+  const dept = m.targetDept || '';
+  if (name && dept) return `${esc(name)} <span class="muted-text">\u2014 ${esc(dept)}</span>`;
+  if (name) return esc(name);
+  if (dept) return `${esc(dept)} <span class="badge badge--muted">Department</span>`;
+  return '\u2014';
+}
+
 function suggestCaseRef() {
   const yy = new Date().getFullYear().toString().slice(-2);
   const n = cases().filter((c) => c.ref.includes(`-${yy}-`)).length + 1;
@@ -390,6 +411,8 @@ function openCreate(app) {
     ${selectField('cs-kind', 'Type', CASE_KIND_ORDER, 'review', (k) => CASE_KIND[k].label)}
     ${selectField('cs-clr', 'Sensitivity', allowedClr, allowedClr[allowedClr.length - 1], (c) => CLEARANCES[c].label)}
     <div class="field"><label>Respondent</label><select id="cs-resp">${personnelOptions(null)}</select></div>
+    <div class="field field--split"><div><label>If external \u2014 name <span class="muted-text">(optional)</span></label><input id="cs-resp-name" type="text" placeholder="e.g. Dr. Halloran, or leave blank" /></div><div><label>Department <span class="muted-text">(optional)</span></label><input id="cs-resp-dept" type="text" placeholder="e.g. Site-19 Research Division" /></div></div>
+    <div class="field__hint">Leave the respondent as \u201cexternal / unnamed\u201d to name a person or department by hand \u2014 a department alone is fine when the matter concerns a whole section.</div>
     <div class="field"><label>Matter under review</label><textarea id="cs-summary" rows="3" placeholder="State the matter\u2026"></textarea></div>
     ${compartmentField(actor, 'cs-comp', '')}
     <div id="cs-err" class="auth__error" hidden></div>
@@ -406,6 +429,8 @@ function openCreate(app) {
           const kind = d.querySelector('#cs-kind').value;
           const clr = d.querySelector('#cs-clr').value;
           const respId = d.querySelector('#cs-resp').value || null;
+          const respName = (d.querySelector('#cs-resp-name').value || '').trim();
+          const respDept = (d.querySelector('#cs-resp-dept').value || '').trim();
           const summary = d.querySelector('#cs-summary').value.trim();
           const comp = d.querySelector('#cs-comp').value || null;
           const err = d.querySelector('#cs-err');
@@ -416,7 +441,7 @@ function openCreate(app) {
           const now = new Date().toISOString();
           upsertCase({
             id: newId('case'), ref, title, kind, clearance: clr, status: 'open', summary,
-            respondentId: respId, respondentName: respId ? null : '[UNNAMED]',
+            respondentId: respId, respondentName: respId ? null : (respName || (respDept ? null : '[UNNAMED]')), respondentDept: respId ? null : (respDept || null),
             panelIds: [], linkedSubjectIds: [], summons: [],
             compartment: comp,
             entries: [{ id: newId('ent'), ts: now, by: actor.designation, type: 'filing', text: `Case opened by ${actor.designation}.` }],
@@ -437,6 +462,7 @@ function openEdit(app, c) {
     <div class="field"><label>Matter (title)</label><input id="ed-title" type="text" value="${esc(c.title)}" /></div>
     ${selectField('ed-kind', 'Type', CASE_KIND_ORDER, c.kind, (k) => CASE_KIND[k].label)}
     <div class="field"><label>Respondent</label><select id="ed-resp">${personnelOptions(c.respondentId)}</select></div>
+    <div class="field field--split"><div><label>If external \u2014 name</label><input id="ed-resp-name" type="text" value="${esc(c.respondentId ? '' : (c.respondentName && c.respondentName !== '[UNNAMED]' ? c.respondentName : ''))}" placeholder="optional" /></div><div><label>Department</label><input id="ed-resp-dept" type="text" value="${esc(c.respondentDept || '')}" placeholder="optional" /></div></div>
     <div class="field"><label>Matter under review</label><textarea id="ed-summary" rows="4">${esc(c.summary || '')}</textarea></div>
     ${compartmentField(app.user, 'ed-comp', c.compartment)}
   `;
@@ -450,11 +476,15 @@ function openEdit(app, c) {
           const title = d.querySelector('#ed-title').value.trim() || c.title;
           const kind = d.querySelector('#ed-kind').value;
           const respId = d.querySelector('#ed-resp').value || null;
+          const respName = (d.querySelector('#ed-resp-name').value || '').trim();
+          const respDept = (d.querySelector('#ed-resp-dept').value || '').trim();
           const summary = d.querySelector('#ed-summary').value.trim();
           const comp = d.querySelector('#ed-comp').value || null;
           mutate(app, c.id, c.version, (rec) => {
             rec.title = title; rec.kind = kind; rec.summary = summary;
-            rec.respondentId = respId; rec.respondentName = respId ? null : (rec.respondentName || '[UNNAMED]');
+            rec.respondentId = respId;
+            rec.respondentName = respId ? null : (respName || (respDept ? null : (rec.respondentName || '[UNNAMED]')));
+            rec.respondentDept = respId ? null : (respDept || null);
             rec.compartment = comp;
           }, { action: 'EDIT_CASE', detail: `${c.ref} updated.` });
           x();
@@ -490,20 +520,22 @@ function openSummons(app, c) {
     title: `Issue summons \u2014 ${c.ref}`,
     body: `
       <div class="field"><label>Summoned party</label><select id="sm-target">${personnelOptions(null)}</select></div>
-      <div class="field"><label>If external / unnamed, name</label><input id="sm-name" type="text" placeholder="optional" /></div>
+      <div class="field field--split"><div><label>If external \u2014 name</label><input id="sm-name" type="text" placeholder="optional" /></div><div><label>Department</label><input id="sm-dept" type="text" placeholder="e.g. Research Division" /></div></div>
       <div class="field"><label>Reason</label><textarea id="sm-reason" rows="2" placeholder="Why are they summoned?"></textarea></div>`,
     actions: [
       { label: 'Cancel', tone: 'ghost', onClick: (x) => x() },
       { label: 'Issue summons', tone: 'primary', onClick: (x, d) => {
           const targetId = d.querySelector('#sm-target').value || null;
           const targetName = d.querySelector('#sm-name').value.trim();
+          const targetDept = d.querySelector('#sm-dept').value.trim();
           const reason = d.querySelector('#sm-reason').value.trim();
           if (!reason) { toast('A reason is required.', 'error'); return; }
-          if (!targetId && !targetName) { toast('Name the summoned party.', 'error'); return; }
+          if (!targetId && !targetName && !targetDept) { toast('Name a person or department to summon.', 'error'); return; }
+          const who = targetId ? personName(targetId) : (targetName || targetDept);
           mutate(app, c.id, c.version, (rec) => {
             rec.summons = rec.summons || [];
-            rec.summons.unshift({ id: newId('sum'), ts: new Date().toISOString(), by: app.user.designation, targetId, targetName: targetId ? null : targetName, reason });
-            addEntry(rec, 'filing', app.user.designation, `Summons issued to ${targetId ? personName(targetId) : targetName}.`);
+            rec.summons.unshift({ id: newId('sum'), ts: new Date().toISOString(), by: app.user.designation, targetId, targetName: targetId ? null : (targetName || null), targetDept: targetId ? null : (targetDept || null), reason });
+            addEntry(rec, 'filing', app.user.designation, `Summons issued to ${who}.`);
           }, { action: 'ISSUE_SUMMONS', detail: `Summons issued in ${c.ref}.` });
           x();
           toast('Summons issued.', 'success');

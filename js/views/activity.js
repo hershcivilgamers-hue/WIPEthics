@@ -14,7 +14,7 @@ import { esc, fmtDateTime, relTime } from '../ui.js';
 const TONE = {
   LOGIN: 'info', LOGOUT: 'muted', REGISTRATION: 'warn', SYSTEM_INIT: 'muted', MIGRATION: 'muted',
   CREATE_RECORD: 'ok', EDIT_RECORD: 'info', SET_CLEARANCE: 'warn',
-  ADD_STRIKE: 'bad', ADD_NOTE: 'info', SET_LEAVE: 'warn', END_LEAVE: 'ok',
+  ADD_STRIKE: 'bad', ADD_NOTE: 'info', SET_LEAVE: 'warn', END_LEAVE: 'ok', LIFT_STRIKE: 'ok', ISSUE_STRIKE: 'bad',
   PROMOTE: 'ok', DEMOTE: 'bad', PROMO_CHECK: 'muted',
   SET_PROMO_REQ: 'warn', REMOVE_PROMO_REQ: 'muted',
   REMOVE_RECORD: 'bad', RESTORE_RECORD: 'ok', PURGE_RECORD: 'bad',

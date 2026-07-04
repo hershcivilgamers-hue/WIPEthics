@@ -116,6 +116,14 @@ function authorizeUser(actor, cur, next) {
     return ok('ISSUE_STRIKE', `Strike issued to ${cur.designation}.`);
   }
 
+  if (len(next.strikes) < len(cur.strikes)) {
+    if (!canIssueStrike(actor, cur)) return deny('You cannot amend this operator\u2019s disciplinary record.');
+    if (changedOutside(cur, next, ['strikes', 'events', 'version', 'updatedAt'])) {
+      return deny('A strike appeal cannot be combined with other edits.');
+    }
+    return ok('LIFT_STRIKE', `Strike lifted for ${cur.designation}.`);
+  }
+
   if (j(next.promoChecks) !== j(cur.promoChecks) &&
       !changedOutside(cur, next, ['promoChecks', 'version', 'updatedAt'])) {
     if (!canPromote(actor, cur)) return deny('You cannot update this checklist.');

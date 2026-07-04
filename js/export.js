@@ -311,7 +311,12 @@ export function buildCaseDocumentHTML(record, actor) {
   const kind = CASE_KIND[record.kind]?.label || record.kind;
   const kindLower = (CASE_KIND[record.kind]?.label || record.kind).toLowerCase();
   const status = CASE_STATUS[record.status]?.label || record.status;
-  const respondent = record.respondentId ? personRef(record.respondentId) : esc(record.respondentName || 'an unnamed party');
+  const respondent = record.respondentId
+    ? personRef(record.respondentId)
+    : esc([
+        (record.respondentName && record.respondentName !== '[UNNAMED]') ? record.respondentName : '',
+        record.respondentDept || '',
+      ].filter(Boolean).join(' \u2014 ') || 'an unnamed party');
 
   const panel = (record.panelIds || []);
   const panelLine = panel.length
@@ -328,7 +333,7 @@ export function buildCaseDocumentHTML(record, actor) {
   if (summons.length) {
     blocks.push('<div class="jhead">Summons</div>');
     summons.forEach((m) => {
-      const who = m.targetId ? personRef(m.targetId, m.targetName) : esc(m.targetName || 'a party');
+      const who = m.targetId ? personRef(m.targetId, m.targetName) : esc([m.targetName || '', m.targetDept || ''].filter(Boolean).join(' \u2014 ') || 'a party');
       blocks.push(`<div class="para">${who} was summoned to appear before the Committee: ${esc(m.reason)}</div>`);
     });
   }

@@ -457,3 +457,7 @@
 .trn-row__exp { flex: 0 0 auto; font-size: 12px; }
 .row-click { cursor: pointer; }
 .row-click:hover, .row-click:focus-visible { background: var(--surface-2); outline: none; }
+
+/* --- Split field row (two inputs side by side) ------------------------------ */
+.field--split { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
+.field--split > div { display: flex; flex-direction: column; }
