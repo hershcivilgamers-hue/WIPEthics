@@ -226,8 +226,27 @@ npx wrangler d1 execute cairo-aic --remote --file=./seed.sql
 ```
 
 — **or** skip the seed entirely for a completely empty system. If you skip it,
-you must create your first Command / CL5 account another way (see the go-live
-bootstrap section); with no accounts at all, no one can sign in.
+you must create your first account with the **bootstrap** step below — a blank
+database has no accounts, and self-registration lands as *pending* with no
+clearance, which only an existing manager can approve. With no manager, no one
+could ever get in. So for a clean start, run this instead of `seed.sql`, from
+the project root (not `worker/`), choosing your own operator ID and passphrase:
+
+```
+node tools/make_bootstrap_sql.mjs CMD-1 "a-long-passphrase-you-choose" "OVERSEER"
+```
+
+That writes `worker/bootstrap.sql` containing exactly one Command / CL5 account
+and nothing else — its passphrase PBKDF2-hashed just as the app does, never in
+plaintext. Then load it (from `worker/`):
+
+```
+npx wrangler d1 execute cairo-aic --remote --file=./bootstrap.sql
+```
+
+Sign in as that account, change its passphrase from the topbar, and build the
+real roster by hand. Because you chose the passphrase yourself and there are no
+demo accounts, there is nothing else to neutralise.
 
 **5. Confirm the door is up and locked** (expect `401`):
 
