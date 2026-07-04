@@ -54,7 +54,7 @@ const user = {
 const lit = (s) => `'${String(s).replace(/'/g, "''")}'`;
 const sql = `-- bootstrap.sql — single Command/CL5 account for an otherwise empty database.
 -- Generated ${now}. Sign in, change this passphrase, then build your roster.
-INSERT OR REPLACE INTO users (id, org, deleted, version, updated_at, data) VALUES (${lit(user.id)}, 'command', 0, 1, ${lit(now)}, ${lit(JSON.stringify(user))});
+INSERT OR REPLACE INTO users (id, username, org, deleted, version, updated_at, data) VALUES (${lit(user.id)}, ${lit(user.username)}, 'command', 0, 1, ${lit(now)}, ${lit(JSON.stringify(user))});
 INSERT OR REPLACE INTO meta (key, value) VALUES ('bootstrappedAt', ${lit(now)});
 `;
 
