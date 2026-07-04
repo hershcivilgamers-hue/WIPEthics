@@ -434,6 +434,19 @@ export function buildSubjectDocumentHTML(subject, actor) {
         <td>${esc(l.text)}<div class="lby">${esc(l.type)} \u2014 ${esc(l.by)}</div></td></tr>`).join('')}</tbody></table>`
     : '<p class="muted">No surveillance entries were recorded.</p>';
 
+  // Surveillance imagery — embedded as the same downscaled data-URLs the record
+  // holds (visible iff the viewer can see the subject at all). Only genuine
+  // image data-URLs are ever embedded.
+  const stills = (subject.images || []).filter((im) => typeof im.dataUrl === 'string' && /^data:image\//.test(im.dataUrl));
+  const imageryBody = stills.length ? `
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 4px">
+      ${stills.map((im, i) => `
+        <figure style="margin:0;width:calc(50% - 5px);break-inside:avoid">
+          <img src="${im.dataUrl}" alt="${esc(im.caption || `surveillance still ${i + 1}`)}" style="display:block;width:100%;border:1px solid #8a8074" />
+          <figcaption style="font-size:9pt;color:#555;margin-top:3px">${esc(im.caption || `Still ${i + 1}`)}${im.by ? ` \u2014 ${esc(im.by)}` : ''}</figcaption>
+        </figure>`).join('')}
+    </div>` : '';
+
   const inner = `
     ${letterhead(subject.org, 'Surveillance Section')}
     <hr class="rule" />
@@ -443,7 +456,8 @@ export function buildSubjectDocumentHTML(subject, actor) {
     <div class="fieldgrid">${fields.map(([k, v]) => `<div class="field"><span class="fl">${esc(k)}</span><span class="fv">${v}</span></div>`).join('')}</div>
     <div class="jhead">1.&nbsp;&nbsp;Assessment</div>
     ${paras(subject.summary || 'No assessment was recorded.')}
-    <div class="jhead">2.&nbsp;&nbsp;Surveillance Log</div>
+    ${stills.length ? `<div class="jhead">2.&nbsp;&nbsp;Surveillance Imagery</div>${imageryBody}` : ''}
+    <div class="jhead">${stills.length ? '3' : '2'}.&nbsp;&nbsp;Surveillance Log</div>
     ${logBody}
   `;
 

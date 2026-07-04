@@ -176,22 +176,23 @@
 .plain-list li { padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
 .plain-list li:last-child { border-bottom: none; }
 
-/* --- Situation Board (Omega-1 rollup) -------------------------------------- */
-.stat-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s3); margin: var(--s4) 0; }
-.stat { padding: var(--s3); }
-.stat__n { font-family: var(--mono); font-size: 26px; line-height: 1.1; }
-.stat__k { margin-top: 2px; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-3); }
-.stat__sub { margin-top: 2px; font-size: 11px; color: var(--text-3); }
+/* --- Situation Board & Docket Board (shared rollup styles) ------------------ */
+.stat-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--s4); margin: var(--s5) 0; }
+.stat { padding: var(--s4) var(--s4) var(--s4); }
+.stat__n { font-family: var(--mono); font-size: 32px; line-height: 1.1; }
+.stat__k { margin-top: 5px; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--text-3); }
+.stat__sub { margin-top: 3px; font-size: 11px; color: var(--text-3); }
 .stat--ok .stat__n { color: var(--ok); }
 .stat--warn .stat__n { color: var(--warn); }
 .stat--bad .stat__n { color: var(--bad); }
-.dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: var(--s4); align-items: start; }
+.dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: var(--s5); align-items: start; }
+.dash-grid > .card { margin: 0; }
 .dash-list { display: flex; flex-direction: column; }
-.dash-row { display: flex; align-items: baseline; gap: var(--s3); padding: var(--s2) var(--s1); border-bottom: 1px solid var(--line); cursor: pointer; }
+.dash-row { display: flex; align-items: baseline; gap: var(--s3); padding: var(--s3) var(--s2); border-bottom: 1px solid var(--line); cursor: pointer; line-height: 1.45; }
 .dash-row:last-child { border-bottom: none; }
 .dash-row:hover, .dash-row:focus-visible { background: var(--surface-2); outline: none; }
 .dash-row__grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dash-row .badge { flex: 0 0 auto; }
 .tl__item.dash-go { cursor: pointer; }
 .tl__item.dash-go:hover .tl__text, .tl__item.dash-go:focus-visible .tl__text { text-decoration: underline; }
-.card__foot { padding-top: var(--s2); }
+.card__foot { padding-top: var(--s3); }
