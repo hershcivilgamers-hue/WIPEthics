@@ -43,7 +43,8 @@ cairo-aic/
     ├── audit.js            Logging of significant actions.
     ├── router.js           Navigation structure and access guards.
     ├── ui.js               Shared helpers: modals, toasts, dates, redaction.
-    ├── export.js           Formal, print-ready tribunal document generation.
+    ├── export.js           Formal, print-ready document generation (records, memos, scripts).
+    ├── interview-bank.js   Ethics Assistant interview scenarios + per-candidate selection.
     ├── app.js              The entry point: boots, builds the shell, routes.
     └── views/              One file per screen.
         ├── login.js        Sign-in and access-request.
@@ -53,7 +54,10 @@ cairo-aic/
         ├── surveillance.js Subject registry (POIs / Targets) and subject files.
         ├── compartments.js Need-To-Know compartments: roster and read-in control.
         ├── operations.js   Operational activity logging + the readiness board.
-        ├── recruitment.js  Omega-1 scouting pipeline (scouting/greenlit/tryout).
+        ├── recruitment.js  Scouting (Omega-1) and Assistant application/interview (Ethics).
+        ├── deployments.js  Omega-1 operations & deployment log.
+        ├── intel.js        Omega-1 intelligence sources & informants.
+        ├── dashboard.js    Omega-1 Situation Board (derived unit rollup).
         ├── tribunals.js    Ethics case docket and the court-style case file.
         ├── directives.js   Standing-orders board and the directive memo view.
         ├── activity.js     The audit feed.
@@ -208,15 +212,50 @@ keep access), and roster changes are atomic. In server mode the Worker re-derive
 every operator's read-in status on read and re-authorises each change on write,
 so the roster is never something the browser can assert for itself.
 
-**Readiness** (operational activity logging) is a unit board showing every
-operator's readiness state — Current, Overdue or Activity Breach — **derived**
-from how recently they last logged activity, never set as a field, so it can't be
-faked. Logging is self-service: an operator records their own check-ins
-regardless of clearance, while setting a duty posture (On Operation, Stood Down,
-On Leave) or logging on another operator's behalf needs the org-management right.
-The board is visible within an operator's own organisation, to Command and to
-CL5; a banner flags anyone in breach. The demo seeds operators across all three
-states so the board is immediately legible.
+**Intelligence** is Omega-1's register of sources and informants, and it leans on
+those compartments. Each source is a file — a codename, a source type (informant,
+defector, technical, intercept and so on), a **reliability** grade, a handler, a
+Need-to-Know classification and a running log of intelligence reports, each graded
+for **credibility**. Reliability and credibility use the standard intelligence
+"Admiralty" scale (a source is graded A–F for how dependable it has proved, each
+report 1–6 for how credible that specific information is). Managers open, task,
+classify and close sources; the **handler** running a source may file reports —
+including into a compartmented source, since running it implies need-to-know —
+while everyone else sees a source only if they clear its classification and, where
+it is compartmented, are read in. The same server-side gate and redaction that
+guard operations guard intel: a source you aren't cleared for never reaches your
+browser at all. The demo seeds a handful of Omega-1 sources, including one held
+under a compartment and one marked burned.
+
+**Readiness** (the unit activity board) tracks every operator's status — Active,
+Semi-Active or Inactive — **derived** from the hours they've logged this week
+against the unit's requirement (Omega-1: 5h/week plus 25h/month; Ethics
+Assistants: 1h/week plus an interaction; other Committee roles and Command are
+exempt). Status is never a stored field, so it can't be faked. Operators log
+their own sessions — hours played, a note of what they did, and tags to the work
+that backs it up (orders now, operations once the deployment log lands, plus
+PoI/Targets) — and logging is self-service regardless of clearance. Authorised
+leave (LoA/RoA) suppresses the status to "On Leave" with no breach, and a Senior
+CL4+ may pin a status as a manual override, but never on their own record. Anyone
+Semi-Active or Inactive is a breach; a banner counts them. The board is visible
+within an operator's own organisation, to Command and to CL5. The demo seeds
+Omega-1 operators across the Active / Semi-Active / Inactive states (status
+reflects the current week, so the seeded figures age as real weeks pass).
+
+**Situation Board** is Omega-1's one-page rollup of everything above: headcount,
+derived readiness with the current breaches named, who is on authorised leave,
+the operations currently running, an intelligence feed of reports filed in the
+last seven days, and the scouting pipeline by stage. It stores nothing of its
+own — every figure is computed on the fly, readiness through the *same*
+derivation the Readiness board runs and the registers through the same
+visibility rules they enforce themselves, so the two can never disagree. In
+server mode the snapshot arriving from the Worker is already redacted per
+viewer, which means a CL3 operative's board simply reflects the smaller world
+they are cleared to see. Visible to Omega-1, Command and CL5. In server mode
+every page also refreshes itself quietly — when you return to the tab, and every
+two minutes while it stays open — so a colleague's changes appear without a
+manual reload. It deliberately holds off whenever you are mid-typing or have a
+dialog open, and it never overtakes a change of yours that is still saving.
 
 **Recruitment** is Omega-1's scouting pipeline, run by the unit's **CL4 cadre**
 (any CL4 with a stake, not only the senior managers). A candidate moves through
@@ -229,6 +268,23 @@ it as denied at any stage). The server enforces the parts that matter: a ballot
 write may only change the actor's own vote, stage transitions follow the pipeline,
 and a candidate cannot leave Greenlit without a genuine majority. The demo seeds a
 candidate in each live stage plus an archived one.
+
+The **Ethics Committee** runs its own **Assistant** pipeline in the same view —
+**Application → Interview → Archived** — where the CL4 cadre comments and votes
+but only **CL5** advances an application to interview (on a majority) and only CL5
+runs the interview itself. At the interview stage each candidate is given a fixed
+set of five ethical scenarios drawn from an authored bank of SCP dilemmas (across
+anomaly ethics, use of force and D-Class, authority and dissent, secrecy and
+disclosure, containment-versus-welfare and personal conduct), each carrying
+marking criteria for what a strong or a weak answer looks like. The draw is
+derived from the candidate, so every interviewer sees the same set until it is
+re-rolled; a Member may append their own custom questions to a specific interview
+and export the whole thing as a formal **interviewer's script** — candidate
+details, each scenario with its assessment guidance and a ruled space to mark
+Strong / Acceptable / Weak, then an overall recommendation block. The script is
+stamped *interviewer's copy* and carries the marking criteria, so it is never
+shown to the candidate. Passing opens the Assistant's personnel file; failing
+requires a written reason.
 
 **Search** (the box in the top bar, or *Search* in the sidebar) runs one query
 across personnel, surveillance subjects, tribunal cases and directives — and it
@@ -243,7 +299,13 @@ its detail view, where the gate is enforced again.
 formal, print-ready document — letterhead and seal, classification banners,
 numbered sections and, where appropriate, signature lines. A directive exports as
 a formal **memorandum** (From / To / Subject header, the directive body, an
-issuing-authority signature). The letterhead adapts to the issuing body (Ethics
+issuing-authority signature), and any active directive can be **acknowledged**:
+an operator of the issuing organisation who is cleared to read it may
+countersign it once, and the issuer sees exactly who has signed and who remains
+outstanding. Intelligence sources export
+as a formal **Source File** (grading, tasking, the dated report log, stamped
+EYES ONLY) and operations as an **After-Action Report** once concluded — an
+*Operation Record* while still running. The letterhead adapts to the issuing body (Ethics
 Committee, MTF Omega-1 or Site Command). Each document opens in a new tab; use
 your browser's Print / Save as PDF. Crucially, a document shows only what the
 exporting operator is cleared to see: a sealed citation stays sealed, a personnel
@@ -263,5 +325,19 @@ same recommendation applies: before using this for anything genuinely sensitive,
 move authentication behind a server (for example the Cloudflare Worker). The
 hashing format here is written so that move is straightforward.
 
+When the Cloudflare Worker backend is configured, authentication becomes a real
+server boundary: the Worker verifies credentials and issues short-lived session
+tokens, password hashes are **never** sent to any client, and the browser cannot
+change a credential through the ordinary sync path — those fields are frozen
+server-side. Issuing or resetting an operator's passphrase goes through a single
+dedicated, audited endpoint that hashes on the server and is bounded by
+clearance: a manager may reset accounts in an organisation they administer, but
+never one belonging to an operator above their own clearance (which would let a
+junior seize a senior's login). Before a public deployment, lock the Worker's
+allowed origin to the site's own domain rather than leaving it open.
+
 Data is stored locally in the browser. The **Administration → System** screen
 can export the full dataset as JSON or reset everything to the seeded state.
+In server mode that export contains only what *you* are cleared to see — it is
+a personal reference copy, not a backup; real backups are one
+`wrangler d1 export` command, as the deployment runbook describes.

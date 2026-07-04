@@ -16,10 +16,11 @@ import { makeCredential, verifyPassword } from '../../js/crypto.js';
 import { makeD1Repo } from './repo.js';
 import { authorizeWrite } from './gate.js';
 import { buildSnapshot, redactUser, redactDirective, redactCompartment } from './redact.js';
-import { canReadDirective, compartmentClears } from '../../js/permissions.js';
+import { canReadDirective, compartmentClears, canManageOrg } from '../../js/permissions.js';
+import { CLEARANCES } from '../../js/constants.js';
 
-const WRITABLE = new Set(['users', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'promo_reqs']);
-const SNAPSHOT = ['users', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'promo_reqs', 'audit'];
+const WRITABLE = new Set(['users', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'promo_reqs', 'settings']);
+const SNAPSHOT = ['users', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'promo_reqs', 'settings', 'audit'];
 
 function uid() { return (globalThis.crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`); }
 function randomToken() {
@@ -37,10 +38,23 @@ function corsHeaders(env) {
     'Vary': 'Origin',
   };
 }
-function json(data, status, env) {
+// Resolve the CORS origin for this request. ALLOWED_ORIGIN may be a single value
+// or a comma-separated allowlist; the matching request origin is echoed back so
+// several sites (e.g. a github.io address and a custom domain) can be permitted.
+// "*" stays fully permissive for local testing. Returns an env clone carrying the
+// single resolved origin, so the rest of the handler is unchanged.
+function withResolvedOrigin(env, request) {
+  const configured = (env && env.ALLOWED_ORIGIN) || '*';
+  if (configured === '*') return env || {};
+  const list = configured.split(',').map((s) => s.trim()).filter(Boolean);
+  const origin = request.headers.get('Origin') || '';
+  const allow = list.includes(origin) ? origin : (list[0] || '*');
+  return { ...env, ALLOWED_ORIGIN: allow };
+}
+function json(data, status, env, extraHeaders) {
   return new Response(JSON.stringify(data), {
     status: status || 200,
-    headers: { 'Content-Type': 'application/json', ...corsHeaders(env) },
+    headers: { 'Content-Type': 'application/json', ...corsHeaders(env), ...(extraHeaders || {}) },
   });
 }
 
@@ -86,15 +100,68 @@ async function clearanceMap(repo) {
 }
 
 // --- handlers ---------------------------------------------------------------
+// --- failed sign-in throttle -----------------------------------------------
+// Tracks failures per key ("ip:<addr>" and "user:<name>") in a sliding window
+// and imposes a timed lockout once the limit is reached. Keeps brute-forcing
+// expensive without locking a real user out for long.
+function throttleConf(env) {
+  return {
+    max: Number((env && env.LOGIN_MAX_ATTEMPTS) || 6),
+    windowMs: Number((env && env.LOGIN_WINDOW_MIN) || 15) * 60000,
+    lockMs: Number((env && env.LOGIN_LOCK_MIN) || 15) * 60000,
+  };
+}
+async function throttleLockedUntil(repo, keys, nowMs) {
+  let until = 0;
+  for (const k of keys) {
+    const row = await repo.getThrottle(k);
+    if (row && row.locked_until) {
+      const t = Date.parse(row.locked_until);
+      if (t > nowMs && t > until) until = t;
+    }
+  }
+  return until;
+}
+async function throttleFail(repo, keys, env, nowMs) {
+  const { max, windowMs, lockMs } = throttleConf(env);
+  for (const k of keys) {
+    const row = await repo.getThrottle(k);
+    let attempts = 1; let windowStart = nowMs;
+    if (row && row.window_start) {
+      const ws = Date.parse(row.window_start);
+      if (nowMs - ws < windowMs) { attempts = (row.attempts || 0) + 1; windowStart = ws; }
+    }
+    const lockedUntil = attempts >= max ? new Date(nowMs + lockMs).toISOString() : null;
+    await repo.setThrottle(k, attempts, new Date(windowStart).toISOString(), lockedUntil);
+  }
+}
+async function throttleClear(repo, keys) {
+  for (const k of keys) await repo.clearThrottle(k);
+}
+
 async function login(request, repo, env) {
   const body = await request.json().catch(() => ({}));
   const { username, password } = body;
   if (!username || !password) return json({ error: 'Username and password are required.' }, 400, env);
+
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const keys = [`ip:${ip}`, `user:${String(username).toLowerCase()}`];
+  const nowMs = Date.now();
+  const lockedUntil = await throttleLockedUntil(repo, keys, nowMs);
+  if (lockedUntil) {
+    const retry = Math.max(1, Math.ceil((lockedUntil - nowMs) / 1000));
+    return json({ error: 'Too many failed sign-in attempts. Please wait and try again.' }, 429, env, { 'Retry-After': String(retry) });
+  }
+
   const user = await repo.getUserByUsername(username);
   const okUser = user && !user.deleted && user.accountStatus === 'active';
   // Always run the hash compare (even on a miss) to avoid leaking which usernames exist.
   const ok = okUser && await verifyPassword(password, user.salt, user.passwordHash);
-  if (!ok) return json({ error: 'Invalid credentials.' }, 401, env);
+  if (!ok) {
+    await throttleFail(repo, keys, env, nowMs);
+    return json({ error: 'Invalid credentials.' }, 401, env);
+  }
+  await throttleClear(repo, keys);
 
   await repo.pruneSessions(new Date().toISOString());
   const token = randomToken();
@@ -148,7 +215,7 @@ function redactForActor(collection, actor, record, compMap) {
   if (collection === 'users') return redactUser(actor, record);
   if (collection === 'directives') return redactDirective(actor, record, compMap);
   if (collection === 'compartments') return redactCompartment(actor, record);
-  if ((collection === 'subjects' || collection === 'cases') && record && record.compartment) {
+  if ((collection === 'subjects' || collection === 'cases' || collection === 'operations' || collection === 'intel') && record && record.compartment) {
     const c = compMap && compMap.get(record.compartment);
     return { ...record, compartmentName: c ? c.name : null };
   }
@@ -231,8 +298,56 @@ async function deleteRecord(collection, id, actor, repo, env) {
   return json({ ok: true }, 200, env);
 }
 
+// Set a new sign-in passphrase for an operator. Hashing happens here (never on
+// the client), and the new credential is written straight to the record — the
+// generic write path freezes salt/passwordHash, so this dedicated, authorised
+// route is the only way credentials can change. A manager may reset accounts in
+// an organisation they administer, but never one at a clearance above their own
+// (which would let a junior seize a senior's login).
+async function resetPassphrase(id, actor, request, repo, env) {
+  const target = await repo.getById('users', id);
+  if (!target || target.deleted) return json({ error: 'No such operator.' }, 404, env);
+  if (!canManageOrg(actor, target.org)) return json({ error: 'You cannot administer accounts in that organisation.' }, 403, env);
+  const weight = (u) => (CLEARANCES[u.clearance] ? CLEARANCES[u.clearance].weight : 0);
+  if (weight(target) > weight(actor)) return json({ error: 'You cannot reset the passphrase of an operator above your own clearance.' }, 403, env);
+
+  let body; try { body = await request.json(); } catch (_e) { body = {}; }
+  const passphrase = (body && body.passphrase ? String(body.passphrase) : '').trim();
+  if (passphrase.length < 6) return json({ error: 'A passphrase must be at least 6 characters.' }, 400, env);
+
+  const { salt, hash } = await makeCredential(passphrase);
+  const now = new Date().toISOString();
+  const updated = { ...target, salt, passwordHash: hash, updatedAt: now, version: (target.version || 1) + 1 };
+  updated.events = [{ id: uid(), date: now, type: 'security', text: `Passphrase reset by ${actor.designation}.` }, ...(target.events || [])];
+  const changed = await repo.update('users', updated, target.version || 1);
+  if (changed === 0) return json({ error: 'This record was changed elsewhere. Reload and retry.' }, 409, env);
+  await repo.addAudit({ id: uid(), ts: now, actor: actor.designation, action: 'RESET_PASSPHRASE', detail: `Passphrase reset for ${target.designation}.` });
+  return json({ ok: true, version: updated.version }, 200, env);
+}
+
+// Self-service passphrase change: the signed-in operator proves identity with
+// their current passphrase, then sets a new one. Hashing is server-side and no
+// clearance rule applies — you are only ever changing your own credential.
+async function changeMyPassphrase(actor, request, repo, env) {
+  let body; try { body = await request.json(); } catch (_e) { body = {}; }
+  const current = body && body.currentPassphrase ? String(body.currentPassphrase) : '';
+  const next = (body && body.newPassphrase ? String(body.newPassphrase) : '').trim();
+  const okCurrent = await verifyPassword(current, actor.salt, actor.passwordHash);
+  if (!okCurrent) return json({ error: 'Your current passphrase is incorrect.' }, 403, env);
+  if (next.length < 6) return json({ error: 'A passphrase must be at least 6 characters.' }, 400, env);
+  const { salt, hash } = await makeCredential(next);
+  const now = new Date().toISOString();
+  const updated = { ...actor, salt, passwordHash: hash, updatedAt: now, version: (actor.version || 1) + 1 };
+  updated.events = [{ id: uid(), date: now, type: 'security', text: 'Passphrase changed by the operator.' }, ...(actor.events || [])];
+  const changed = await repo.update('users', updated, actor.version || 1);
+  if (changed === 0) return json({ error: 'This record was changed elsewhere. Reload and retry.' }, 409, env);
+  await repo.addAudit({ id: uid(), ts: now, actor: actor.designation, action: 'CHANGE_PASSPHRASE', detail: `${actor.designation} changed their passphrase.` });
+  return json({ ok: true, version: updated.version }, 200, env);
+}
+
 // --- router -----------------------------------------------------------------
-export async function handle(request, repo, env) {
+export async function handle(request, repo, rawEnv) {
+  const env = withResolvedOrigin(rawEnv, request);
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders(env) });
 
   const url = new URL(request.url);
@@ -252,6 +367,15 @@ export async function handle(request, repo, env) {
     return json({ ok: true }, 200, env);
   }
   if (parts[1] === 'me' && request.method === 'GET') return json({ user: redactUser(actor, actor) }, 200, env);
+  if (parts.length === 3 && parts[1] === 'me' && parts[2] === 'passphrase' && request.method === 'POST') {
+    return changeMyPassphrase(actor, request, repo, env);
+  }
+  // Sign out of every device: drop all of the caller's sessions at once.
+  if (parts.length === 3 && parts[1] === 'me' && parts[2] === 'sessions' && request.method === 'DELETE') {
+    const n = await repo.deleteUserSessions(actor.id);
+    await repo.addAudit({ id: uid(), ts: new Date().toISOString(), actor: actor.designation, action: 'SIGN_OUT_ALL', detail: `Signed out of all sessions (${n}).` });
+    return json({ ok: true, cleared: n }, 200, env);
+  }
   if (parts[1] === 'data' && request.method === 'GET') return getData(actor, repo, env);
 
   // Collection writes: /api/:collection/:id
@@ -259,6 +383,11 @@ export async function handle(request, repo, env) {
     const [, collection, id] = parts;
     if (request.method === 'PUT') return writeRecord(collection, id, actor, request, repo, env);
     if (request.method === 'DELETE') return deleteRecord(collection, id, actor, repo, env);
+  }
+
+  // Credential reset: POST /api/users/:id/passphrase (server hashes; never synced).
+  if (parts.length === 4 && parts[1] === 'users' && parts[3] === 'passphrase' && request.method === 'POST') {
+    return resetPassphrase(parts[2], actor, request, repo, env);
   }
 
   return json({ error: 'Not found.' }, 404, env);

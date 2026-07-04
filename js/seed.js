@@ -10,6 +10,7 @@
 // =============================================================================
 
 import { loadDb, saveDb, newId } from './storage.js';
+import { ACTIVITY_REQ_SETTING_ID, ACTIVITY_REQ_DEFAULT } from './constants.js';
 import { makeCredential } from './crypto.js';
 import { logAction } from './audit.js';
 
@@ -443,53 +444,190 @@ export function buildSeedCompartments(userList) {
 // Records spread across readiness states so the board shows Current / Overdue /
 // Breach from first load. lastActiveAt drives the derived readiness.
 const ACTIVITY_SPECS = [
-  { who: 'O1-1', duty: 'none',     last: 2,  entries: [['check-in', 2, 'Reported fit for duty; task-force lead.'], ['deployment', 6, 'Led Sector 12 containment escort.']] },
-  { who: 'O1-3', duty: 'deployed', last: 4,  entries: [['deployment', 4, 'Forward on acquisition watch.'], ['check-in', 12, 'Routine readiness check-in.']] },
-  { who: 'O1-7', duty: 'none',     last: 18, entries: [['check-in', 18, 'Close-protection refresher complete.']] },
-  { who: 'O1-9', duty: 'none',     last: 40, entries: [['note', 40, 'Last contact before conduct review.']] },
-  { who: 'O1-4', duty: 'leave',    last: 9,  entries: [['standdown', 9, 'Placed on Leave of Absence — recovery.']] },
-  { who: 'EC-3', duty: 'none',     last: 3,  entries: [['check-in', 3, 'Committee session attendance logged.']] },
+  // who, sessions: [ [hoursAgo, hours, note, tagOrderRef?, tagSubjectRef?] ]
+  { who: 'O1-1', sessions: [[2, 3, 'Led a Sector 12 containment escort.', 'O1-SO-001', 'TGT-118'], [5, 3, 'Ran a breach-response drill with the section.']] }, // 6h this week -> Active
+  { who: 'O1-3', sessions: [[4, 2, 'Forward acquisition watch \u2014 a quiet shift.']] }, // 2h -> Semi-Active
+  { who: 'O1-7', sessions: [[12 * 24, 8, 'Close-protection rotation (last week).']] },     // last week -> Inactive
+  { who: 'O1-9', sessions: [] },                                                            // nothing logged -> Inactive
 ];
-export function buildSeedActivity(userList) {
+const OPERATION_SPECS = [
+  { ref: 'OP-O1-0001', name: 'SECTOR 12 CORDON', kind: 'deployment', clearance: 'CL3', status: 'active',
+    lead: 'O1-1', team: ['O1-3', 'O1-7'], location: 'Sector 12', objective: 'Maintain the outer cordon during the containment escort.',
+    startedHoursAgo: 30, targets: ['TGT-118'],
+    log: [['note', 60, 'Operation opened.'], ['order', 48, 'Cordon posture set; two-team rotation.'], ['movement', 30, 'Teams deployed forward to Sector 12.'], ['contact', 6, 'Brief contact at the north gate; no breach.']] },
+  { ref: 'OP-O1-0002', name: 'IRONWOOD VIGIL', kind: 'containment', clearance: 'CL4-S', status: 'planned',
+    lead: 'O1-1', team: ['O1-3'], location: '[COMPARTMENTED]', objective: 'Standby containment posture pending IRONWOOD tasking.',
+    compartmentRef: 'NTK-IRONWOOD', log: [['note', 20, 'Operation drafted under IRONWOOD.']] },
+  { ref: 'OP-O1-0003', name: 'GREY FERRY PATROL', kind: 'patrol', clearance: 'CL3', status: 'concluded',
+    lead: 'O1-7', team: ['O1-9'], location: 'Grey Ferry line', objective: 'Routine patrol of the Grey Ferry approach.',
+    startedHoursAgo: 240, concludedHoursAgo: 210, outcome: { result: 'success', text: 'Patrol completed without incident.' },
+    log: [['note', 260, 'Operation opened.'], ['movement', 240, 'Patrol commenced.'], ['status', 210, 'Patrol concluded.']] },
+  { ref: 'OP-O1-0004', name: 'RAPID ANSWER', kind: 'response', clearance: 'CL3', status: 'aborted',
+    lead: 'O1-3', team: [], location: 'Sector 4', objective: 'Rapid response to a reported disturbance.',
+    concludedHoursAgo: 180, log: [['note', 200, 'Response spun up.'], ['status', 180, 'Stood down; false alarm. Operation aborted.']] },
+];
+export function buildSeedOperations(userList, db) {
+  const idOf = (d) => (userList.find((u) => u.designation === d) || {}).id || null;
+  const subId = (ref) => (db.subjects.find((x) => x.ref === ref) || {}).id || null;
+  const compId = (ref) => (db.compartments.find((x) => x.ref === ref) || {}).id || null;
+  const now = Date.now();
+  return OPERATION_SPECS.map((s) => ({
+    id: newId('op'), ref: s.ref, name: s.name, kind: s.kind, org: 'omega-1',
+    status: s.status, clearance: s.clearance, compartment: s.compartmentRef ? compId(s.compartmentRef) : null,
+    lead: s.lead ? idOf(s.lead) : null,
+    participants: (s.team || []).map(idOf).filter(Boolean),
+    location: s.location || '', objective: s.objective || '',
+    log: (s.log || []).map(([type, hoursAgo, text]) => ({ id: newId('ol'), at: now - hoursAgo * 3600000, by: s.lead || 'O1-1', type, text })),
+    outcome: s.outcome ? { result: s.outcome.result, text: s.outcome.text, at: new Date(now - (s.concludedHoursAgo || 0) * 3600000).toISOString(), by: s.lead || 'O1-1' } : null,
+    linkedSubjectIds: (s.targets || []).map(subId).filter(Boolean),
+    startedAt: s.startedHoursAgo ? new Date(now - s.startedHoursAgo * 3600000).toISOString() : null,
+    concludedAt: s.concludedHoursAgo ? new Date(now - s.concludedHoursAgo * 3600000).toISOString() : null,
+    createdBy: s.lead || 'O1-1', createdAt: new Date(now - ((s.log && s.log[0] && s.log[0][1]) || 60) * 3600000).toISOString(),
+    updatedAt: new Date(now).toISOString(), version: 1, deleted: false, deletedAt: null,
+  }));
+}
+
+const INTEL_SPECS = [
+  { ref: 'SRC-O1-0001', codename: 'GOLDFINCH', type: 'informant', clearance: 'CL4-J', status: 'active', reliability: 'B',
+    handler: 'O1-1', cover: 'Dockside fixer, Grey Ferry wharf.', tasking: 'Report movement of persons of interest through the Grey Ferry approach.',
+    targets: ['TGT-118'],
+    reports: [[6, 200, 'Source opened; initial contact established.'], [2, 120, 'PoI seen meeting an unknown party at the north wharf.'], [3, 30, 'Chatter of a shipment expected within the week; unconfirmed.']] },
+  { ref: 'SRC-O1-0002', codename: 'NIGHTJAR', type: 'informant', clearance: 'CL4-S', status: 'probation', reliability: 'C',
+    handler: 'O1-3', cover: '[COMPARTMENTED]', tasking: 'Access reporting under IRONWOOD. Handling restricted.',
+    compartmentRef: 'NTK-IRONWOOD',
+    reports: [[6, 40, 'Source recruited under IRONWOOD; on probation pending vetting.'], [4, 12, 'Single-source claim, not yet corroborated.']] },
+  { ref: 'SRC-O1-0003', codename: 'GREY HERON', type: 'intercept', clearance: 'CL3', status: 'dormant', reliability: 'D',
+    handler: 'O1-7', cover: 'Passive line intercept, sector exchange.', tasking: 'Monitor the sector exchange for keyword hits.',
+    reports: [[6, 300, 'Intercept established.'], [5, 210, 'Volume low; product thin. Stood to dormant.']] },
+  { ref: 'SRC-O1-0004', codename: 'KESTREL', type: 'defector', clearance: 'CL4-J', status: 'burned', reliability: 'E',
+    handler: 'O1-3', cover: 'Former hostile-group liaison.', tasking: 'Debrief on prior affiliations.',
+    closedHoursAgo: 150,
+    reports: [[6, 260, 'Walk-in defector; debrief opened.'], [3, 220, 'Useful background on prior affiliations.'], [6, 150, 'Source compromised; marked burned and stood down.']] },
+];
+export function buildSeedIntel(userList, db) {
+  const idOf = (d) => (userList.find((u) => u.designation === d) || {}).id || null;
+  const subId = (ref) => (db.subjects.find((x) => x.ref === ref) || {}).id || null;
+  const compId = (ref) => (db.compartments.find((x) => x.ref === ref) || {}).id || null;
+  const now = Date.now();
+  return INTEL_SPECS.map((s) => ({
+    id: newId('src'), ref: s.ref, codename: s.codename, type: s.type, org: 'omega-1',
+    status: s.status, reliability: s.reliability,
+    clearance: s.clearance, compartment: s.compartmentRef ? compId(s.compartmentRef) : null,
+    handler: s.handler ? idOf(s.handler) : null, cover: s.cover || '', tasking: s.tasking || '',
+    reports: (s.reports || []).map(([credibility, hoursAgo, text]) => ({ id: newId('ir'), at: now - hoursAgo * 3600000, by: s.handler || 'O1-1', credibility, text })),
+    linkedSubjectIds: (s.targets || []).map(subId).filter(Boolean),
+    openedAt: new Date(now - ((s.reports && s.reports[0] && s.reports[0][1]) || 200) * 3600000).toISOString(),
+    closedAt: s.closedHoursAgo ? new Date(now - s.closedHoursAgo * 3600000).toISOString() : null,
+    createdBy: s.handler || 'O1-1', createdAt: new Date(now - ((s.reports && s.reports[0] && s.reports[0][1]) || 200) * 3600000).toISOString(),
+    updatedAt: new Date(now).toISOString(), version: 1, deleted: false, deletedAt: null,
+  }));
+}
+
+const TRAINING_SPECS = [
+  { code: 'O1-IND', title: 'Omega-1 Induction', org: 'omega-1', category: 'induction', validityMonths: 0, clearanceFloor: null, description: 'Baseline unit induction and standing-order familiarisation.' },
+  { code: 'O1-CQB', title: 'Close-Quarters Battle Refresher', org: 'omega-1', category: 'weapons', validityMonths: 12, clearanceFloor: 'CL3', description: 'Annual weapons handling and close-protection refresher.' },
+  { code: 'O1-CON', title: 'Containment Breach Response', org: 'omega-1', category: 'containment', validityMonths: 24, clearanceFloor: 'CL3', description: 'Procedures for anomalous containment breach response.' },
+  { code: 'O1-MED', title: 'Field Trauma Care', org: 'omega-1', category: 'medical', validityMonths: 24, clearanceFloor: null, description: 'Field trauma and casualty stabilisation.' },
+  { code: 'EC-REC', title: 'Records & Conduct Certification', org: 'ethics-committee', category: 'records', validityMonths: 24, clearanceFloor: null, description: 'Handling of committee records and conduct standards.' },
+  { code: 'EC-REV', title: 'Review Board Procedure', org: 'ethics-committee', category: 'command', validityMonths: 0, clearanceFloor: 'CL4-J', description: 'Seating and conduct of a review board.' },
+];
+export function buildSeedTrainings() {
+  const now = new Date();
+  return TRAINING_SPECS.map((s, i) => ({
+    id: newId('trn'), ref: `TRN-${String(i + 1).padStart(3, '0')}`, code: s.code, title: s.title,
+    org: s.org, category: s.category, description: s.description,
+    validityMonths: s.validityMonths, clearanceFloor: s.clearanceFloor, active: true,
+    createdBy: 'SYSTEM', createdAt: now.toISOString(), updatedAt: now.toISOString(),
+    version: 1, deleted: false, deletedAt: null,
+  }));
+}
+
+// Attach a few completions to seed personnel so files show currency out of the
+// box — including one lapsed and one expiring, to exercise the derived states.
+export function attachSeedCompletions(userList, courses) {
+  const course = (code) => courses.find((c) => c.code === code);
   const byD = (d) => userList.find((u) => u.designation === d);
+  const now = Date.now();
+  const grant = (u, code, monthsAgo, by) => {
+    if (!u) return; const c = course(code); if (!c) return;
+    const awardedAt = new Date(now - monthsAgo * 30 * 86400000).toISOString();
+    const expiresAt = c.validityMonths ? new Date(new Date(awardedAt).setMonth(new Date(awardedAt).getMonth() + c.validityMonths)).toISOString() : null;
+    u.trainings = u.trainings || [];
+    u.trainings.push({ id: newId('cmp'), courseId: c.id, awardedBy: by || 'O1-1', awardedAt, expiresAt, note: '' });
+  };
+  // Vanguard (O1-1): current across the board.
+  grant(byD('O1-1'), 'O1-IND', 20, 'CMD-1'); grant(byD('O1-1'), 'O1-CQB', 2, 'CMD-1'); grant(byD('O1-1'), 'O1-CON', 6, 'CMD-1');
+  // Bailiff (O1-7): induction fine, CQB LAPSED (14 months on a 12-month cert).
+  grant(byD('O1-7'), 'O1-IND', 18, 'O1-1'); grant(byD('O1-7'), 'O1-CQB', 14, 'O1-1');
+  // Warrant (O1-3): CQB EXPIRING (about a fortnight of a 12-month cert remaining).
+  grant(byD('O1-3'), 'O1-IND', 15, 'O1-1'); grant(byD('O1-3'), 'O1-CQB', 11.5, 'O1-1'); grant(byD('O1-3'), 'O1-MED', 3, 'O1-1');
+  // Advocate (EC-5): committee certs.
+  grant(byD('EC-5'), 'EC-REC', 4, 'EC-1');
+}
+
+export function buildSeedActivity(userList, db) {
+  const byD = (d) => userList.find((u) => u.designation === d);
+  const dirId = (ref) => (db.directives.find((x) => x.ref === ref) || {}).id || null;
+  const dirLabel = (ref) => { const d = db.directives.find((x) => x.ref === ref); return d ? `${d.ref} ${d.title || ''}`.trim() : ref; };
+  const subId = (ref) => (db.subjects.find((x) => x.ref === ref) || {}).id || null;
+  const subLabel = (ref) => { const s = db.subjects.find((x) => x.ref === ref); return s ? `${s.ref} ${s.alias || ''}`.trim() : ref; };
+  const now = Date.now();
   return ACTIVITY_SPECS.map((s) => {
     const u = byD(s.who);
     if (!u) return null;
-    const entries = (s.entries || []).map(([type, daysAgo, text]) => ({ id: newId('act'), ts: iso(daysAgo), type, by: u.designation, text }));
+    const log = (s.sessions || []).map(([hoursAgo, hours, note, orderRef, subjRef]) => {
+      const tags = [];
+      if (orderRef && dirId(orderRef)) tags.push({ kind: 'order', id: dirId(orderRef), label: dirLabel(orderRef) });
+      if (subjRef && subId(subjRef)) tags.push({ kind: 'subject', id: subId(subjRef), label: subLabel(subjRef) });
+      return { id: newId('al'), at: now - hoursAgo * 3600000, hours, note, tags, by: u.designation };
+    });
     return {
       id: newId('actr'), userId: u.id, org: u.org,
-      entries, duty: s.duty || 'none', lastActiveAt: iso(s.last),
-      createdBy: u.designation, createdAt: iso(60), updatedAt: iso(s.last),
+      log, override: s.override || null,
+      createdBy: u.designation, createdAt: iso(60), updatedAt: new Date(now).toISOString(),
       version: 1, deleted: false, deletedAt: null,
     };
   }).filter(Boolean);
 }
 
-// --- Recruitment seed (Omega-1 scouting pipeline) ---------------------------
+// --- Recruitment seed (both org pipelines) ----------------------------------
 const RECRUIT_SPECS = [
+  // Omega-1 scouting pipeline
   {
-    ref: 'SCT-0042', name: 'Rourke, T.', steamId: 'STEAM_0:1:44290183', department: 'Security', rank: 'Trooper',
+    ref: 'SCT-0042', name: 'Rourke, T.', steamId: 'STEAM_0:1:44290183', department: 'General Security Department', rank: 'Trooper',
     org: 'omega-1', stage: 'scouting',
-    comments: [['O1-3', 6, 'scouting', 'Strong showing on the last two joint patrols. Flagged for scouting.']],
-    votes: {},
+    comments: [['O1-3', 6, 'scouting', 'Strong showing on the last two joint patrols. Flagged for scouting.']], votes: {},
   },
   {
-    ref: 'SCT-0039', name: 'Vane, L.', steamId: 'STEAM_0:0:51120947', department: 'Containment', rank: 'Specialist',
+    ref: 'SCT-0039', name: 'Vane, L.', steamId: 'STEAM_0:0:51120947', department: 'Internal Security Department', rank: 'Specialist',
     org: 'omega-1', stage: 'greenlit',
     comments: [['O1-3', 12, 'scouting', 'Scouted from containment detail; consistent conduct.'], ['O1-1', 5, 'greenlit', 'Put up for greenlight vote.']],
-    votes: { O1_1: 'yes', O1_3: 'yes' }, // resolved to user ids at build time
-  },
-  {
-    ref: 'SCT-0036', name: 'Hadley, R.', steamId: 'STEAM_0:1:60884412', department: 'Response', rank: 'Corporal',
-    org: 'omega-1', stage: 'tryout',
-    comments: [['O1-1', 18, 'scouting', 'Scouted after the Sector 9 callout.'], ['O1-1', 11, 'greenlit', 'Greenlit on a clear majority.'], ['O1-3', 4, 'tryout', 'Tryout scheduled; awaiting assessment.']],
     votes: { O1_1: 'yes', O1_3: 'yes' },
   },
   {
-    ref: 'SCT-0031', name: 'Croft, M.', steamId: 'STEAM_0:0:33910228', department: 'Security', rank: 'Trooper',
+    ref: 'SCT-0036', name: 'Hadley, R.', steamId: 'STEAM_0:1:60884412', department: 'MTF Epsilon-11', rank: 'Corporal',
+    org: 'omega-1', stage: 'tryout',
+    comments: [['O1-1', 18, 'scouting', 'Scouted after the Sector 9 callout.'], ['O1-1', 11, 'greenlit', 'Greenlit on a clear majority.'], ['O1-3', 4, 'tryout', 'Tryout scheduled; awaiting assessment.']],
+    votes: { O1_1: 'yes', O1_3: 'yes' },
+    tryoutStrikes: [['O1-3', 2, 0.5, 'Late to the assessed deployment.']],
+  },
+  {
+    ref: 'SCT-0031', name: 'Croft, M.', steamId: 'STEAM_0:0:33910228', department: 'Research Department', rank: 'Trooper',
     org: 'omega-1', stage: 'archived', archiveStatus: 'denied',
-    comments: [['O1-3', 40, 'scouting', 'Scouted, but conduct flags surfaced during review.'], ['O1-1', 33, 'scouting', 'Denied at scouting — insufficient record.']],
-    votes: {},
+    comments: [['O1-3', 40, 'scouting', 'Scouted, but conduct flags surfaced during review.'], ['O1-1', 33, 'scouting', 'Denied at scouting \u2014 insufficient record.']], votes: {},
+  },
+  // Ethics Committee Assistant pipeline
+  {
+    ref: 'APP-EC-014', name: 'Wexley, P.', steamId: 'STEAM_0:1:71223388', department: 'Ethics Committee', rank: 'Assistant Candidate',
+    org: 'ethics-committee', stage: 'application', tag: 'in-progress', applicationLink: 'https://forum.example/app/ec-014',
+    comments: [['EC-5', 8, 'application', 'Application received; thoughtful written responses.'], ['EC-3', 3, 'application', 'Supportive \u2014 recommend taking to interview.']],
+    votes: { EC_3: 'yes', EC_5: 'yes' },
+  },
+  {
+    ref: 'APP-EC-011', name: 'Aldous, R.', steamId: 'STEAM_0:0:80551247', department: 'Ethics Committee', rank: 'Assistant Candidate',
+    org: 'ethics-committee', stage: 'interview', tag: 'to-interview', applicationLink: 'https://forum.example/app/ec-011',
+    comments: [['EC-5', 20, 'application', 'Strong application; majority support.'], ['EC-1', 9, 'interview', 'Advanced to interview. Scheduling pending.']],
+    votes: { EC_1: 'yes', EC_3: 'yes', EC_5: 'yes' },
   },
 ];
 export function buildSeedRecruits(userList) {
@@ -508,11 +646,13 @@ export function buildSeedRecruits(userList) {
     return {
       id: newId('rec'), ref: r.ref, name: r.name, steamId: r.steamId,
       department: r.department, rank: r.rank, org: r.org,
-      stage: r.stage, archiveStatus: r.archiveStatus ?? null,
+      stage: r.stage, archiveStatus: r.archiveStatus ?? null, archiveReason: r.archiveReason ?? null,
+      applicationLink: r.applicationLink ?? '', tag: r.tag ?? null,
       comments: (r.comments || []).map(([by, daysAgo, stage, text]) => ({ id: newId('rc'), by, ts: iso(daysAgo), stage, text })),
       votes: resolveVotes(r.votes),
+      tryoutStrikes: (r.tryoutStrikes || []).map(([by, daysAgo, weight, reason]) => ({ id: newId('strk'), by, ts: iso(daysAgo), weight, reason })),
       personnelFileId: null,
-      createdBy: r.comments?.[0]?.[0] || 'O1-1', createdAt: created, updatedAt: iso(4),
+      createdBy: r.comments?.[0]?.[0] || 'O1-1', createdAt: created, updatedAt: iso(3),
       version: 1, deleted: false, deletedAt: null,
     };
   });
@@ -549,9 +689,14 @@ export async function ensureSeeded() {
   db.subjects = buildSeedSubjects();
   db.cases = buildSeedCases(db.users, db.subjects);
   db.compartments = buildSeedCompartments(db.users);
-  db.activity = buildSeedActivity(db.users);
+  db.activity = buildSeedActivity(db.users, db);
+  db.operations = buildSeedOperations(db.users, db);
+  db.intel = buildSeedIntel(db.users, db);
   db.recruits = buildSeedRecruits(db.users);
+  db.trainings = buildSeedTrainings();
+  attachSeedCompletions(db.users, db.trainings);
   db.promoReqs = buildSeedPromoReqs('CMD-1');
+  db.settings = [{ id: ACTIVITY_REQ_SETTING_ID, org: 'command', data: { ...ACTIVITY_REQ_DEFAULT } }];
 
   // Tag a record into each operational compartment so the Need-To-Know caveats
   // are visible on first load. Records reference a compartment by its id.

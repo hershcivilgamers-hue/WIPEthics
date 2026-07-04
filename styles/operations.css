@@ -92,3 +92,106 @@
 /* Shared small helpers used by the activity modal. */
 .modal__divider { height: 1px; background: var(--line); margin: 14px 0; }
 .card__subtitle { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); margin-bottom: 8px; }
+
+/* Ethics application tag selector + variable-width pipeline. */
+.pipeline--2 { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 760px) { .pipeline--2 { grid-template-columns: 1fr; } }
+.tag-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.tag-row__label { color: var(--text-3); font-size: 12px; margin-right: 4px; }
+
+/* --- Activity board (hours-based) ------------------------------------------ */
+.activity-table .cell-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.activity-table tr.row-breach > td { background: rgba(207, 68, 54, 0.07); }
+.activity-table tr[data-user] { cursor: pointer; }
+.activity-table tr[data-user]:hover > td { background: var(--surface-2); }
+.activity-table tr.row-breach[data-user]:hover > td { background: rgba(207, 68, 54, 0.12); }
+
+.btn--xs {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 5px;
+}
+
+/* Tag picker in the log modal */
+.tag-list {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+}
+.tag-group-h {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  margin: 8px 0 4px;
+}
+.tag-group-h:first-child { margin-top: 0; }
+.tag-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.tag-opt input { accent-color: var(--accent, #6ea8fe); }
+
+/* Tag chips in the detail timeline */
+.tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0; }
+.chip {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.chip--order { border-color: rgba(110, 168, 254, 0.4); }
+.chip--subject { border-color: rgba(217, 164, 65, 0.4); }
+.chip--operation { border-color: var(--line); }
+
+/* --- Deployment log / operation file --------------------------------------- */
+.ntk-banner {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--amber-dim, rgba(217,164,65,0.4));
+  background: rgba(217, 164, 65, 0.10);
+  color: var(--amber-2, #d9a441);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+.plain-list { list-style: none; margin: 0; padding: 0; }
+.plain-list li { padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.plain-list li:last-child { border-bottom: none; }
+
+/* --- Situation Board (Omega-1 rollup) -------------------------------------- */
+.stat-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s3); margin: var(--s4) 0; }
+.stat { padding: var(--s3); }
+.stat__n { font-family: var(--mono); font-size: 26px; line-height: 1.1; }
+.stat__k { margin-top: 2px; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-3); }
+.stat__sub { margin-top: 2px; font-size: 11px; color: var(--text-3); }
+.stat--ok .stat__n { color: var(--ok); }
+.stat--warn .stat__n { color: var(--warn); }
+.stat--bad .stat__n { color: var(--bad); }
+.dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: var(--s4); align-items: start; }
+.dash-list { display: flex; flex-direction: column; }
+.dash-row { display: flex; align-items: baseline; gap: var(--s3); padding: var(--s2) var(--s1); border-bottom: 1px solid var(--line); cursor: pointer; }
+.dash-row:last-child { border-bottom: none; }
+.dash-row:hover, .dash-row:focus-visible { background: var(--surface-2); outline: none; }
+.dash-row__grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-row .badge { flex: 0 0 auto; }
+.tl__item.dash-go { cursor: pointer; }
+.tl__item.dash-go:hover .tl__text, .tl__item.dash-go:focus-visible .tl__text { text-decoration: underline; }
+.card__foot { padding-top: var(--s2); }

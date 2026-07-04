@@ -16,6 +16,7 @@
 // =============================================================================
 
 import * as api from './api.js';
+import { CONFIG } from './config.js';
 import { setSync, applyServerSnapshot, applyServerRecord } from './storage.js';
 
 let refresh = () => {};
@@ -75,4 +76,85 @@ export function init({ refresh: r, toast: t, onAuthLost: a } = {}) {
   toast = t || toast;
   onAuthLost = a || onAuthLost;
   setSync({ write, remove });
+}
+
+// ---------------------------------------------------------------------------
+// Passive refresh — keeps long-open tabs current with colleagues' changes.
+//
+// Triggers: returning to the tab (visibility/focus) and a slow interval while
+// the tab is visible. Safeguards, in order of importance:
+//   • never fires while the operator is typing or has a dialog open, so a
+//     re-render can't yank a half-written form away;
+//   • runs through the write queue, so it can never overwrite an optimistic
+//     change whose push is still in flight;
+//   • re-renders only when the snapshot actually differs from the last one;
+//   • stays silent on network failures (the write path already reports real
+//     errors loudly) — only a dead session (401) is surfaced, once.
+// ---------------------------------------------------------------------------
+const AUTO_REFRESH_MS = 120000;    // slow tick while the tab is visible
+const REFRESH_MIN_GAP_MS = 20000;  // focus events can arrive in bursts
+let refreshTimer = null;
+let lastTickAt = 0;
+let lastSnapshotJson = null;
+let tickRunning = false;
+
+function operatorIsBusy() {
+  try {
+    if (document.querySelector('.modal-backdrop')) return true;
+    const ae = document.activeElement;
+    if (ae && (ae.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName || ''))) return true;
+  } catch (_) { /* no DOM available — treat as not busy */ }
+  return false;
+}
+
+export async function autoRefreshTick(force = false) {
+  if (!api.serverMode() || !api.getToken()) return;
+  try { if (document.visibilityState && document.visibilityState !== 'visible') return; } catch (_) { /* no DOM */ }
+  const now = Date.now();
+  if (!force && now - lastTickAt < REFRESH_MIN_GAP_MS) return;
+  if (operatorIsBusy()) return;
+  lastTickAt = now;
+  return api.enqueue(async () => {
+    if (tickRunning) return;
+    tickRunning = true;
+    try {
+      const snap = await api.fetchSnapshot();
+      const json = JSON.stringify(snap);
+      if (json !== lastSnapshotJson) {
+        if (operatorIsBusy()) return; // began typing while we fetched — next tick will catch up
+        lastSnapshotJson = json;
+        applyServerSnapshot(snap);
+        refresh();
+      }
+    } catch (err) {
+      if (err && err.status === 401) {
+        onAuthLost();
+        toast('Your session has expired. Please sign in again.', 'error');
+      }
+      // Anything else stays silent — this is a background nicety.
+    } finally {
+      tickRunning = false;
+    }
+  });
+}
+
+function disarmAutoRefresh() { if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; } }
+function armAutoRefresh() {
+  disarmAutoRefresh();
+  refreshTimer = setInterval(() => autoRefreshTick(false), AUTO_REFRESH_MS);
+  // Under Node (the test harness) don't let the interval hold the process open.
+  if (refreshTimer && typeof refreshTimer.unref === 'function') refreshTimer.unref();
+}
+
+export function startAutoRefresh() {
+  if (!api.serverMode()) return;
+  if (CONFIG.features && CONFIG.features.autoRefresh === false) return;
+  try {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') { autoRefreshTick(true); armAutoRefresh(); }
+      else disarmAutoRefresh();
+    });
+    window.addEventListener('focus', () => autoRefreshTick(false));
+  } catch (_) { /* no DOM events available */ }
+  armAutoRefresh();
 }

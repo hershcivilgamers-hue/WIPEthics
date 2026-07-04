@@ -8,14 +8,15 @@
 //   • System        — backend status, dataset export, full reset.
 // =============================================================================
 
-import { ORGS, RANKS, CLEARANCE_ORDER, CLEARANCES, rankUp } from '../constants.js';
+import { ORGS, RANKS, CLEARANCE_ORDER, CLEARANCES, rankUp, ACTIVITY_REQ_SETTING_ID, ACTIVITY_REQ_DEFAULT, mergeActivityReqs } from '../constants.js';
 import {
   users, directives, subjects, cases, getUser, upsertUser, getDirective, upsertDirective,
   getSubject, upsertSubject, getCase, upsertCase, compartments, getCompartment, upsertCompartment,
+  recruits, getRecruit, upsertRecruit, operations, getOperation, upsertOperation, intel, getIntel, upsertIntel,
   promoReqs, getPromoReq, upsertPromoReq,
-  deletePromoReq, newId, loadDb, saveDb, clearDb, storageBackend,
+  deletePromoReq, getSetting, upsertSetting, newId, loadDb, saveDb, clearDb, storageBackend,
 } from '../storage.js';
-import { canSetClearance, canManagePromoReqs, isCL5 } from '../permissions.js';
+import { canSetClearance, canManagePromoReqs, canManageSettings, isCL5 } from '../permissions.js';
 import { ensureSeeded } from '../seed.js';
 import { logAction } from '../audit.js';
 import {
@@ -36,6 +37,7 @@ export function render(host, app) {
     ['registrations', 'Registrations'],
     ['clearance', 'Clearance'],
     ['promotions', 'Promotion Reqs'],
+    ['activity', 'Activity Reqs'],
     ['recycle', 'Recycle Bin'],
     ['system', 'System'],
   ];
@@ -43,7 +45,9 @@ export function render(host, app) {
   const pendingCount = users().filter((u) => !u.deleted && u.accountStatus === 'pending').length;
   const binCount = users().filter((u) => u.deleted).length + directives().filter((d) => d.deleted).length
     + subjects().filter((s) => s.deleted).length + cases().filter((c) => c.deleted).length
-    + compartments().filter((c) => c.deleted).length;
+    + compartments().filter((c) => c.deleted).length
+    + recruits().filter((r) => r.deleted).length + operations().filter((o) => o.deleted).length
+    + intel().filter((s) => s.deleted).length;
 
   host.innerHTML = `
     <div class="page-head">
@@ -72,6 +76,7 @@ function drawPanel(panel, app) {
   if (activeTab === 'registrations') return drawRegistrations(panel, app);
   if (activeTab === 'clearance') return drawClearance(panel, app);
   if (activeTab === 'promotions') return drawPromoReqs(panel, app);
+  if (activeTab === 'activity') return drawActivityReqs(panel, app);
   if (activeTab === 'recycle') return drawRecycle(panel, app);
   return drawSystem(panel, app);
 }
@@ -326,14 +331,67 @@ function drawPromoReqs(panel, app) {
 }
 
 // --- Recycle bin ------------------------------------------------------------
+function drawActivityReqs(panel, app) {
+  if (!canManageSettings(app.user)) {
+    panel.innerHTML = '<div class="empty">Activity requirements are managed at CL5.</div>';
+    return;
+  }
+  const rec = getSetting(ACTIVITY_REQ_SETTING_ID);
+  const r = mergeActivityReqs(rec && rec.data);
+
+  panel.innerHTML = `
+    <section class="card">
+      <div class="card__title">Activity requirements</div>
+      <div class="card__body">
+        <p class="field__hint">These thresholds drive the Readiness board. An operator is Active when the weekly requirement is met, Semi-Active with some activity but under it, and Inactive with nothing logged this week. Other Committee roles and Command are always exempt.</p>
+        <div class="req-grid">
+          <div class="field"><label>Omega-1 \u2014 hours / week</label><input id="rq-ow" type="number" min="0" step="0.5" value="${r.omegaWeekly}" /></div>
+          <div class="field"><label>Omega-1 \u2014 hours / month</label><input id="rq-om" type="number" min="0" step="1" value="${r.omegaMonthly}" /></div>
+          <div class="field"><label>Ethics Assistant \u2014 hours / week</label><input id="rq-ew" type="number" min="0" step="0.5" value="${r.ethicsWeekly}" /></div>
+        </div>
+        <label class="check-line"><input id="rq-ei" type="checkbox" ${r.ethicsNeedsInteraction ? 'checked' : ''} /> Ethics Assistants also need an interaction (a note or a tag) to count as Active</label>
+        <div class="form-actions">
+          <button class="btn btn--primary" id="rq-save">Save requirements</button>
+          <button class="btn btn--ghost" id="rq-reset">Reset to defaults</button>
+        </div>
+      </div>
+    </section>`;
+
+  const persist = (data) => {
+    const cur = getSetting(ACTIVITY_REQ_SETTING_ID) || { id: ACTIVITY_REQ_SETTING_ID, org: 'command' };
+    cur.data = data;
+    upsertSetting(cur);
+    logAction(app.user, 'SET_SETTING', `Activity requirements: O1 ${data.omegaWeekly}h/wk + ${data.omegaMonthly}h/mo; EC Assistant ${data.ethicsWeekly}h/wk${data.ethicsNeedsInteraction ? ' + interaction' : ''}.`);
+    toast('Activity requirements saved.', 'success');
+    drawActivityReqs(panel, app);
+  };
+
+  panel.querySelector('#rq-save').addEventListener('click', () => {
+    persist(mergeActivityReqs({
+      omegaWeekly: parseFloat(panel.querySelector('#rq-ow').value),
+      omegaMonthly: parseFloat(panel.querySelector('#rq-om').value),
+      ethicsWeekly: parseFloat(panel.querySelector('#rq-ew').value),
+      ethicsNeedsInteraction: panel.querySelector('#rq-ei').checked,
+    }));
+  });
+  panel.querySelector('#rq-reset').addEventListener('click', async () => {
+    const ok = await confirmDialog({ title: 'Reset requirements', message: 'Reset to the defaults \u2014 Omega-1 5h/week + 25h/month, Ethics Assistant 1h/week plus an interaction?', confirmLabel: 'Reset' });
+    if (ok) persist(mergeActivityReqs(ACTIVITY_REQ_DEFAULT));
+  });
+}
+
 function drawRecycle(panel, app) {
   const delUsers = users().filter((u) => u.deleted);
   const delDirs = directives().filter((d) => d.deleted);
   const delSubjects = subjects().filter((s) => s.deleted);
   const delCases = cases().filter((c) => c.deleted);
   const delCompartments = compartments().filter((c) => c.deleted);
+  const delRecruits = recruits().filter((r) => r.deleted);
+  const delOps = operations().filter((o) => o.deleted);
+  const delIntel = intel().filter((s) => s.deleted);
 
-  if (!delUsers.length && !delDirs.length && !delSubjects.length && !delCases.length && !delCompartments.length) {
+  if (!delUsers.length && !delDirs.length && !delSubjects.length && !delCases.length && !delCompartments.length
+      && !delRecruits.length && !delOps.length && !delIntel.length) {
     panel.innerHTML = '<div class="card"><div class="card__body empty">The recycle bin is empty.</div></div>';
     return;
   }
@@ -383,10 +441,40 @@ function drawRecycle(panel, app) {
       </div>
     </div>`).join('');
 
+  const recRows = delRecruits.map((r) => `
+    <div class="bin-row">
+      <div><span class="mono">${esc(r.ref)}</span> \u00b7 ${esc(r.name)} ${orgTag(r.org)}<div class="bin-row__meta">Removed ${fmtDateTime(r.deletedAt)}</div></div>
+      <div class="bin-row__actions">
+        <button class="btn btn--xs" data-restore-r="${esc(r.id)}">Restore</button>
+        <button class="btn btn--xs btn--danger" data-purge-r="${esc(r.id)}">Purge</button>
+      </div>
+    </div>`).join('');
+
+  const opRows = delOps.map((o) => `
+    <div class="bin-row">
+      <div><span class="mono">${esc(o.ref)}</span> \u00b7 ${esc(o.name)} ${orgTag(o.org)}<div class="bin-row__meta">Removed ${fmtDateTime(o.deletedAt)}</div></div>
+      <div class="bin-row__actions">
+        <button class="btn btn--xs" data-restore-o="${esc(o.id)}">Restore</button>
+        <button class="btn btn--xs btn--danger" data-purge-o="${esc(o.id)}">Purge</button>
+      </div>
+    </div>`).join('');
+
+  const intelRows = delIntel.map((s) => `
+    <div class="bin-row">
+      <div><span class="mono">${esc(s.ref)}</span> \u00b7 ${esc(s.codename)} ${orgTag(s.org)}<div class="bin-row__meta">Removed ${fmtDateTime(s.deletedAt)}</div></div>
+      <div class="bin-row__actions">
+        <button class="btn btn--xs" data-restore-i="${esc(s.id)}">Restore</button>
+        <button class="btn btn--xs btn--danger" data-purge-i="${esc(s.id)}">Purge</button>
+      </div>
+    </div>`).join('');
+
   panel.innerHTML = `
     ${delUsers.length ? `<div class="card"><div class="card__title">Removed personnel</div><div class="card__body">${userRows}</div></div>` : ''}
+    ${delRecruits.length ? `<div class="card"><div class="card__title">Removed candidates</div><div class="card__body">${recRows}</div></div>` : ''}
     ${delSubjects.length ? `<div class="card"><div class="card__title">Removed surveillance subjects</div><div class="card__body">${subjRows}</div></div>` : ''}
     ${delCases.length ? `<div class="card"><div class="card__title">Removed tribunal cases</div><div class="card__body">${caseRows}</div></div>` : ''}
+    ${delOps.length ? `<div class="card"><div class="card__title">Removed operations</div><div class="card__body">${opRows}</div></div>` : ''}
+    ${delIntel.length ? `<div class="card"><div class="card__title">Removed intelligence sources</div><div class="card__body">${intelRows}</div></div>` : ''}
     ${delCompartments.length ? `<div class="card"><div class="card__title">Removed compartments</div><div class="card__body">${compRows}</div></div>` : ''}
     ${delDirs.length ? `<div class="card"><div class="card__title">Removed directives</div><div class="card__body">${dirRows}</div></div>` : ''}
   `;
@@ -465,6 +553,51 @@ function drawRecycle(panel, app) {
     saveDb();
     logAction(app.user, 'PURGE_RECORD', `Compartment ${c.name} permanently deleted.`);
     toast('Compartment purged.', 'success'); app.refresh();
+  }));
+  panel.querySelectorAll('[data-restore-r]').forEach((b) => b.addEventListener('click', () => {
+    const r = getRecruit(b.dataset.restoreR); if (!r) return;
+    r.deleted = false; r.deletedAt = null; r.version += 1; upsertRecruit(r);
+    logAction(app.user, 'RESTORE_RECORD', `Candidate ${r.ref} restored.`);
+    toast('Candidate restored.', 'success'); app.refresh();
+  }));
+  panel.querySelectorAll('[data-purge-r]').forEach((b) => b.addEventListener('click', async () => {
+    const r = getRecruit(b.dataset.purgeR); if (!r) return;
+    const ok = await confirmDialog({ title: 'Purge permanently', message: `Permanently delete candidate ${r.ref} \u00b7 ${r.name}? This cannot be undone.`, confirmLabel: 'Purge', danger: true });
+    if (!ok) return;
+    const db = loadDb(); db.recruits = db.recruits.filter((x) => x.id !== r.id);
+    saveDb();
+    logAction(app.user, 'PURGE_RECORD', `Candidate ${r.ref} permanently deleted.`);
+    toast('Candidate purged.', 'success'); app.refresh();
+  }));
+  panel.querySelectorAll('[data-restore-o]').forEach((b) => b.addEventListener('click', () => {
+    const o = getOperation(b.dataset.restoreO); if (!o) return;
+    o.deleted = false; o.deletedAt = null; o.version += 1; upsertOperation(o);
+    logAction(app.user, 'RESTORE_RECORD', `Operation ${o.ref} restored.`);
+    toast('Operation restored.', 'success'); app.refresh();
+  }));
+  panel.querySelectorAll('[data-purge-o]').forEach((b) => b.addEventListener('click', async () => {
+    const o = getOperation(b.dataset.purgeO); if (!o) return;
+    const ok = await confirmDialog({ title: 'Purge permanently', message: `Permanently delete operation ${o.ref} \u00b7 ${o.name}? Its log goes with it.`, confirmLabel: 'Purge', danger: true });
+    if (!ok) return;
+    const db = loadDb(); db.operations = db.operations.filter((x) => x.id !== o.id);
+    saveDb();
+    logAction(app.user, 'PURGE_RECORD', `Operation ${o.ref} permanently deleted.`);
+    toast('Operation purged.', 'success'); app.refresh();
+  }));
+  panel.querySelectorAll('[data-restore-i]').forEach((b) => b.addEventListener('click', () => {
+    const s = getIntel(b.dataset.restoreI); if (!s) return;
+    s.deleted = false; s.deletedAt = null; s.version += 1; upsertIntel(s);
+    logAction(app.user, 'RESTORE_RECORD', `Source ${s.ref} restored.`);
+    toast('Source restored.', 'success'); app.refresh();
+  }));
+  panel.querySelectorAll('[data-purge-i]').forEach((b) => b.addEventListener('click', async () => {
+    const s = getIntel(b.dataset.purgeI); if (!s) return;
+    const ok = await confirmDialog({ title: 'Purge permanently', message: `Permanently delete source ${s.ref} \u00b7 ${s.codename}? Its reporting record goes with it.`, confirmLabel: 'Purge', danger: true });
+    if (!ok) return;
+    const db = loadDb(); db.intel = db.intel.filter((x) => x.id !== s.id);
+    saveDb();
+    logAction(app.user, 'PURGE_RECORD', `Source ${s.ref} permanently deleted.`);
+    toast('Source purged.', 'success'); app.refresh();
   }));
 }
 

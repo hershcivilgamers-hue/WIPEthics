@@ -267,6 +267,7 @@ export function renderSubject(host, app, id) {
 
     ${canManage ? `<div class="actionbar">
       <button class="btn btn--sm" data-act="log">Add log entry</button>
+      <button class="btn btn--sm" data-act="image">Add imagery</button>
       <button class="btn btn--sm" data-act="status">Set status</button>
       <button class="btn btn--sm" data-act="reclassify">Reclassify</button>
       <button class="btn btn--sm" data-act="edit">Edit</button>
@@ -295,6 +296,15 @@ export function renderSubject(host, app, id) {
           <div class="card__body"><p class="subj-summary">${esc(s.summary || 'No summary on record.')}</p></div>
         </section>
         <section class="card">
+          <div class="card__title">Imagery</div>
+          <div class="card__body">
+            ${(s.images && s.images.length) ? `<div class="img-grid">${s.images.map((im) => `
+              <button class="img-thumb" data-img="${esc(im.id)}" title="${esc(im.caption || '')}">
+                <img src="${im.dataUrl}" alt="${esc(im.caption || 'surveillance image')}" loading="lazy" />
+              </button>`).join('')}</div>` : '<div class="empty">No imagery on record.</div>'}
+          </div>
+        </section>
+        <section class="card">
           <div class="card__title">Surveillance Log</div>
           <div class="card__body">
             ${logs.length ? `<ul class="timeline">${logItems}</ul>` : logItems}
@@ -309,6 +319,7 @@ export function renderSubject(host, app, id) {
 
   const dispatch = {
     log: () => openLog(app, s),
+    image: () => addImage(app, s),
     status: () => openStatus(app, s),
     reclassify: () => openReclassify(app, s),
     edit: () => openEdit(app, s),
@@ -316,6 +327,112 @@ export function renderSubject(host, app, id) {
     remove: () => removeSubject(app, s),
   };
   host.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => dispatch[b.dataset.act]()));
+  host.querySelectorAll('[data-img]').forEach((b) => b.addEventListener('click', () => openLightbox(app, s, b.dataset.img)));
+}
+
+// ===========================================================================
+// IMAGERY
+// ===========================================================================
+// Images are stored inline on the subject record as downscaled JPEG data URLs.
+// Surveillance records sync whole through the Worker and feed the snapshot, so
+// images are aggressively downscaled (max ~800px, JPEG) and capped per record to
+// keep payloads small; the access gate is the subject's own (you see a subject's
+// imagery iff you can see the subject).
+const MAX_IMAGES = 6;
+const MAX_IMAGE_BYTES = 220 * 1024; // per compressed image, a guard against huge records
+
+function pickImageFile() {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = () => resolve(input.files && input.files[0] ? input.files[0] : null);
+    input.click();
+  });
+}
+
+function downscaleImage(file, maxDim = 800, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    if (!file.type || !file.type.startsWith('image/')) { reject(new Error('not an image')); return; }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('read failed'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('decode failed'));
+      img.onload = () => {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        // JPEG keeps photographic surveillance stills small (transparency is not
+        // needed here); fall back to PNG only if toDataURL refuses JPEG.
+        let url = canvas.toDataURL('image/jpeg', quality);
+        if (!url.startsWith('data:image/jpeg')) url = canvas.toDataURL('image/png');
+        resolve(url);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function addImage(app, s) {
+  if (!canManageSubject(app.user, s)) { toast('You cannot edit this record.', 'error'); return; }
+  if ((s.images || []).length >= MAX_IMAGES) { toast(`A record holds at most ${MAX_IMAGES} images.`, 'error'); return; }
+  const file = await pickImageFile();
+  if (!file) return;
+  let dataUrl;
+  try { dataUrl = await downscaleImage(file); }
+  catch { toast('That file could not be read as an image.', 'error'); return; }
+  if (dataUrl.length > MAX_IMAGE_BYTES * 1.37) { // base64 is ~1.37x the byte size
+    toast('That image is too detailed to store even after downscaling \u2014 try a smaller crop.', 'error');
+    return;
+  }
+
+  openModal({
+    title: 'Add imagery',
+    wide: true,
+    body: `
+      <div class="img-preview"><img src="${dataUrl}" alt="preview" /></div>
+      <div class="field"><label>Caption (optional)</label><input id="im-cap" type="text" placeholder="e.g. Subject at Sector 9 \u2014 14 Jun" /></div>
+      <div class="field__hint">Stored downscaled (\u2264 800px) with the record.</div>`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Add image', tone: 'primary', onClick: (c, d) => {
+          const caption = d.querySelector('#im-cap').value.trim();
+          mutate(app, s.id, s.version, (rec) => {
+            rec.images = [...(rec.images || []), { id: newId('img'), dataUrl, caption, by: app.user.designation, at: new Date().toISOString() }];
+          }, { action: 'EDIT_SUBJECT', detail: `Imagery added to ${s.ref}.` });
+          c();
+          toast('Image added to the record.', 'success');
+        } },
+    ],
+  });
+}
+
+function openLightbox(app, s, imgId) {
+  const im = (s.images || []).find((x) => x.id === imgId);
+  if (!im) return;
+  const canManage = canManageSubject(app.user, s);
+  openModal({
+    title: im.caption || 'Surveillance imagery',
+    wide: true,
+    body: `
+      <div class="img-full"><img src="${im.dataUrl}" alt="${esc(im.caption || 'surveillance image')}" /></div>
+      <div class="img-meta">Filed by <span class="mono">${esc(im.by || '\u2014')}</span> \u00b7 ${fmtDateTime(im.at)}</div>`,
+    actions: canManage ? [
+      { label: 'Remove image', tone: 'danger', onClick: async (c) => {
+          c();
+          const ok = await confirmDialog({ title: 'Remove image', message: 'Remove this image from the record?', confirmLabel: 'Remove', danger: true });
+          if (!ok) return;
+          mutate(app, s.id, s.version, (rec) => { rec.images = (rec.images || []).filter((x) => x.id !== imgId); }, { action: 'EDIT_SUBJECT', detail: `Imagery removed from ${s.ref}.` });
+          toast('Image removed.', 'success');
+        } },
+      { label: 'Close', tone: 'primary', onClick: (c) => c() },
+    ] : [{ label: 'Close', tone: 'primary', onClick: (c) => c() }],
+  });
 }
 
 // ===========================================================================
@@ -375,7 +492,7 @@ function openCreate(app) {
           upsertSubject({
             id: newId('sub'), ref, alias, realName: '[UNIDENTIFIED]', kind, org,
             threat, clearance: clr, status: 'active', summary, lastKnownLocation: loc,
-            compartment: comp,
+            compartment: comp, images: [],
             logs: [{ id: newId('log'), ts: now, by: actor.designation, type: 'intel', text: `Record opened by ${actor.designation}.` }],
             createdBy: actor.designation, createdAt: now, updatedAt: now,
             version: 1, deleted: false, deletedAt: null,

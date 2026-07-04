@@ -16,7 +16,8 @@
 import {
   accessLevel, canReadDirective, canViewSubject, canViewCase, isCL5,
   compartmentClears, readIntoCompartment, canManageCompartment,
-  canViewActivity, canViewRecruitment,
+  canViewActivity, canViewRecruitment, canViewOperation, isAssignedToOperation,
+  canViewIntel, isAssignedToIntel, canViewTraining,
 } from '../../js/permissions.js';
 
 // A user record with credential material and (per access level) sensitive
@@ -52,6 +53,7 @@ export function redactUser(actor, user) {
       notes: user.notes ?? [],
       events: user.events ?? [],
       promoChecks: user.promoChecks ?? [],
+      trainings: user.trainings ?? [],
     };
   }
 
@@ -67,6 +69,7 @@ export function redactUser(actor, user) {
       events: user.events ?? [],
       notes: [],
       promoChecks: user.promoChecks ?? [],
+      trainings: user.trainings ?? [],
     };
   }
 
@@ -101,7 +104,7 @@ export function redactDirective(actor, d, compMap) {
     out.compartmentName = c ? c.name : null;
   }
   const clears = canReadDirective(actor, d) && compartmentClears(actor, d, compMap);
-  if (clears) out.body = d.body;
+  if (clears) { out.body = d.body; out.acks = d.acks || {}; }
   else out.bodyWithheld = true;
   return out;
 }
@@ -167,7 +170,17 @@ export function buildSnapshot(actor, db) {
       .filter((c) => c.access !== 'none'),
     activity: (db.activity || []).filter((a) => !a.deleted && canViewActivity(actor, a)),
     recruits: (db.recruits || []).filter((r) => !r.deleted && canViewRecruitment(actor, r)),
+    operations: (db.operations || [])
+      .filter((o) => !o.deleted && canViewOperation(actor, o)
+        && (isAssignedToOperation(actor, o) || compartmentClears(actor, o, compMap)))
+      .map((o) => withCaveat(o, compMap)),
+    intel: (db.intel || [])
+      .filter((s) => !s.deleted && canViewIntel(actor, s)
+        && (isAssignedToIntel(actor, s) || compartmentClears(actor, s, compMap)))
+      .map((s) => withCaveat(s, compMap)),
+    trainings: (db.trainings || []).filter((t) => !t.deleted && canViewTraining(actor, t)),
     promoReqs: db.promoReqs || [],
+    settings: db.settings || [],
     audit: isCL5(actor) ? (db.audit || []) : [],
   };
 }

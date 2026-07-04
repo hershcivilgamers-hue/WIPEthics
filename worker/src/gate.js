@@ -15,10 +15,10 @@
 
 import {
   canEditPersonnel, canSetClearance, canIssueStrike, canDeletePersonnel,
-  canApproveRegistrations, canPromote, canDemote, canManagePromoReqs,
-  canManageDirectives, canManageSubject, canManageTribunal, canRuleTribunal,
+  canApproveRegistrations, canPromote, canDemote, canManagePromoReqs, canManageSettings,
+  canManageDirectives, canReadDirective, canManageSubject, canManageTribunal, canRuleTribunal,
   compartmentClears, canManageCompartment, canReadOperatorInto,
-  canManageOrg, canParticipateRecruitment,
+  canManageOrg, canParticipateRecruitment, canLogToOperation, canLogIntel, canManageTraining, isCL5,
 } from '../../js/permissions.js';
 import { rankUp, rankDown, clearanceForRank, clearanceWeight, tallyVotes } from '../../js/constants.js';
 
@@ -128,10 +128,25 @@ function authorizeUser(actor, cur, next) {
 
 function authorizeDirective(actor, cur, next, ctx) {
   const org = (next || cur).org;
+  const ref = (next || cur).ref || 'directive';
+  // Acknowledgement: any operator cleared to read an active order may
+  // countersign it — adding exactly their own entry and touching nothing else.
+  // Checked before the manager gate, like the handler's report-only path.
+  if (cur && j(next.acks || {}) !== j(cur.acks || {})
+      && !changedOutside(cur, next, ['acks', 'version', 'updatedAt'])) {
+    const before = cur.acks || {};
+    const after = next.acks || {};
+    const kept = Object.keys(before).every((k) => after[k] === before[k]);
+    const added = Object.keys(after).filter((k) => !(k in before));
+    if (!kept || added.length !== 1 || added[0] !== actor.id) return deny('You may only add your own acknowledgement.');
+    if (cur.status === 'rescinded') return deny('A rescinded order cannot be acknowledged.');
+    if (actor.org !== cur.org) return deny('This order is addressed to the issuing organisation\u2019s personnel.');
+    if (!canReadDirective(actor, cur) || !compartmentClears(actor, cur, ctx && ctx.compMap)) return deny('You are not cleared to read this order.');
+    return ok('ACK_DIRECTIVE', `${actor.designation} acknowledged ${ref}.`);
+  }
   if (!canManageDirectives(actor, org)) return deny('You cannot manage directives for that organisation.');
   const block = compartmentWriteBlock(actor, cur, next, ctx);
   if (block) return block;
-  const ref = (next || cur).ref || 'directive';
   if (!cur) return ok('CREATE_DIRECTIVE', `Issued ${ref}.`);
   if (!!next.deleted !== !!cur.deleted) return next.deleted ? ok('REMOVE_DIRECTIVE', `Withdrew ${ref}.`) : ok('RESTORE_DIRECTIVE', `Restored ${ref}.`);
   return ok('EDIT_DIRECTIVE', `Updated ${ref}.`);
@@ -218,6 +233,11 @@ function authorizePromoReq(actor) {
   return ok('SET_PROMO_REQ', 'Updated promotion requirements.');
 }
 
+function authorizeSettings(actor, cur, next) {
+  if (!canManageSettings(actor)) return deny('Global settings are managed at CL5.');
+  return ok('SET_SETTING', `Updated setting ${(next || cur || {}).id || ''}.`);
+}
+
 // Operational activity. Self-service: an operator opens/logs their OWN record
 // regardless of clearance. Logging on another operator's behalf, setting a duty
 // posture, or removing a record needs the org-management right. Writes are
@@ -230,32 +250,43 @@ function authorizeActivity(actor, cur, next, ctx) {
 
   if (!cur) {
     if (isSelf && rec.org !== actor.org) return deny('Your activity record must sit under your own organisation.');
-    return ok('LOG_ACTIVITY', 'Activity record opened.');
+    return ok('OPEN_ACTIVITY', 'Activity record opened.');
   }
   if (!!next.deleted !== !!cur.deleted) {
     if (!isMgr) return deny('Only a manager can remove an activity record.');
     return next.deleted ? ok('REMOVE_RECORD', 'Activity record removed.') : ok('RESTORE_RECORD', 'Activity record restored.');
   }
-  const dutyChanged = j(next.duty) !== j(cur.duty);
-  if (dutyChanged && !isMgr) return deny('Only a manager can set a duty posture.');
-  if (changedOutside(cur, next, ['entries', 'duty', 'lastActiveAt', 'version', 'updatedAt'])) {
+
+  // A status override is a manager action, never on one's own record, and may
+  // touch nothing but the override field.
+  if (j(next.override) !== j(cur.override)) {
+    if (isSelf) return deny('You cannot override your own activity status.');
+    if (!isMgr) return deny('Only a manager may override an activity status.');
+    if (changedOutside(cur, next, ['override', 'version', 'updatedAt'])) return deny('An override may only change the override.');
+    return next.override
+      ? ok('SET_ACTIVITY_OVERRIDE', `Activity status set to ${next.override.status}.`)
+      : ok('CLEAR_ACTIVITY_OVERRIDE', 'Activity override cleared.');
+  }
+
+  // Otherwise this is a log write: self or manager, and only the log may change.
+  if (changedOutside(cur, next, ['log', 'version', 'updatedAt'])) {
     return deny('An activity update cannot change other fields.');
   }
-  if (dutyChanged) return ok('SET_DUTY_STATUS', 'Duty posture updated.');
-  return ok('LOG_ACTIVITY', 'Activity logged.');
+  return ok('LOG_ACTIVITY', 'Hours logged.');
 }
 
-// Recruitment (Omega-1 scouting pipeline). Run by the unit's CL4 cadre. A vote
-// write may only change the actor's own ballot; stage transitions follow the
-// Scouting -> Greenlit -> Tryout -> Archived flow, and a candidate needs a
-// majority Yes vote to leave Greenlit. Removing a candidate record needs the
-// management right.
+// Recruitment. Both org pipelines are run by the unit's CL4 cadre and share the
+// vote-integrity rule (a ballot write may only change the actor's own vote).
+// They diverge on who advances stages: Omega-1 transitions are open to any CL4,
+// while every Ethics transition — and any change while an Ethics application is
+// in the interview stage — is CL5 only.
 function authorizeRecruit(actor, cur, next, ctx) {
   const org = (next || cur).org;
   if (!canParticipateRecruitment(actor, org)) return deny('Recruitment is run by the unit\u2019s CL4 cadre.');
   const ref = (next || cur).ref || 'candidate';
+  const isEthics = org === 'ethics-committee';
 
-  if (!cur) return ok('OPEN_RECRUIT', `Opened scouting target ${ref}.`);
+  if (!cur) return ok('OPEN_RECRUIT', `Opened candidate ${ref}.`);
 
   if (!!next.deleted !== !!cur.deleted) {
     if (!canManageOrg(actor, org)) return deny('Only a manager can remove a candidate record.');
@@ -271,6 +302,35 @@ function authorizeRecruit(actor, cur, next, ctx) {
   }
 
   const stageChanged = j(next.stage) !== j(cur.stage);
+
+  if (isEthics) {
+    if (stageChanged) {
+      if (!isCL5(actor)) return deny('Only CL5 may advance or close an application.');
+      if (cur.stage === 'application' && next.stage === 'interview') {
+        if (!tallyVotes(cur.votes).majorityYes) return deny('An application needs a majority Yes vote to go to interview.');
+        return ok('ADVANCE_RECRUIT', `${ref} \u2192 interview.`);
+      }
+      if (next.stage === 'archived') {
+        if (cur.stage === 'interview' && next.archiveStatus === 'approved') return ok('INDUCT_RECRUIT', `${ref} passed interview.`);
+        return ok('REJECT_RECRUIT', `${ref} archived (${next.archiveStatus || 'denied'}).`);
+      }
+      return deny('That is not a valid stage transition.');
+    }
+    // Once in interview, only CL5 may add notes or otherwise change the record.
+    if (cur.stage === 'interview' && !isCL5(actor)) return deny('Only CL5 may add to an application in the interview stage.');
+    // Interview assessment edits (CL5, interview stage) — refine the audit label.
+    if (cur.stage === 'interview') {
+      if (j(cur.interviewSeed) !== j(next.interviewSeed)) return ok('EDIT_RECRUIT', `Interview question set re-rolled for ${ref}.`);
+      if (j(cur.customQuestions || []) !== j(next.customQuestions || [])) {
+        const grew = (next.customQuestions || []).length > (cur.customQuestions || []).length;
+        return ok('EDIT_RECRUIT', grew ? `Interview question added to ${ref}.` : `Interview question removed from ${ref}.`);
+      }
+    }
+    if (votesChanged) return ok('VOTE_RECRUIT', `Vote cast on ${ref}.`);
+    return ok('EDIT_RECRUIT', `Updated candidate ${ref}.`);
+  }
+
+  // Omega-1 — any CL4 cadre advances.
   if (stageChanged) {
     if (next.stage === 'archived') {
       if (cur.stage === 'tryout' && next.archiveStatus === 'approved') return ok('INDUCT_RECRUIT', `Candidate ${ref} approved at tryout.`);
@@ -296,13 +356,114 @@ const AUTHORIZERS = {
   compartments: authorizeCompartment,
   activity: authorizeActivity,
   recruits: authorizeRecruit,
+  operations: authorizeOperation,
+  intel: authorizeIntel,
+  trainings: authorizeTraining,
   promo_reqs: authorizePromoReq,
+  settings: authorizeSettings,
 };
 
 // collection -> (actor, current|null, incoming, ctx) -> {ok, action, detail}
 //   | {ok:false, status, error}
 // `ctx` may carry { compMap, clearanceOf } for the authorizers that need to look
 // beyond the single record (compartment gating, read-in floor checks).
+// Operations & deployment log. Managers run the operation; an assigned operator
+// (or a manager) may file a single log entry. The log-only path is checked first
+// so an assigned operator can file a field report even into a compartmented op
+// (assignment implies need-to-know); everything else is a manager action and is
+// subject to the compartment write-block.
+function authorizeOperation(actor, cur, next, ctx) {
+  const org = (next || cur).org;
+  const ref = (next || cur).ref || 'operation';
+
+  if (!cur) {
+    if (!canManageOrg(actor, org)) return deny('You cannot open operations for that organisation.');
+    const block = compartmentWriteBlock(actor, null, next, ctx);
+    if (block) return block;
+    return ok('CREATE_OPERATION', `Opened operation ${ref}.`);
+  }
+
+  if (!!next.deleted !== !!cur.deleted) {
+    if (!canManageOrg(actor, org)) return deny('Only a manager can remove an operation.');
+    const block = compartmentWriteBlock(actor, cur, next, ctx);
+    if (block) return block;
+    return next.deleted ? ok('REMOVE_OPERATION', `Removed operation ${ref}.`) : ok('RESTORE_OPERATION', `Restored operation ${ref}.`);
+  }
+
+  // Log-only: an assigned operator or a manager may append an entry, and nothing
+  // but the log may change.
+  if (j(next.log) !== j(cur.log) && !changedOutside(cur, next, ['log', 'version', 'updatedAt'])) {
+    if (!canLogToOperation(actor, cur)) return deny('You are not assigned to this operation.');
+    return ok('LOG_OPERATION', `Entry logged to ${ref}.`);
+  }
+
+  // Everything else is a manager action.
+  if (!canManageOrg(actor, org)) return deny('You cannot manage this operation.');
+  const block = compartmentWriteBlock(actor, cur, next, ctx);
+  if (block) return block;
+  if (j(next.status) !== j(cur.status)) {
+    if (next.status === 'active') return ok('ACTIVATE_OPERATION', `Operation ${ref} activated.`);
+    if (next.status === 'concluded') return ok('CONCLUDE_OPERATION', `Operation ${ref} concluded.`);
+    if (next.status === 'aborted') return ok('ABORT_OPERATION', `Operation ${ref} aborted.`);
+  }
+  return ok('EDIT_OPERATION', `Updated operation ${ref}.`);
+}
+
+// Intelligence sources & informants. Mirrors operations: a manager opens, tasks
+// and closes a source; a handler (or a manager) may file a report. The
+// report-only path is checked first so a handler can file into a compartmented
+// source (running it implies need-to-know); every other change is a manager
+// action and is blocked when the actor is not read into the compartment.
+function authorizeIntel(actor, cur, next, ctx) {
+  const org = (next || cur).org;
+  const ref = (next || cur).ref || 'source';
+
+  if (!cur) {
+    if (!canManageOrg(actor, org)) return deny('You cannot open intelligence sources for that organisation.');
+    const block = compartmentWriteBlock(actor, null, next, ctx);
+    if (block) return block;
+    return ok('CREATE_INTEL', `Opened source ${ref}.`);
+  }
+
+  if (!!next.deleted !== !!cur.deleted) {
+    if (!canManageOrg(actor, org)) return deny('Only a manager can remove a source.');
+    const block = compartmentWriteBlock(actor, cur, next, ctx);
+    if (block) return block;
+    return next.deleted ? ok('REMOVE_INTEL', `Removed source ${ref}.`) : ok('RESTORE_INTEL', `Restored source ${ref}.`);
+  }
+
+  // Report-only: a handler or a manager may append a report, and nothing else.
+  if (j(next.reports) !== j(cur.reports) && !changedOutside(cur, next, ['reports', 'version', 'updatedAt'])) {
+    if (!canLogIntel(actor, cur)) return deny('You are not the handler of this source.');
+    return ok('LOG_INTEL', `Report filed to ${ref}.`);
+  }
+
+  // Everything else is a manager action.
+  if (!canManageOrg(actor, org)) return deny('You cannot manage this source.');
+  const block = compartmentWriteBlock(actor, cur, next, ctx);
+  if (block) return block;
+  if (j(next.status) !== j(cur.status)) {
+    if (next.status === 'burned') return ok('BURN_INTEL', `Source ${ref} marked burned.`);
+    if (next.status === 'closed') return ok('CLOSE_INTEL', `Source ${ref} closed.`);
+    if (next.status === 'active') return ok('ACTIVATE_INTEL', `Source ${ref} activated.`);
+  }
+  return ok('EDIT_INTEL', `Updated source ${ref}.`);
+}
+
+// Trainings catalogue. Straightforwardly org-scoped: a unit's managers define,
+// amend, retire and restore courses; nobody else writes. Completions are held
+// on personnel files and are authorised by the personnel gate, not here.
+function authorizeTraining(actor, cur, next) {
+  const org = (next || cur).org;
+  const ref = (next || cur).ref || (next || cur).code || 'course';
+  if (!canManageTraining(actor, org)) return deny('You cannot manage the training catalogue for that organisation.');
+  if (!cur) return ok('CREATE_TRAINING', `Added course ${ref}.`);
+  if (!!next.deleted !== !!cur.deleted) {
+    return next.deleted ? ok('REMOVE_TRAINING', `Retired course ${ref}.`) : ok('RESTORE_TRAINING', `Restored course ${ref}.`);
+  }
+  return ok('EDIT_TRAINING', `Updated course ${ref}.`);
+}
+
 export function authorizeWrite(collection, actor, cur, next, ctx) {
   const fn = AUTHORIZERS[collection];
   if (!fn) return { ok: false, status: 404, error: 'Unknown collection.' };

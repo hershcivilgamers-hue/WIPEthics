@@ -13,7 +13,7 @@ import { runMigrations } from './migrations.js';
 import { currentUser, endSession, setServerUser } from './state.js';
 import { logAction } from './audit.js';
 import { NAV, parseHash, isRouteAllowed } from './router.js';
-import { getUser, getSubject, getCase, applyServerSnapshot } from './storage.js';
+import { getUser, getSubject, getCase, getRecruit, applyServerSnapshot } from './storage.js';
 import { esc, clearanceBadge, toast } from './ui.js';
 import * as api from './api.js';
 import * as sync from './sync.js';
@@ -25,6 +25,12 @@ import * as personnelView from './views/personnel.js';
 import * as surveillanceView from './views/surveillance.js';
 import * as compartmentsView from './views/compartments.js';
 import * as operationsView from './views/operations.js';
+import * as deploymentsView from './views/deployments.js';
+import * as intelView from './views/intel.js';
+import * as trainingsView from './views/trainings.js';
+import * as dashboardView from './views/dashboard.js';
+import * as docketView from './views/docket.js';
+import * as notificationsView from './views/notifications.js';
 import * as recruitmentView from './views/recruitment.js';
 import * as tribunalsView from './views/tribunals.js';
 import * as directivesView from './views/directives.js';
@@ -98,11 +104,16 @@ function renderShell(user, route) {
   } else if (route.name === 'compartment') {
     activeName = 'compartments';
   } else if (route.name === 'recruit') {
-    activeName = 'recruitment';
+    const rec = getRecruit(route.params.id);
+    activeName = rec && rec.org === 'ethics-committee' ? 'recruit-ethics' : 'recruit-omega';
   } else if (route.name === 'case') {
     activeName = 'tribunals';
   } else if (route.name === 'directive') {
     activeName = 'directives';
+  } else if (route.name === 'operation') {
+    activeName = 'deployments';
+  } else if (route.name === 'source') {
+    activeName = 'intel';
   }
 
   const banner = `CLASSIFIED \u00b7 ${esc(CONFIG.facility)} \u00b7 OPERATOR CLEARANCE ${esc(clearanceWord(user))} \u00b7 ACCESS LOGGED`;
@@ -124,6 +135,7 @@ function renderShell(user, route) {
                 <span class="op-chip__name">${esc(user.codename)}</span>
                 ${clearanceBadge(user.clearance)}
               </div>
+              <button class="btn btn--ghost btn--sm" id="change-pass">Change passphrase</button>
               <button class="btn btn--ghost btn--sm" id="logout">Sign out</button>
             </div>
           </header>
@@ -132,6 +144,9 @@ function renderShell(user, route) {
       </div>
       <div class="classbar classbar--bottom">${banner}</div>
     </div>`;
+
+  const changePass = root.querySelector('#change-pass');
+  if (changePass) changePass.addEventListener('click', () => personnelView.openChangePassphrase(app));
 
   root.querySelector('#logout').addEventListener('click', () => {
     logAction(user, 'LOGOUT', `${user.designation} signed out.`);
@@ -172,8 +187,17 @@ function dispatch(route, user) {
     case 'compartments': compartmentsView.renderList(view, app); break;
     case 'compartment':  compartmentsView.renderCompartment(view, app, route.params.id); break;
     case 'operations':   operationsView.render(view, app); break;
-    case 'recruitment':  recruitmentView.renderList(view, app); break;
-    case 'recruit':      recruitmentView.renderRecruit(view, app, route.params.id); break;
+    case 'deployments':  deploymentsView.renderList(view, app); break;
+    case 'operation':    deploymentsView.renderOperation(view, app, route.params.id); break;
+    case 'intel':        intelView.renderList(view, app); break;
+    case 'source':       intelView.renderSource(view, app, route.params.id); break;
+    case 'trainings':    trainingsView.render(view, app); break;
+    case 'dashboard':    dashboardView.render(view, app); break;
+    case 'docket':       docketView.render(view, app); break;
+    case 'notifications': notificationsView.render(view, app); break;
+    case 'recruit-omega':  recruitmentView.renderList(view, app, 'omega-1'); break;
+    case 'recruit-ethics': recruitmentView.renderList(view, app, 'ethics-committee'); break;
+    case 'recruit':        recruitmentView.renderRecruit(view, app, route.params.id); break;
     case 'tribunals':    tribunalsView.renderList(view, app); break;
     case 'case':         tribunalsView.renderCase(view, app, route.params.id); break;
     case 'directives':   directivesView.render(view, app); break;
@@ -206,6 +230,7 @@ async function boot() {
       toast,
       onAuthLost: () => { api.setToken(null); setServerUser(null); renderApp(); },
     });
+    sync.startAutoRefresh();
     api.loadToken();
     if (api.getToken()) {
       try {

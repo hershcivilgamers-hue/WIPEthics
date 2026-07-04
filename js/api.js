@@ -72,6 +72,16 @@ export async function fetchSnapshot() {
 export async function register(payload) {
   return request('POST', '/api/register', payload);
 }
+export async function resetPassphrase(userId, passphrase) {
+  return request('POST', `/api/users/${encodeURIComponent(userId)}/passphrase`, { passphrase });
+}
+export async function changeMyPassphrase(currentPassphrase, newPassphrase) {
+  return request('POST', '/api/me/passphrase', { currentPassphrase, newPassphrase });
+}
+export async function signOutEverywhere() {
+  await request('DELETE', '/api/me/sessions');
+  setToken(null);
+}
 
 // --- writes (serialized) ---
 let chain = Promise.resolve();

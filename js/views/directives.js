@@ -8,7 +8,7 @@
 // =============================================================================
 
 import { ORGS, ORG_ORDER, CLEARANCE_ORDER, CLEARANCES, clearanceWeight } from '../constants.js';
-import { directives, getDirective, upsertDirective, compartments, getCompartment, isServerMode, newId } from '../storage.js';
+import { directives, getDirective, upsertDirective, compartments, getCompartment, isServerMode, newId, users } from '../storage.js';
 import { canManageDirectives, canReadDirective, isCL5, readIntoCompartment } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { exportDirective } from '../export.js';
@@ -139,6 +139,33 @@ export function renderDirective(host, app, id) {
     ? `<div class="memo__body">${esc(d.body)}</div>`
     : `<div class="memo__withheld">${withheldReason(d)}</div>`;
 
+  // Acknowledgement: any operator cleared to read an active order may
+  // countersign it once. The Worker re-verifies the same rule server-side.
+  const myAck = (d.acks || {})[actor.id] || null;
+  const canAck = canRead && !rescinded && !myAck && actor.org === d.org;
+  const ackStrip = canAck
+    ? '<div class="actionbar"><button class="btn btn--sm btn--primary" data-act="ack">Acknowledge this order</button></div>'
+    : (myAck ? `<div class="ack-note">Acknowledged by you on ${fmtDate(myAck)}.</div>` : '');
+
+  // Compliance panel for issuers: the addressees — the issuing organisation's
+  // personnel who are cleared to read — and who among them has signed.
+  let ackPanel = '';
+  if (canManage) {
+    const eligible = users().filter((u) => !u.deleted && u.accountStatus === 'active' && u.status !== 'discharged' && u.org === d.org && bodyReadable(u, d));
+    const signed = eligible.filter((u) => (d.acks || {})[u.id]);
+    const outstanding = eligible.filter((u) => !(d.acks || {})[u.id]);
+    const row = (u, ts) => `<div class="ack-row"><span class="mono">${esc(u.designation)}</span><span class="ack-row__name">${esc(u.codename || '')}</span><span class="muted-text">${ts ? `Acknowledged ${fmtDate(ts)}` : 'Outstanding'}</span></div>`;
+    ackPanel = `
+      <section class="card">
+        <div class="card__title">Acknowledgements <span class="muted-text">(${signed.length} of ${eligible.length})</span></div>
+        <div class="card__body">
+          ${outstanding.map((u) => row(u, null)).join('')}
+          ${signed.map((u) => row(u, (d.acks || {})[u.id])).join('')}
+          ${!eligible.length ? '<div class="empty">No personnel are currently cleared to read this order.</div>' : ''}
+        </div>
+      </section>`;
+  }
+
   host.innerHTML = `
     <div class="file-actions">
       <button class="btn btn--ghost btn--sm" id="back">\u2190 Standing Orders</button>
@@ -161,6 +188,8 @@ export function renderDirective(host, app, id) {
 
     ${caveatBanner(d)}
 
+    ${ackStrip}
+
     ${canManage ? `<div class="actionbar">
       ${!rescinded ? '<button class="btn btn--sm btn--danger" data-act="rescind">Rescind</button>' : '<button class="btn btn--sm" data-act="reinstate">Reinstate</button>'}
     </div>` : ''}
@@ -177,6 +206,8 @@ export function renderDirective(host, app, id) {
       <div class="memo__rule"></div>
       ${bodyBlock}
     </section>
+
+    ${ackPanel}
   `;
 
   host.querySelector('#back').addEventListener('click', () => app.navigate('#/directives'));
@@ -185,6 +216,27 @@ export function renderDirective(host, app, id) {
   if (rescindBtn) rescindBtn.addEventListener('click', () => setStatus(app, d.id, 'rescinded'));
   const reinstateBtn = host.querySelector('[data-act="reinstate"]');
   if (reinstateBtn) reinstateBtn.addEventListener('click', () => setStatus(app, d.id, 'active'));
+  const ackBtn = host.querySelector('[data-act="ack"]');
+  if (ackBtn) ackBtn.addEventListener('click', () => acknowledge(app, d.id));
+}
+
+// Countersign an order: adds exactly the operator's own acknowledgement and
+// nothing else. The Worker re-verifies the same shape (reader, active order,
+// own entry only) before anything persists.
+function acknowledge(app, id) {
+  const d = getDirective(id);
+  if (!d || d.deleted) return;
+  if (d.status === 'rescinded') { toast('A rescinded order cannot be acknowledged.', 'error'); return; }
+  if (app.user.org !== d.org) { toast('This order is addressed to the issuing organisation\u2019s personnel.', 'error'); return; }
+  if (!bodyReadable(app.user, d)) { toast('You are not cleared to read this order.', 'error'); return; }
+  if ((d.acks || {})[app.user.id]) { toast('Already acknowledged.', 'info'); return; }
+  d.acks = { ...(d.acks || {}), [app.user.id]: new Date().toISOString() };
+  d.updatedAt = new Date().toISOString();
+  d.version = (d.version || 1) + 1;
+  upsertDirective(d);
+  logAction(app.user, 'ACK_DIRECTIVE', `Acknowledged ${d.ref}.`);
+  toast('Order acknowledged.', 'success');
+  app.refresh();
 }
 
 async function setStatus(app, id, status) {

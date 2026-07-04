@@ -408,3 +408,52 @@
 .result .row-go { color: var(--text-3); font-size: 12px; flex-shrink: 0; }
 .result:hover .row-go { color: var(--amber); }
 .search-excluded { margin-top: var(--s4); padding: var(--s3) var(--s4); border: 1px dashed var(--line-strong); border-radius: var(--radius); font-size: 11.5px; color: var(--text-3); letter-spacing: .02em; }
+
+/* --- Admin: activity requirements editor ----------------------------------- */
+.req-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.check-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  margin: 6px 0 4px;
+}
+.check-line input { margin-top: 2px; accent-color: var(--accent, #6ea8fe); }
+.form-actions { display: flex; gap: 10px; margin-top: 14px; }
+
+/* --- Interview assessment panel (Ethics Assistant interview stage) --------- */
+.iv-actions { display: flex; flex-wrap: wrap; gap: var(--s2); margin: var(--s3) 0; }
+.iv-picklist { margin: var(--s2) 0 var(--s3); border-top: 1px solid var(--line); }
+.iv-pick { display: flex; align-items: baseline; gap: var(--s3); padding: var(--s2) var(--s1); border-bottom: 1px solid var(--line); }
+.iv-pick__n { flex: 0 0 1.4em; font-family: var(--mono); color: var(--text-3); text-align: right; }
+.iv-pick__cat { flex: 0 0 auto; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--ethics); }
+.iv-pick__p { flex: 1; min-width: 0; color: var(--text-2); font-size: 13px; }
+.iv-pick--custom { border-left: 2px solid var(--cl5); padding-left: var(--s2); }
+.iv-pick--custom .iv-pick__cat { color: var(--cl5); }
+.iv-pick--custom .btn { margin-left: auto; flex: 0 0 auto; }
+.iv-sub { margin-top: var(--s3); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--text-3); }
+.iv-form { margin-top: var(--s3); padding: var(--s3); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); }
+.iv-form textarea, .iv-form input { width: 100%; margin-bottom: var(--s2); padding: var(--s2); background: var(--bg); color: var(--text); border: 1px solid var(--line-strong); border-radius: var(--radius); font: inherit; box-sizing: border-box; }
+.iv-form textarea { resize: vertical; }
+.iv-form__row { display: flex; gap: var(--s2); }
+
+/* --- Directive acknowledgements -------------------------------------------- */
+.ack-note { margin: var(--s3) 0; font-size: 13px; color: var(--text-3); }
+.ack-row { display: flex; gap: var(--s3); align-items: baseline; padding: var(--s1) 0; border-bottom: 1px solid var(--line); }
+.ack-row:last-child { border-bottom: none; }
+.ack-row__name { flex: 1; }
+
+/* --- Training currency (personnel dossier + catalogue) --------------------- */
+.trn-row { display: flex; align-items: baseline; gap: var(--s3); padding: var(--s2) 0; border-bottom: 1px solid var(--line); }
+.trn-row:last-child { border-bottom: none; }
+.trn-row__name { flex: 1; min-width: 0; }
+.trn-row__exp { flex: 0 0 auto; font-size: 12px; }
+.row-click { cursor: pointer; }
+.row-click:hover, .row-click:focus-visible { background: var(--surface-2); outline: none; }

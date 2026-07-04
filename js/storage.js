@@ -32,7 +32,11 @@ function emptyDb() {
     compartments: [],
     activity: [],
     recruits: [],
+    operations: [],
+    intel: [],
+    trainings: [],
     promoReqs: [],
+    settings: [],
     audit: [],
     session: { userId: null },
   };
@@ -104,7 +108,11 @@ export function applyServerSnapshot(snap) {
     compartments: snap.compartments || [],
     activity: snap.activity || [],
     recruits: snap.recruits || [],
+    operations: snap.operations || [],
+    intel: snap.intel || [],
+    trainings: snap.trainings || [],
     promoReqs: snap.promoReqs || [],
+    settings: snap.settings || [],
     audit: snap.audit || [],
     meta: { ...base.meta, seededAt: 'server' },
     session: { userId: null },
@@ -195,7 +203,9 @@ export const cases = () => loadDb().cases;
 export const compartments = () => loadDb().compartments;
 export const activity = () => loadDb().activity;
 export const recruits = () => loadDb().recruits;
+export const operations = () => loadDb().operations;
 export const promoReqs = () => loadDb().promoReqs;
+export const settings = () => loadDb().settings;
 export const audit = () => loadDb().audit;
 export const meta = () => loadDb().meta;
 export const session = () => loadDb().session;
@@ -296,11 +306,56 @@ export function upsertRecruit(record) {
   return record;
 }
 
+export function getOperation(id) {
+  return operations().find((r) => r.id === id) || null;
+}
+export function upsertOperation(record) {
+  const list = operations();
+  const i = list.findIndex((r) => r.id === record.id);
+  if (i >= 0) list[i] = record; else list.push(record);
+  afterWrite('operations', record);
+  return record;
+}
+
+export const intel = () => loadDb().intel;
+export function getIntel(id) {
+  return intel().find((r) => r.id === id) || null;
+}
+export function upsertIntel(record) {
+  const list = intel();
+  const i = list.findIndex((r) => r.id === record.id);
+  if (i >= 0) list[i] = record; else list.push(record);
+  afterWrite('intel', record);
+  return record;
+}
+
+export const trainings = () => loadDb().trainings;
+export function getTraining(id) {
+  return trainings().find((r) => r.id === id) || null;
+}
+export function upsertTraining(record) {
+  const list = trainings();
+  const i = list.findIndex((r) => r.id === record.id);
+  if (i >= 0) list[i] = record; else list.push(record);
+  afterWrite('trainings', record);
+  return record;
+}
+
 // Promotion-requirement sets — one per (org, fromRank) transition.
 export function getPromoReq(id) {
   return promoReqs().find((r) => r.id === id) || null;
 }
 
+export function getSetting(id) {
+  return settings().find((r) => r.id === id) || null;
+}
+export function upsertSetting(record) {
+  const list = settings();
+  const i = list.findIndex((r) => r.id === record.id);
+  if (i >= 0) list[i] = record; else list.push(record);
+  afterWrite('settings', record);
+  return record;
+}
 export function upsertPromoReq(record) {
   const list = promoReqs();
   const idx = list.findIndex((r) => r.id === record.id);

@@ -19,8 +19,14 @@ database_id = "7402770b-c4be-4066-8925-0a518b380855"
 
 [vars]
 # The origin the app is served from, e.g. "https://yourname.github.io" or your
-# Google Site address. Used for CORS so only your site may call the API.
+# Google Site address. Used for CORS so only your site may call the API. You can
+# list several, comma-separated (e.g. a github.io address and a custom domain).
 # Leave as "*" only while testing.
 ALLOWED_ORIGIN = "*"
 # How long a login stays valid, in hours.
 SESSION_TTL_HOURS = "12"
+# Failed sign-in throttle: lock a username/address for LOGIN_LOCK_MIN minutes
+# after LOGIN_MAX_ATTEMPTS failures within a LOGIN_WINDOW_MIN-minute window.
+LOGIN_MAX_ATTEMPTS = "6"
+LOGIN_WINDOW_MIN = "15"
+LOGIN_LOCK_MIN = "15"

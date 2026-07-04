@@ -91,6 +91,10 @@ export function canDemote(actor, target) {
 export function canManagePromoReqs(actor) {
   return isCL5(actor);
 }
+// Global settings (e.g. activity requirements) are managed at CL5.
+export function canManageSettings(actor) {
+  return isCL5(actor);
+}
 
 export function canIssueStrike(actor, target) {
   if (!canManageOrg(actor, target?.org)) return false;
@@ -251,17 +255,23 @@ export function compartmentClears(actor, record, compartmentsById) {
   return readIntoCompartment(actor, c);
 }
 
-// --- Operational activity & readiness ---------------------------------------
+// --- Operational activity & requirements ------------------------------------
 // Activity is operational-unit information: visible within the owning org, to
-// Command, to CL5, and to the operator themselves. Logging is self-service (an
-// operator logs their own check-ins regardless of clearance); a duty posture or
-// logging on another operator's behalf needs the org-management right.
+// Command, to CL5, and to the operator themselves. Logging hours is self-service
+// (an operator logs their own sessions regardless of clearance); logging on
+// another operator's behalf, or overriding a derived status, needs the
+// org-management right — and a manager may never override their OWN status.
 export function canManageActivity(actor, org) {
   return canManageOrg(actor, org);
 }
 export function canLogActivity(actor, record) {
   if (!actor || !record) return false;
   return record.userId === actor.id || canManageOrg(actor, record.org);
+}
+export function canOverrideActivity(actor, record) {
+  if (!actor || !record) return false;
+  if (record.userId === actor.id) return false; // no self-override
+  return canManageOrg(actor, record.org);
 }
 export function canViewActivity(actor, record) {
   if (!actor || !record) return false;
@@ -288,4 +298,69 @@ export function canViewRecruitment(actor, record) {
 // tryout approval (creating personnel needs the org-management right).
 export function canInductRecruit(actor, record) {
   return canManageOrg(actor, record?.org);
+}
+
+// --- Operations & deployment log --------------------------------------------
+// An operation is clearance-gated like a surveillance subject and may carry a
+// Need-To-Know caveat. An operator ASSIGNED to it (lead or participant) can
+// always see it and file log entries, even without the management right; running
+// the operation (status, outcome, assignments, classification) is a manager task.
+export function isAssignedToOperation(actor, op) {
+  if (!actor || !op) return false;
+  if (op.lead === actor.id) return true;
+  return Array.isArray(op.participants) && op.participants.includes(actor.id);
+}
+export function canViewOperation(actor, op) {
+  if (!actor || !op) return false;
+  if (isCL5(actor)) return true;
+  if (isAssignedToOperation(actor, op)) return true;
+  // Org-scoped: only operators with a stake in the owning unit (or Command) see
+  // its operations, and then only at or above the operation's clearance.
+  const stake = actor.org === op.org || actor.org === 'command';
+  return stake && w(actor) >= clearanceWeight(op.clearance);
+}
+export function canManageOperation(actor, op) {
+  return canManageOrg(actor, op?.org);
+}
+export function canLogToOperation(actor, op) {
+  if (!actor || !op) return false;
+  return canManageOrg(actor, op.org) || isAssignedToOperation(actor, op);
+}
+
+// --- Intelligence sources & informants --------------------------------------
+// The handler runs the source; assignment implies need-to-know. Otherwise, only
+// operators with a stake in the owning unit (or Command) see a source, and then
+// only at or above its classification. Managers open, task and close sources; a
+// handler (or a manager) may file a report.
+export function isAssignedToIntel(actor, src) {
+  if (!actor || !src) return false;
+  return src.handler === actor.id;
+}
+export function canViewIntel(actor, src) {
+  if (!actor || !src) return false;
+  if (isCL5(actor)) return true;
+  if (isAssignedToIntel(actor, src)) return true;
+  const stake = actor.org === src.org || actor.org === 'command';
+  return stake && w(actor) >= clearanceWeight(src.clearance);
+}
+export function canManageIntel(actor, src) {
+  return canManageOrg(actor, src?.org);
+}
+export function canLogIntel(actor, src) {
+  if (!actor || !src) return false;
+  return canManageOrg(actor, src.org) || isAssignedToIntel(actor, src);
+}
+
+// --- Trainings (course catalogue) -------------------------------------------
+// Courses are org-scoped like directives: a unit's managers define and grant
+// them; anyone with a stake in the unit (or Command, or CL5) reads the
+// catalogue. Granting a completion is a personnel edit, so it flows through the
+// personnel gate — this is only about the catalogue itself.
+export function canViewTraining(actor, course) {
+  if (!actor || !course) return false;
+  if (isCL5(actor)) return true;
+  return actor.org === course.org || actor.org === 'command';
+}
+export function canManageTraining(actor, org) {
+  return canManageOrg(actor, org);
 }

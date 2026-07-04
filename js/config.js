@@ -17,7 +17,12 @@ export const CONFIG = {
   storageKey: 'cairo.aic.v1',
 
   // Password hashing strength. Higher = slower = more secure.
-  pbkdf2Iterations: 150000,
+  // PBKDF2 work factor. Cloudflare Workers caps PBKDF2 at 100000 iterations, and
+  // the Worker is the server-side authority that hashes on login/registration,
+  // so this must not exceed 100000 — higher throws "iteration counts above
+  // 100000 are not supported" at runtime. (Changing this invalidates existing
+  // password hashes, so regenerate seed.sql and re-run it after any change.)
+  pbkdf2Iterations: 100000,
 
   // Server backend (Cloudflare Worker + D1). When set, the app authenticates
   // against this API, loads the data the signed-in operator is cleared to see,
@@ -33,6 +38,14 @@ export const CONFIG = {
     activityLog: true,
     compartments: true,
     operations: true,
+    deployments: true,
+    intel: true,
+    trainings: true,
+    dashboard: true,
+    // Passive tab refresh in server mode (on return-to-tab + a slow interval),
+    // so colleagues' changes appear without a manual reload.
+    autoRefresh: true,
+    notifications: true,
     recruitment: true,
     recycleBin: true,
     selfRegistration: true,

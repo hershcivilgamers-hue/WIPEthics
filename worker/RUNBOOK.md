@@ -137,6 +137,62 @@ ready, point me at your Worker URL (from Step 6) and I'll wire it in.
 
 ---
 
+## Going live — a checklist
+
+Before opening the system to real members:
+
+1. **Lock CORS to your site.** In `wrangler.toml`, set `ALLOWED_ORIGIN` from `"*"`
+   to your site's address — e.g. `"https://yourname.github.io"`. You may list
+   several comma-separated (a github.io address and a custom domain, say); the
+   Worker echoes whichever one matches the request. Then `npx wrangler deploy`.
+2. **Apply the latest schema.** If you deployed an earlier version, re-run
+   `npx wrangler d1 execute cairo-aic --remote --file="./schema.sql"`. It only
+   adds what's missing (the new sign-in throttle table) and is safe to repeat.
+3. **Sort out the first administrator.** The seed includes a Command CL5
+   account. On a real deployment, sign in as it once and immediately **change its
+   passphrase** from the topbar (or create your own admin via Personnel → New
+   personnel and disable the seeded one). Never leave a demo passphrase live.
+4. **Bring in your roster.** Each real person becomes a single record that is
+   both their login and their personnel file. They can self-request access (you
+   approve and assign rank/clearance), you can create the record directly with an
+   initial passphrase, or they can come through Recruitment — where the inductor
+   can set an initial passphrase at the moment they pass.
+5. **Passphrases are self-service.** Anyone can change their own from the topbar;
+   a manager can reset an operator's from their file (never one above their own
+   clearance); every reset and change is written to the audit log.
+6. **Tune the knobs if you like.** `SESSION_TTL_HOURS` controls how long a login
+   lasts; `LOGIN_MAX_ATTEMPTS` / `LOGIN_WINDOW_MIN` / `LOGIN_LOCK_MIN` control the
+   failed-sign-in lockout. The defaults (6 failures in 15 minutes → 15-minute
+   lock) are sensible for a community.
+
+After any change to the Worker or the permission rules, redeploy with
+`npx wrangler deploy`; after any change to the site, push it to GitHub Pages.
+
+---
+
+## Backups
+
+Your live data lives in the D1 database, and Cloudflare will dump the whole
+thing to a plain SQL file with one command (run from `worker/`):
+
+```
+npx wrangler d1 export cairo-aic --remote --output="backup-2026-07-02.sql"
+```
+
+Make this a habit: **weekly**, and **always immediately before** running any
+`schema.sql` or `seed.sql` command against the remote database. Keep the files
+somewhere safe; restoring is the reverse —
+`npx wrangler d1 execute cairo-aic --remote --file="backup-2026-07-02.sql"`.
+
+One thing that is *not* a backup: the JSON export on **Administration →
+System**. In server mode that file contains only what the signed-in operator is
+cleared to see — records above their clearance, outside their stake, or in
+compartments they aren't read into were never sent to the browser at all, and
+password hashes are never included. It's fine as a personal reference copy;
+the `wrangler d1 export` above is the real thing.
+
+---
+
 ## Notes & troubleshooting
 
 - **CORS errors in the browser** (once wired): make sure `ALLOWED_ORIGIN` in

@@ -72,6 +72,38 @@ CREATE TABLE IF NOT EXISTS activity (
 );
 CREATE INDEX IF NOT EXISTS idx_activity_org ON activity (org);
 
+-- Omega-1 operations & deployment log. Clearance-gated like subjects; may carry
+-- a Need-To-Know caveat. data.lead / data.participants link operators.
+CREATE TABLE IF NOT EXISTS operations (
+  id          TEXT PRIMARY KEY,
+  org         TEXT,
+  deleted     INTEGER DEFAULT 0,
+  version     INTEGER DEFAULT 1,
+  updated_at  TEXT,
+  data        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_operations_org ON operations (org);
+
+CREATE TABLE IF NOT EXISTS intel (
+  id          TEXT PRIMARY KEY,
+  org         TEXT,
+  deleted     INTEGER DEFAULT 0,
+  version     INTEGER DEFAULT 1,
+  updated_at  TEXT,
+  data        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_intel_org ON intel (org);
+
+CREATE TABLE IF NOT EXISTS trainings (
+  id          TEXT PRIMARY KEY,
+  org         TEXT,
+  deleted     INTEGER DEFAULT 0,
+  version     INTEGER DEFAULT 1,
+  updated_at  TEXT,
+  data        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_trainings_org ON trainings (org);
+
 -- Recruitment candidate pipeline (pre-personnel).
 CREATE TABLE IF NOT EXISTS recruits (
   id          TEXT PRIMARY KEY,
@@ -84,6 +116,14 @@ CREATE TABLE IF NOT EXISTS recruits (
 CREATE INDEX IF NOT EXISTS idx_recruits_org ON recruits (org);
 
 CREATE TABLE IF NOT EXISTS promo_reqs (
+  id          TEXT PRIMARY KEY,
+  org         TEXT,
+  data        TEXT NOT NULL
+);
+
+-- Global configuration (e.g. the activity requirements). One record per setting
+-- key; readable by all authenticated operators, writable at CL5.
+CREATE TABLE IF NOT EXISTS settings (
   id          TEXT PRIMARY KEY,
   org         TEXT,
   data        TEXT NOT NULL
@@ -107,6 +147,16 @@ CREATE TABLE IF NOT EXISTS sessions (
   expires_at  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
+
+-- Failed sign-in throttle. One row per key ("ip:<addr>" or "user:<name>"): a
+-- sliding count of recent failures and, once the limit is hit, a lockout stamp.
+-- Cleared on a successful sign-in. Additive and safe to re-run.
+CREATE TABLE IF NOT EXISTS auth_throttle (
+  key          TEXT PRIMARY KEY,
+  attempts     INTEGER NOT NULL DEFAULT 0,
+  window_start TEXT,
+  locked_until TEXT
+);
 
 -- Small key/value bag for bookkeeping (e.g. when the dataset was seeded).
 CREATE TABLE IF NOT EXISTS meta (

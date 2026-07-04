@@ -10,11 +10,12 @@
 import {
   ORGS, RANKS, STATUS_ORDER, CLEARANCE_ORDER, CLEARANCES, STRIKE_LIMIT,
   rankUp, rankDown, clearanceForRank,
+  TRAINING_CATEGORY, TRAINING_CURRENCY, trainingCurrency, trainingExpiry,
 } from '../constants.js';
-import { users, getUser, upsertUser, promoReqs, newId } from '../storage.js';
+import { users, getUser, upsertUser, promoReqs, newId, applyServerSnapshot, trainings, getTraining } from '../storage.js';
 import {
   canEditPersonnel, canSetClearance, canSetRank, canIssueStrike,
-  canDeletePersonnel, canPromote, canDemote, accessLevel, isCL5,
+  canDeletePersonnel, canPromote, canDemote, accessLevel, isCL5, canManageOrg, canManageTraining,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { exportPersonnel } from '../export.js';
@@ -164,6 +165,12 @@ export function renderDossier(host, app, id) {
     note: canEditPersonnel(actor, u),
     leave: canEditPersonnel(actor, u),
     del: canDeletePersonnel(actor, u),
+    // Reset an operator's sign-in passphrase: a manager with a stake, and never
+    // an operator above your own clearance. Not offered for pending accounts
+    // (those are handled by the approval flow).
+    passphrase: canManageOrg(actor, u.org)
+      && (CLEARANCES[actor.clearance]?.weight || 0) >= (CLEARANCES[u.clearance]?.weight || 0)
+      && u.accountStatus !== 'pending' && !!u.username,
   };
   const anyAction = Object.values(acts).some(Boolean);
 
@@ -188,6 +195,7 @@ export function renderDossier(host, app, id) {
   const leaveBlock = onLeave ? sectionLeave(u, full) : '';
   const notesBlock = sectionNotes(u, full);
   const promoBlock = nameOnly ? '' : sectionPromotion(u, actor);
+  const trainingBlock = nameOnly ? '' : sectionTraining(u, actor);
 
   const redactBanner = nameOnly ? `
     <div class="redact-banner">
@@ -225,6 +233,7 @@ export function renderDossier(host, app, id) {
     ${anyAction ? `<div class="actionbar">
       ${acts.edit ? '<button class="btn btn--sm" data-act="edit">Edit record</button>' : ''}
       ${(isCL5(actor) && actor.id !== u.id) ? '<button class="btn btn--sm" data-act="clearance">Set clearance</button>' : ''}
+      ${acts.passphrase ? '<button class="btn btn--sm" data-act="passphrase">Set passphrase</button>' : ''}
       ${acts.strike ? '<button class="btn btn--sm" data-act="strike">Add strike</button>' : ''}
       ${acts.leave ? `<button class="btn btn--sm" data-act="leave">${onLeave ? 'Return from leave' : 'Place on leave'}</button>` : ''}
       ${acts.note ? '<button class="btn btn--sm" data-act="note">Add note</button>' : ''}
@@ -241,6 +250,7 @@ export function renderDossier(host, app, id) {
         ${leaveBlock}
         ${strikesBlock}
         ${awardsBlock}
+        ${trainingBlock}
         ${serviceRecord}
         ${notesBlock}
       </div>
@@ -253,14 +263,17 @@ export function renderDossier(host, app, id) {
   const dispatch = {
     edit: () => openEdit(app, u),
     clearance: () => openClearance(app, u),
+    passphrase: () => openPassphrase(app, u),
     strike: () => openStrike(app, u),
     note: () => openNote(app, u),
     leave: () => onLeave ? returnFromLeave(app, u) : openLeave(app, u),
     delete: () => removeRecord(app, u),
     promote: () => promote(app, u),
     demote: () => demote(app, u),
+    'grant-training': () => openGrantTraining(app, u),
   };
   host.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => dispatch[b.dataset.act]()));
+  host.querySelectorAll('[data-revoke-training]').forEach((b) => b.addEventListener('click', () => revokeTraining(app, u, b.dataset.revokeTraining)));
   host.querySelectorAll('[data-req]').forEach((b) => b.addEventListener('change', () => toggleRequirement(app, u, b.dataset.req)));
 }
 
@@ -409,6 +422,90 @@ function sectionAwards(u) {
   return `<section class="card"><div class="card__title">Awards & Commendations</div><div class="card__body">${items}</div></section>`;
 }
 
+// Training currency: the operator's held courses with derived status, plus a
+// manager's grant/revoke controls. Granting writes a completion onto the file
+// (a personnel edit, authorised by the personnel gate). Currency is derived, so
+// nothing needs recomputing over time.
+function sectionTraining(u, actor) {
+  const now = Date.now();
+  const canManage = canManageTraining(actor, u.org);
+  // Latest completion per course.
+  const byCourse = new Map();
+  for (const t of (u.trainings || [])) {
+    const prev = byCourse.get(t.courseId);
+    if (!prev || new Date(t.awardedAt) > new Date(prev.awardedAt)) byCourse.set(t.courseId, t);
+  }
+  const rows = [...byCourse.values()].map((t) => {
+    const course = getTraining(t.courseId);
+    const state = trainingCurrency(t, now);
+    const m = TRAINING_CURRENCY[state];
+    const name = course ? `${esc(course.code)} \u00b7 ${esc(course.title)}` : '<span class="muted-text">(course withdrawn)</span>';
+    return `<div class="trn-row">
+      <span class="trn-row__name">${name}</span>
+      <span class="badge badge--${m.tone}">${esc(m.label)}</span>
+      <span class="muted-text trn-row__exp">${t.expiresAt ? `exp. ${fmtDate(t.expiresAt)}` : 'no expiry'}</span>
+      ${canManage ? `<button class="btn btn--xs btn--danger" data-revoke-training="${esc(t.id)}">Revoke</button>` : ''}
+    </div>`;
+  }).sort().join('');
+
+  const header = `Training <span class="muted-text">(${byCourse.size})</span>`;
+  const grant = canManage ? '<button class="btn btn--xs" data-act="grant-training" style="float:right;margin-top:-2px">+ Record completion</button>' : '';
+  return `<section class="card"><div class="card__title">${header}${grant}</div><div class="card__body">${rows || '<div class="empty">No training on record.</div>'}</div></section>`;
+}
+
+function openGrantTraining(app, u) {
+  const actor = app.user;
+  if (!canManageTraining(actor, u.org)) { toast('You cannot record training for this operator.', 'error'); return; }
+  const courses = trainings().filter((c) => !c.deleted && c.active && c.org === u.org)
+    .filter((c) => !c.clearanceFloor || CLEARANCES[u.clearance].weight >= CLEARANCES[c.clearanceFloor].weight)
+    .sort((a, b) => a.code.localeCompare(b.code));
+  if (!courses.length) { toast('No eligible courses for this operator\u2019s unit and clearance.', 'error'); return; }
+  const opts = courses.map((c) => `<option value="${esc(c.id)}">${esc(c.code)} \u2014 ${esc(c.title)}${c.validityMonths ? ` (valid ${c.validityMonths} mo)` : ''}</option>`).join('');
+  const today = new Date().toISOString().slice(0, 10);
+  openModal({
+    title: `Record completion \u2014 ${u.designation}`,
+    body: `
+      <div class="field"><label>Course</label><select id="gt-course">${opts}</select></div>
+      <div class="field"><label>Date completed</label><input id="gt-date" type="date" value="${today}" max="${today}" /></div>
+      <div class="field"><label>Note (optional)</label><input id="gt-note" type="text" placeholder="e.g. passed with distinction" /></div>
+      <div class="field__hint">The expiry is set automatically from the course's validity period.</div>`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Record', tone: 'primary', onClick: (c, d) => {
+          const courseId = d.querySelector('#gt-course').value;
+          const course = getTraining(courseId);
+          if (!course) { toast('Course no longer exists.', 'error'); return; }
+          const dateStr = d.querySelector('#gt-date').value || today;
+          const awardedAt = new Date(`${dateStr}T12:00:00`).toISOString();
+          const fresh = getUser(u.id);
+          if (!fresh) { toast('Record no longer exists.', 'error'); c(); app.refresh(); return; }
+          fresh.trainings = [...(fresh.trainings || []), {
+            id: newId('cmp'), courseId, awardedBy: actor.designation, awardedAt,
+            expiresAt: trainingExpiry(awardedAt, course.validityMonths), note: d.querySelector('#gt-note').value.trim(),
+          }];
+          fresh.version = (fresh.version || 1) + 1; fresh.updatedAt = new Date().toISOString();
+          upsertUser(fresh);
+          logAction(actor, 'EDIT_PERSONNEL', `Recorded ${course.code} for ${u.designation}.`);
+          toast('Completion recorded.', 'success'); c(); app.refresh();
+        } },
+    ],
+  });
+}
+
+async function revokeTraining(app, u, completionId) {
+  const actor = app.user;
+  if (!canManageTraining(actor, u.org)) return;
+  const ok = await confirmDialog({ title: 'Revoke completion', message: 'Remove this training completion from the operator\u2019s file?', confirmLabel: 'Revoke', danger: true });
+  if (!ok) return;
+  const fresh = getUser(u.id);
+  if (!fresh) { toast('Record no longer exists.', 'error'); app.refresh(); return; }
+  fresh.trainings = (fresh.trainings || []).filter((t) => t.id !== completionId);
+  fresh.version = (fresh.version || 1) + 1; fresh.updatedAt = new Date().toISOString();
+  upsertUser(fresh);
+  logAction(actor, 'EDIT_PERSONNEL', `Revoked a training completion for ${u.designation}.`);
+  toast('Completion revoked.', 'success'); app.refresh();
+}
+
 function sectionStrikes(u, full) {
   const count = (u.strikes || []).length;
   if (!count) return '';
@@ -488,6 +585,131 @@ function openEdit(app, u) {
           }, { action: 'EDIT_RECORD', detail: `${u.designation} record updated.` });
           c();
           toast('Record updated.', 'success');
+        } },
+    ],
+  });
+}
+
+// Set a new sign-in passphrase for an operator. In server mode the Worker hashes
+// and stores it (the only authorised path — sync can't touch credentials); in
+// local mode we hash here and write the record directly. The authority rule is
+// mirrored from the server: a manager with a stake, never above your own level.
+function openPassphrase(app, u) {
+  const actor = app.user;
+  const weight = (x) => (CLEARANCES[x?.clearance]?.weight || 0);
+  if (!canManageOrg(actor, u.org) || weight(actor) < weight(u)) { toast('Not permitted.', 'error'); return; }
+  const body = `
+    <p class="modal__message">Set a new sign-in passphrase for <strong>${esc(u.designation)} \u00b7 ${esc(u.codename)}</strong>.
+    They sign in with operator ID <span class="mono">${esc(u.username || '\u2014')}</span>. Share the passphrase over a secure channel; they can change it later.</p>
+    <div class="field"><label>New passphrase</label><input id="pp-new" type="text" placeholder="at least 6 characters" spellcheck="false" autocomplete="off" /></div>
+    <div class="field"><label>Confirm passphrase</label><input id="pp-confirm" type="text" placeholder="re-enter" spellcheck="false" autocomplete="off" /></div>
+    <div id="pp-err" class="auth__error" hidden></div>
+  `;
+  openModal({
+    title: `Set passphrase \u2014 ${u.designation}`,
+    body,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Set passphrase', tone: 'primary', onClick: async (c, d) => {
+          const pass = d.querySelector('#pp-new').value;
+          const confirm = d.querySelector('#pp-confirm').value;
+          const err = d.querySelector('#pp-err');
+          err.hidden = true;
+          if (!pass || pass.length < 6) { err.textContent = 'A passphrase must be at least 6 characters.'; err.hidden = false; return; }
+          if (pass !== confirm) { err.textContent = 'The passphrases do not match.'; err.hidden = false; return; }
+          try {
+            const api = await import('../api.js');
+            if (api.serverMode()) {
+              await api.resetPassphrase(u.id, pass);
+              // Reconcile the version the server just bumped, so later edits don't conflict.
+              try { applyServerSnapshot(await api.fetchSnapshot()); } catch (_e) { /* non-fatal */ }
+            } else {
+              const { makeCredential } = await import('../crypto.js');
+              const { salt, hash } = await makeCredential(pass);
+              const fresh = getUser(u.id);
+              if (!fresh) { toast('Record no longer exists.', 'error'); c(); app.refresh(); return; }
+              fresh.salt = salt; fresh.passwordHash = hash;
+              fresh.version = (fresh.version || 1) + 1;
+              fresh.updatedAt = new Date().toISOString();
+              fresh.events = fresh.events || [];
+              fresh.events.unshift({ id: newId('evt'), date: fresh.updatedAt, type: 'security', text: `Passphrase reset by ${actor.designation}.` });
+              upsertUser(fresh);
+              logAction(actor, 'RESET_PASSPHRASE', `Passphrase reset for ${u.designation}.`);
+            }
+            c();
+            toast(`Passphrase updated for ${u.designation}.`, 'success');
+            app.refresh();
+          } catch (e) {
+            err.textContent = (e && e.message) || 'Could not update the passphrase.'; err.hidden = false;
+          }
+        } },
+    ],
+  });
+}
+
+// Self-service passphrase change for the signed-in operator, reachable from the
+// topbar by every role. Requires the current passphrase; the Worker verifies and
+// rehashes in server mode, we verify and rehash locally otherwise.
+export function openChangePassphrase(app) {
+  const me = app.user;
+  const body = `
+    <p class="modal__message">Change the sign-in passphrase for your own account (<span class="mono">${esc(me.username || me.designation)}</span>).</p>
+    <div class="field"><label>Current passphrase</label><input id="cp-cur" type="password" autocomplete="current-password" spellcheck="false" /></div>
+    <div class="field"><label>New passphrase</label><input id="cp-new" type="password" autocomplete="new-password" placeholder="at least 6 characters" spellcheck="false" /></div>
+    <div class="field"><label>Confirm new passphrase</label><input id="cp-confirm" type="password" autocomplete="new-password" spellcheck="false" /></div>
+    <div id="cp-err" class="auth__error" hidden></div>
+    <div class="modal__aside"><button class="btn btn--ghost btn--sm" id="cp-signout-all">Sign out of all devices</button></div>
+  `;
+  const bindSignOutAll = (d) => {
+    const b = d.querySelector('#cp-signout-all');
+    if (!b) return;
+    b.addEventListener('click', async () => {
+      const api = await import('../api.js');
+      if (!api.serverMode()) { toast('Nothing to do \u2014 sessions are only kept in server mode.', 'info'); return; }
+      const ok = await confirmDialog({ title: 'Sign out everywhere', message: 'End every active session for your account, including this one? You will need to sign in again.', confirmLabel: 'Sign out everywhere', danger: true });
+      if (!ok) return;
+      try { await api.signOutEverywhere(); } catch (_) { /* clear locally regardless */ }
+      window.location.reload();
+    });
+  };
+  openModal({
+    title: 'Change passphrase',
+    body,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Change passphrase', tone: 'primary', onClick: async (c, d) => {
+          const cur = d.querySelector('#cp-cur').value;
+          const next = d.querySelector('#cp-new').value;
+          const confirm = d.querySelector('#cp-confirm').value;
+          const err = d.querySelector('#cp-err');
+          err.hidden = true;
+          if (!cur) { err.textContent = 'Enter your current passphrase.'; err.hidden = false; return; }
+          if (!next || next.length < 6) { err.textContent = 'The new passphrase must be at least 6 characters.'; err.hidden = false; return; }
+          if (next !== confirm) { err.textContent = 'The new passphrases do not match.'; err.hidden = false; return; }
+          try {
+            const api = await import('../api.js');
+            if (api.serverMode()) {
+              await api.changeMyPassphrase(cur, next);
+              try { applyServerSnapshot(await api.fetchSnapshot()); } catch (_e) { /* non-fatal */ }
+            } else {
+              const { makeCredential, verifyPassword } = await import('../crypto.js');
+              const fresh = getUser(me.id);
+              if (!fresh) { toast('Your record could not be found.', 'error'); c(); return; }
+              if (!(await verifyPassword(cur, fresh.salt, fresh.passwordHash))) { err.textContent = 'Your current passphrase is incorrect.'; err.hidden = false; return; }
+              const { salt, hash } = await makeCredential(next);
+              fresh.salt = salt; fresh.passwordHash = hash;
+              fresh.version = (fresh.version || 1) + 1;
+              fresh.updatedAt = new Date().toISOString();
+              fresh.events = fresh.events || [];
+              fresh.events.unshift({ id: newId('evt'), date: fresh.updatedAt, type: 'security', text: 'Passphrase changed by the operator.' });
+              upsertUser(fresh);
+              logAction(me, 'CHANGE_PASSPHRASE', `${me.designation} changed their passphrase.`);
+            }
+            c();
+            toast('Your passphrase has been changed.', 'success');
+          } catch (e) {
+            err.textContent = (e && e.message) || 'Could not change the passphrase.'; err.hidden = false;
+          }
         } },
     ],
   });

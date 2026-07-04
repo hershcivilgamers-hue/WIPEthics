@@ -14,8 +14,12 @@ const COLUMNS = {
   cases:      ['id', 'deleted', 'version', 'updated_at', 'data'],
   compartments: ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
   activity:   ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
+  operations: ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
+  intel:      ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
+  trainings:  ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
   recruits:   ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
   promo_reqs: ['id', 'org', 'data'],
+  settings:   ['id', 'org', 'data'],
 };
 
 function rowValue(col, record) {
@@ -89,6 +93,10 @@ export function makeD1Repo(DB) {
     async deleteSession(token) {
       await DB.prepare('DELETE FROM sessions WHERE token = ?').bind(token).run();
     },
+    async deleteUserSessions(userId) {
+      const r = await DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
+      return (r && r.meta && typeof r.meta.changes === 'number') ? r.meta.changes : 0;
+    },
     async pruneSessions(nowIso) {
       await DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(nowIso).run();
     },
@@ -97,6 +105,20 @@ export function makeD1Repo(DB) {
     async addAudit(entry) {
       await DB.prepare('INSERT INTO audit (id, ts, actor, action, detail) VALUES (?, ?, ?, ?, ?)')
         .bind(entry.id, entry.ts, entry.actor, entry.action, entry.detail).run();
+    },
+
+    // --- failed sign-in throttle ---
+    async getThrottle(key) {
+      return DB.prepare('SELECT key, attempts, window_start, locked_until FROM auth_throttle WHERE key = ?').bind(key).first();
+    },
+    async setThrottle(key, attempts, windowStart, lockedUntil) {
+      await DB.prepare(
+        'INSERT INTO auth_throttle (key, attempts, window_start, locked_until) VALUES (?, ?, ?, ?) ' +
+        'ON CONFLICT(key) DO UPDATE SET attempts = excluded.attempts, window_start = excluded.window_start, locked_until = excluded.locked_until',
+      ).bind(key, attempts, windowStart, lockedUntil || null).run();
+    },
+    async clearThrottle(key) {
+      await DB.prepare('DELETE FROM auth_throttle WHERE key = ?').bind(key).run();
     },
   };
 }
