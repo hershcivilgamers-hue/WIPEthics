@@ -24,6 +24,7 @@ import { logAction } from './audit.js';
 import {
   CASE_KIND, CASE_STATUS, RULING_FINDING, CLEARANCES, ORGS, STATUSES,
   SUBJECT_CLASS, THREAT_LEVELS, SUBJECT_STATUS, STRIKE_LIMIT,
+  CASE_VOTE, tallyCaseVotes, caseTakesVote,
 } from './constants.js';
 import { esc, toast } from './ui.js';
 import { interviewSetFor } from './interview-bank.js';
@@ -227,6 +228,12 @@ const CSS = `
   .reclist .ref { font-family: 'Courier New', monospace; font-weight: 700; }
 
   .so { font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin: 22px 0 16px; }
+  .votebox { border-collapse: collapse; margin: 2px auto 12px; }
+  .votebox th { background: #efe9d9; font-size: 8.5pt; letter-spacing: .06em; text-transform: uppercase; border: 1px solid #b9b2a0; padding: 4px 18px; }
+  .votebox td { border: 1px solid #b9b2a0; padding: 7px 18px; text-align: center; font-size: 15pt; font-weight: 700; }
+  .votemembers { border-collapse: collapse; width: 86%; margin: 0 auto 12px; }
+  .votemembers td { border-bottom: 1px solid #d8d2c2; padding: 4px 8px; font-size: 10.5pt; }
+  .votemembers .vm-pos { text-align: right; color: #444; }
   .sign { margin-top: 8px; }
   .sign__line { width: 280px; border-bottom: 1px solid #1a1a1a; height: 30px; }
   .sign__name { font-weight: 700; margin-top: 4px; }
@@ -377,6 +384,35 @@ export function buildCaseDocumentHTML(record, actor) {
     </div>`);
   } else {
     blocks.push('<div class="para">These proceedings remain ongoing. No determination has been entered as at the date of this record.</div>');
+  }
+
+  // Record of the Vote — for deliberative (non-tribunal) matters, mirroring the
+  // panel poll shown in the app: the tally plus each seated member's position.
+  if (caseTakesVote(record.kind)) {
+    const votes = record.votes || {};
+    const t = tallyCaseVotes(votes);
+    blocks.push('<div class="jhead">Record of the Vote</div>');
+    blocks.push(`<table class="votebox"><thead><tr>
+      <th>In Favour</th><th>Opposed</th><th>Abstaining</th><th>Votes Cast</th>
+    </tr></thead><tbody><tr>
+      <td>${t.favour}</td><td>${t.oppose}</td><td>${t.abstain}</td><td>${t.cast}</td>
+    </tr></tbody></table>`);
+    const seated = record.panelIds || [];
+    if (seated.length) {
+      const rows = seated.map((pid) => {
+        const pos = votes[pid];
+        const label = pos ? (CASE_VOTE[pos]?.label || pos) : 'Not voted';
+        return `<tr><td class="vm-name">${personRef(pid)}</td><td class="vm-pos">${esc(label)}</td></tr>`;
+      }).join('');
+      blocks.push(`<table class="votemembers"><tbody>${rows}</tbody></table>`);
+    } else {
+      blocks.push('<div class="para muted">No panel was seated to vote on this matter.</div>');
+    }
+    if (!record.ruling) {
+      const outcome = t.cast === 0 ? 'No votes have yet been cast.'
+        : (t.carried ? 'A majority of the votes cast are in favour.' : 'The matter has not carried on the votes cast.');
+      blocks.push(`<div class="para">${esc(outcome)}</div>`);
+    }
   }
 
   const inner = `

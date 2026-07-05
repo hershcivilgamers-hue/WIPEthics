@@ -40,6 +40,7 @@ const TONE = {
   CREATE_INTEL: 'ok', EDIT_INTEL: 'info', LOG_INTEL: 'info', BURN_INTEL: 'bad',
   CLOSE_INTEL: 'muted', ACTIVATE_INTEL: 'ok', REMOVE_INTEL: 'bad', RESTORE_INTEL: 'ok',
   ACK_DIRECTIVE: 'ok', RESET_PASSPHRASE: 'warn', CHANGE_PASSPHRASE: 'muted', SIGN_OUT_ALL: 'warn',
+  CREATE_BLACKLIST: 'bad', EDIT_BLACKLIST: 'info', REMOVE_BLACKLIST: 'muted', RESTORE_BLACKLIST: 'warn',
 };
 
 function label(action) {

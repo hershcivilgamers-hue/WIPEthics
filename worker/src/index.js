@@ -19,8 +19,8 @@ import { buildSnapshot, redactUser, redactDirective, redactCompartment } from '.
 import { canReadDirective, compartmentClears, canManageOrg } from '../../js/permissions.js';
 import { CLEARANCES } from '../../js/constants.js';
 
-const WRITABLE = new Set(['users', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'promo_reqs', 'settings']);
-const SNAPSHOT = ['users', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'promo_reqs', 'settings', 'audit'];
+const WRITABLE = new Set(['users', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'blacklist', 'promo_reqs', 'settings']);
+const SNAPSHOT = ['users', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'blacklist', 'promo_reqs', 'settings', 'audit'];
 
 function uid() { return (globalThis.crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`); }
 function randomToken() {

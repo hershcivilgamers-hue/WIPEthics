@@ -16,6 +16,7 @@ const COLUMNS = {
   activity:   ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
   operations: ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
   intel:      ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
+  blacklist:  ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
   trainings:  ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
   recruits:   ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
   promo_reqs: ['id', 'org', 'data'],

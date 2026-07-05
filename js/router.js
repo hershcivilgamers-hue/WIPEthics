@@ -35,6 +35,7 @@ export const NAV = [
       { name: 'trainings',    hash: '#/trainings',    label: 'Trainings',       feature: 'trainings' },
       { name: 'directives',   hash: '#/directives',   label: 'Standing Orders', feature: 'directives' },
       { name: 'activity',     hash: '#/activity',     label: 'Activity Log',    feature: 'activityLog' },
+      { name: 'blacklist',    hash: '#/blacklist',    label: 'Blacklist',       feature: 'blacklist' },
     ],
   },
   {
@@ -92,12 +93,13 @@ function featureBlocked(name) {
   if (name === 'deployments' || name === 'operation') return !CONFIG.features.deployments;
   if (name === 'intel' || name === 'source') return !CONFIG.features.intel;
   if (name === 'trainings') return !CONFIG.features.trainings;
+  if (name === 'blacklist') return !CONFIG.features.blacklist;
   if (name === 'dashboard') return !CONFIG.features.dashboard;
   if (name === 'docket') return !CONFIG.features.dashboard;
   return false;
 }
 
-const TOP_LEVEL = ['overview', 'notifications', 'search', 'surveillance', 'compartments', 'operations', 'trainings', 'deployments', 'intel', 'dashboard', 'docket', 'tribunals', 'directives', 'activity', 'recruit-omega', 'recruit-ethics', 'omega-1', 'ethics', 'command', 'admin'];
+const TOP_LEVEL = ['overview', 'notifications', 'search', 'surveillance', 'compartments', 'operations', 'trainings', 'deployments', 'intel', 'dashboard', 'docket', 'tribunals', 'directives', 'activity', 'blacklist', 'recruit-omega', 'recruit-ethics', 'omega-1', 'ethics', 'command', 'admin'];
 
 // Parse the current location hash into a route { name, params }.
 export function parseHash() {

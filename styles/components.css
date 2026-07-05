@@ -69,7 +69,7 @@
   color: var(--text-3);
   font-weight: 600;
 }
-.field input,
+.field input:not([type="checkbox"]):not([type="radio"]),
 .field select,
 .field textarea,
 .toolbar__search,
@@ -83,7 +83,7 @@
   color: var(--text);
   transition: border-color .12s, box-shadow .12s;
 }
-.field input:focus,
+.field input:not([type="checkbox"]):not([type="radio"]):focus,
 .field select:focus,
 .field textarea:focus {
   border-color: var(--amber-dim);

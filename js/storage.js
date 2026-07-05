@@ -34,6 +34,7 @@ function emptyDb() {
     recruits: [],
     operations: [],
     intel: [],
+    blacklist: [],
     trainings: [],
     promoReqs: [],
     settings: [],
@@ -111,6 +112,7 @@ export function applyServerSnapshot(snap) {
     operations: snap.operations || [],
     intel: snap.intel || [],
     trainings: snap.trainings || [],
+    blacklist: snap.blacklist || [],
     promoReqs: snap.promoReqs || [],
     settings: snap.settings || [],
     audit: snap.audit || [],
@@ -326,6 +328,18 @@ export function upsertIntel(record) {
   const i = list.findIndex((r) => r.id === record.id);
   if (i >= 0) list[i] = record; else list.push(record);
   afterWrite('intel', record);
+  return record;
+}
+
+export const blacklist = () => loadDb().blacklist;
+export function getBlacklistEntry(id) {
+  return blacklist().find((r) => r.id === id) || null;
+}
+export function upsertBlacklistEntry(record) {
+  const list = blacklist();
+  const i = list.findIndex((r) => r.id === record.id);
+  if (i >= 0) list[i] = record; else list.push(record);
+  afterWrite('blacklist', record);
   return record;
 }
 

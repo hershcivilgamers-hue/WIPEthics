@@ -94,6 +94,16 @@ CREATE TABLE IF NOT EXISTS intel (
 );
 CREATE INDEX IF NOT EXISTS idx_intel_org ON intel (org);
 
+CREATE TABLE IF NOT EXISTS blacklist (
+  id          TEXT PRIMARY KEY,
+  org         TEXT,
+  deleted     INTEGER DEFAULT 0,
+  version     INTEGER DEFAULT 1,
+  updated_at  TEXT,
+  data        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_blacklist_org ON blacklist (org);
+
 CREATE TABLE IF NOT EXISTS trainings (
   id          TEXT PRIMARY KEY,
   org         TEXT,

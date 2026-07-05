@@ -433,6 +433,19 @@ function authorizeRecruit(actor, cur, next, ctx) {
   return ok('EDIT_RECRUIT', `Updated candidate ${ref}.`);
 }
 
+// A cross-department barred/hostile register. An entry is raised against an
+// organisation; managing it (add / edit / lift / remove) follows that org's
+// management rule, so any org manager maintains their own entries and CL5
+// maintains all of them. Everyone signed in can read the register.
+function authorizeBlacklist(actor, cur, next) {
+  const org = (next || cur).org;
+  const ref = (next || cur).name || 'entry';
+  if (!canManageOrg(actor, org)) return deny('You cannot maintain the blacklist for that organisation.');
+  if (!cur) return ok('CREATE_BLACKLIST', `Blacklisted ${ref}.`);
+  if (!!next.deleted !== !!cur.deleted) return next.deleted ? ok('REMOVE_BLACKLIST', `Removed blacklist entry for ${ref}.`) : ok('RESTORE_BLACKLIST', `Restored blacklist entry for ${ref}.`);
+  return ok('EDIT_BLACKLIST', `Updated blacklist entry for ${ref}.`);
+}
+
 const AUTHORIZERS = {
   users: authorizeUser,
   directives: authorizeDirective,
@@ -444,6 +457,7 @@ const AUTHORIZERS = {
   operations: authorizeOperation,
   intel: authorizeIntel,
   trainings: authorizeTraining,
+  blacklist: authorizeBlacklist,
   promo_reqs: authorizePromoReq,
   settings: authorizeSettings,
 };

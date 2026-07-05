@@ -180,6 +180,7 @@ export function buildSnapshot(actor, db) {
         && (isAssignedToIntel(actor, s) || compartmentClears(actor, s, compMap)))
       .map((s) => withCaveat(s, compMap)),
     trainings: (db.trainings || []).filter((t) => !t.deleted && canViewTraining(actor, t)),
+    blacklist: (db.blacklist || []).filter((b) => !b.deleted),
     promoReqs: db.promoReqs || [],
     settings: db.settings || [],
     audit: isCL5(actor) ? (db.audit || []) : [],

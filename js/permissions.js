@@ -32,6 +32,7 @@ function hasStakeIn(actor, org) {
 // CL4·Senior (weight 5) is the floor for managing personnel records.
 export function canManageOrg(actor, org) {
   if (!actor) return false;
+  if (isCL5(actor)) return true; // CL5 (Command tier) manages every organisation
   return w(actor) >= 5 && hasStakeIn(actor, org);
 }
 

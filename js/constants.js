@@ -144,6 +144,22 @@ export const SUBJECT_CLASS = {
 };
 export const SUBJECT_CLASS_ORDER = ['poi', 'target'];
 
+// --- Blacklist registry -----------------------------------------------------
+// A cross-department "do not admit / do not engage" register. Entries are
+// visible to all signed-in personnel; managers of the raising organisation (and
+// CL5) maintain them.
+export const BLACKLIST_SEVERITY = {
+  advisory: { code: 'advisory', label: 'Advisory',      tone: 'muted' },
+  barred:   { code: 'barred',   label: 'Barred',        tone: 'warn' },
+  hostile:  { code: 'hostile',  label: 'Hostile / KOS', tone: 'bad' },
+};
+export const BLACKLIST_SEVERITY_ORDER = ['advisory', 'barred', 'hostile'];
+export const BLACKLIST_STATUS = {
+  active: { code: 'active', label: 'Active',  tone: 'bad' },
+  lifted: { code: 'lifted', label: 'Lifted',  tone: 'muted' },
+};
+export const BLACKLIST_STATUS_ORDER = ['active', 'lifted'];
+
 // A Target is a termination authorisation, so it carries an authorisation state.
 // A target is only "live" once an Ethics Committee member has authorised it;
 // until then it is pending and must not be acted on.
