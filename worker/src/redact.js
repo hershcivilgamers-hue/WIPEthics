@@ -64,7 +64,7 @@ export function redactUser(actor, user) {
       realName: '[REDACTED]',
       // Disciplinary reasons, command notes and leave reason are withheld;
       // counts/dates remain so the UI can show "N strikes" and leave status.
-      strikes: (user.strikes ?? []).map((s) => ({ id: s.id, date: s.date })),
+      strikes: (user.strikes ?? []).map((s) => ({ id: s.id, date: s.date, expiresAt: s.expiresAt ?? null })),
       leave: user.leave ? { type: user.leave.type, from: user.leave.from, to: user.leave.to } : null,
       awards: user.awards ?? [],
       events: user.events ?? [],

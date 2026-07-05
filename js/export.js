@@ -23,7 +23,7 @@ import { canViewSubject, accessLevel, canReadDirective } from './permissions.js'
 import { logAction } from './audit.js';
 import {
   CASE_KIND, CASE_STATUS, RULING_FINDING, CLEARANCES, ORGS, STATUSES,
-  SUBJECT_CLASS, THREAT_LEVELS, SUBJECT_STATUS, STRIKE_LIMIT,
+  SUBJECT_CLASS, THREAT_LEVELS, SUBJECT_STATUS, STRIKE_LIMIT, strikeActive, activeStrikeCount,
   CASE_VOTE, tallyCaseVotes, caseTakesVote,
 } from './constants.js';
 import { esc, toast } from './ui.js';
@@ -642,7 +642,7 @@ export function buildPersonnelDocumentHTML(user, actor) {
   const full = level === 'full';
   const nameOnly = level === 'name-only';
   const onLeave = !!user.leave;
-  const strikeCount = (user.strikes || []).length;
+  const strikeCount = activeStrikeCount(user.strikes);
   const noteCount = (user.notes || []).length;
 
   let notice = '';
@@ -680,8 +680,11 @@ export function buildPersonnelDocumentHTML(user, actor) {
     const atLimit = strikeCount >= STRIKE_LIMIT;
     sections.push(`<div class="jhead">Disciplinary Record${atLimit ? ' \u2014 At Limit' : ''}</div>`);
     if (full) {
-      sections.push(`<table class="log"><tbody>${user.strikes.map((s) => `
-        <tr><td class="ld">${longDate(s.date)}</td><td>${esc(s.reason)}<div class="lby">Issued by ${esc(s.by)}</div></td></tr>`).join('')}</tbody></table>`);
+      sections.push(`<table class="log"><tbody>${user.strikes.map((s) => {
+        const active = strikeActive(s);
+        const exp = s.expiresAt ? (active ? ` \u00b7 expires ${longDate(s.expiresAt)}` : ` \u00b7 EXPIRED ${longDate(s.expiresAt)}`) : '';
+        return `<tr><td class="ld">${longDate(s.date)}</td><td>${esc(s.reason)}${active ? '' : ' (expired)'}<div class="lby">Issued by ${esc(s.by)}${exp}</div></td></tr>`;
+      }).join('')}</tbody></table>`);
     } else {
       sections.push(`<p>${strikeCount} strike${strikeCount > 1 ? 's' : ''} on file. Detail ${REDACTED}</p>`);
     }

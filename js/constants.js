@@ -135,6 +135,16 @@ export const ACCOUNT_STATUS = {
 // --- Strike policy ----------------------------------------------------------
 // Number of active strikes that flags a record for command review.
 export const STRIKE_LIMIT = 3;
+// A strike may carry an optional expiry. An expired strike remains on the record
+// as history but no longer counts toward the flag/limit.
+export function strikeActive(strike, now = Date.now()) {
+  if (!strike) return false;
+  if (!strike.expiresAt) return true;
+  return new Date(strike.expiresAt).getTime() > now;
+}
+export function activeStrikeCount(strikes, now = Date.now()) {
+  return (strikes || []).filter((s) => strikeActive(s, now)).length;
+}
 
 // --- Surveillance: subject classification -----------------------------------
 // A POI is watched; a TARGET is actively pursued / to be contained.

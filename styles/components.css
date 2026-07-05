@@ -481,3 +481,7 @@
 .tag-admin-row { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; padding: var(--s2) 0; border-bottom: 1px solid var(--line); }
 .tag-admin-row:last-child { border-bottom: none; }
 .tag-pick { display: flex; flex-direction: column; gap: var(--s1); }
+
+/* --- Expired strikes -------------------------------------------------------- */
+.strike--expired { opacity: .55; }
+.strike--expired .strike__reason { text-decoration: line-through; text-decoration-thickness: 1px; }

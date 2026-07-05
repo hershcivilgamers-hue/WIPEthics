@@ -7,7 +7,7 @@
 // =============================================================================
 
 import { CONFIG } from '../config.js';
-import { ORGS, ORG_ORDER, STRIKE_LIMIT } from '../constants.js';
+import { ORGS, ORG_ORDER, STRIKE_LIMIT, activeStrikeCount } from '../constants.js';
 import { users, directives, subjects, cases } from '../storage.js';
 import { canApproveRegistrations, canManageOrg, canViewSubject, canManageSubject, canViewCase, canRuleTribunal } from '../permissions.js';
 import { esc, clearanceBadge, orgTag } from '../ui.js';
@@ -18,7 +18,7 @@ export function render(host, app) {
   const roster = allUsers.filter((u) => u.accountStatus !== 'pending');
   const pending = allUsers.filter((u) => u.accountStatus === 'pending');
   const onLeave = roster.filter((u) => u.status === 'loa');
-  const flagged = roster.filter((u) => (u.strikes || []).length >= STRIKE_LIMIT);
+  const flagged = roster.filter((u) => activeStrikeCount(u.strikes) >= STRIKE_LIMIT);
   const activeDirectives = directives().filter((d) => !d.deleted && d.status === 'active');
 
   // Surveillance signals (only the subjects this operator is cleared to see).
@@ -52,7 +52,7 @@ export function render(host, app) {
     queue.push({
       tone: 'bad',
       title: `${u.designation} \u00b7 ${u.codename} is at the strike limit`,
-      sub: `${(u.strikes || []).length} active strikes \u2014 open the disciplinary record.`,
+      sub: `${activeStrikeCount(u.strikes)} active strikes \u2014 open the disciplinary record.`,
       hash: `#/personnel/${u.id}`,
     });
   });

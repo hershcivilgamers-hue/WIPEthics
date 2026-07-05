@@ -8,7 +8,7 @@
 // =============================================================================
 
 import {
-  ORGS, RANKS, STATUS_ORDER, CLEARANCE_ORDER, CLEARANCES, STRIKE_LIMIT,
+  ORGS, RANKS, STATUS_ORDER, CLEARANCE_ORDER, CLEARANCES, STRIKE_LIMIT, strikeActive, activeStrikeCount,
   rankUp, rankDown, clearanceForRank,
   TRAINING_CATEGORY, TRAINING_CURRENCY, trainingCurrency, trainingExpiry,
   PERSONNEL_TAGS_SETTING_ID, normalizeTagCatalog,
@@ -192,7 +192,7 @@ export function renderDossier(host, app, id) {
   const anyAction = Object.values(acts).some(Boolean);
 
   const onLeave = !!u.leave;
-  const flagged = (u.strikes || []).length >= STRIKE_LIMIT;
+  const flagged = activeStrikeCount(u.strikes) >= STRIKE_LIMIT;
 
   // --- Sections built per access level ---
   const identityRows = `
@@ -530,18 +530,25 @@ async function revokeTraining(app, u, completionId) {
 function sectionStrikes(u, full, canLift) {
   const count = (u.strikes || []).length;
   if (!count) return '';
+  const activeCount = activeStrikeCount(u.strikes);
   let body;
   if (full) {
-    body = u.strikes.map((s) => `
-      <div class="strike">
-        <div class="strike__reason">${esc(s.reason)}</div>
-        <div class="strike__meta">${fmtDate(s.date)} \u00b7 issued by <span class="mono">${esc(s.by)}</span>${s.liftedNote ? ` \u00b7 <span class="muted-text">${esc(s.liftedNote)}</span>` : ''}</div>
+    body = u.strikes.map((s) => {
+      const active = strikeActive(s);
+      const expiryLine = s.expiresAt
+        ? (active ? `expires ${fmtDate(s.expiresAt)}` : `expired ${fmtDate(s.expiresAt)}`)
+        : 'permanent';
+      return `
+      <div class="strike ${active ? '' : 'strike--expired'}">
+        <div class="strike__reason">${esc(s.reason)}${active ? '' : ' <span class="badge badge--muted">Expired</span>'}</div>
+        <div class="strike__meta">${fmtDate(s.date)} \u00b7 issued by <span class="mono">${esc(s.by)}</span> \u00b7 ${esc(expiryLine)}${s.liftedNote ? ` \u00b7 <span class="muted-text">${esc(s.liftedNote)}</span>` : ''}</div>
         ${canLift ? `<button class="btn btn--xs" data-lift-strike="${esc(s.id)}">Lift</button>` : ''}
-      </div>`).join('');
+      </div>`;
+    }).join('');
   } else {
-    body = `<div class="restricted-line">${count} strike${count > 1 ? 's' : ''} on file \u2014 detail ${redacted(10)}</div>`;
+    body = `<div class="restricted-line">${activeCount} active strike${activeCount === 1 ? '' : 's'} on file \u2014 detail ${redacted(10)}</div>`;
   }
-  const flagged = count >= STRIKE_LIMIT;
+  const flagged = activeCount >= STRIKE_LIMIT;
   return `
     <section class="card ${flagged ? 'card--alert' : ''}">
       <div class="card__title">Disciplinary Record ${flagged ? '<span class="badge badge--bad">At limit</span>' : ''}</div>
@@ -838,18 +845,23 @@ function openClearance(app, u) {
 function openStrike(app, u) {
   openModal({
     title: `Add strike \u2014 ${u.designation}`,
-    body: `<div class="field"><label>Reason</label><textarea id="st-reason" rows="3" placeholder="State the infraction\u2026"></textarea></div>`,
+    body: `
+      <div class="field"><label>Reason</label><textarea id="st-reason" rows="3" placeholder="State the infraction\u2026"></textarea></div>
+      <div class="field"><label>Expires <span class="muted-text">(optional \u2014 leave blank for a permanent strike)</span></label><input id="st-expiry" type="date" /></div>
+      <div class="field__hint">An expired strike stays on the record as history but no longer counts toward the ${STRIKE_LIMIT}-strike limit.</div>`,
     actions: [
       { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
       { label: 'Record strike', tone: 'danger', onClick: (c, d) => {
           const reason = d.querySelector('#st-reason').value.trim();
           if (!reason) { toast('A reason is required.', 'error'); return; }
+          const expRaw = d.querySelector('#st-expiry').value;
+          const expiresAt = expRaw ? new Date(`${expRaw}T23:59:59`).toISOString() : null;
           let count = 0;
           mutate(app, u.id, u.version, (rec) => {
             rec.strikes = rec.strikes || [];
-            rec.strikes.push({ id: newId('stk'), reason, date: new Date().toISOString(), by: app.user.designation });
-            count = rec.strikes.length;
-            addEvent(rec, 'strike', `Strike recorded: ${reason}`);
+            rec.strikes.push({ id: newId('stk'), reason, date: new Date().toISOString(), by: app.user.designation, expiresAt });
+            count = activeStrikeCount(rec.strikes);
+            addEvent(rec, 'strike', `Strike recorded: ${reason}${expiresAt ? ` (expires ${fmtDate(expiresAt)})` : ''}`);
           }, { action: 'ADD_STRIKE', detail: `Strike on ${u.designation}.` });
           c();
           if (count >= STRIKE_LIMIT) toast(`Strike recorded \u2014 ${u.designation} is now at the ${STRIKE_LIMIT}-strike limit.`, 'warn', 4500);

@@ -673,6 +673,7 @@ async function closeSubject(app, s) {
   openModal({
     title: `Close watch \u2014 ${s.ref}`,
     wide: true,
+    body,
     actions: [
       { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
       { label: 'Record outcome', tone: 'primary', onClick: (c, d) => {
