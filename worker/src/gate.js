@@ -14,13 +14,13 @@
 // =============================================================================
 
 import {
-  canEditPersonnel, canSetClearance, canIssueStrike, canDeletePersonnel,
+  canEditPersonnel, canSetClearance, canSetRank, canIssueStrike, canDeletePersonnel,
   canApproveRegistrations, canPromote, canDemote, canManagePromoReqs, canManageSettings,
   canManageDirectives, canReadDirective, canManageSubject, canManageTribunal, canRuleTribunal,
   compartmentClears, canManageCompartment, canReadOperatorInto,
   canManageOrg, canParticipateRecruitment, canLogToOperation, canLogIntel, canManageTraining, isCL5,
 } from '../../js/permissions.js';
-import { rankUp, rankDown, clearanceForRank, clearanceWeight, tallyVotes } from '../../js/constants.js';
+import { rankUp, rankDown, clearanceForRank, clearanceWeight, tallyVotes, RANKS } from '../../js/constants.js';
 
 const deny = (msg) => ({ ok: false, status: 403, error: msg || 'Not permitted.' });
 const ok = (action, detail) => ({ ok: true, action, detail });
@@ -82,6 +82,26 @@ function authorizeUser(actor, cur, next) {
   }
 
   if (j(next.rank) !== j(cur.rank)) {
+    // A rank that isn't on the org's ladder at all is a data error (e.g. an
+    // Omega "Commander" left on an Ethics file after an org change). Correcting
+    // it isn't a ladder move, so the one-step rule can't apply — instead we let
+    // a manager set any VALID rank for the org whose clearance sits within their
+    // own ceiling. This can only make an invalid record valid; it can't be used
+    // to jump a properly-ranked operator, because it requires the *current* rank
+    // to be off-ladder.
+    const curOnLadder = (RANKS[cur.org] || []).includes(cur.rank);
+    const nextOnLadder = (RANKS[cur.org] || []).includes(next.rank);
+    if (!curOnLadder && nextOnLadder) {
+      if (!canSetRank(actor, cur)) return deny('You are not permitted to correct this operator\u0027s rank.');
+      const tier = clearanceForRank(cur.org, next.rank);
+      if (tier && j(next.clearance) !== j(tier)) return deny('Rank correction must align clearance to the corrected rank.');
+      if (tier && !canSetClearance(actor, cur, tier)) return deny('That rank\u0027s clearance is above your own ceiling.');
+      if (len(next.promoChecks) !== 0) return deny('A rank change must reset the promotion checklist.');
+      if (changedOutside(cur, next, ['rank', 'clearance', 'promoChecks', 'events', 'version', 'updatedAt'])) {
+        return deny('A rank correction cannot be combined with other edits.');
+      }
+      return ok('SET_RANK', `${cur.designation}: rank corrected to ${next.rank}.`);
+    }
     // Rank moves exactly one step. The only legitimate operator-driven rank
     // flows are the Promote and Demote buttons — each a single rankUp/rankDown.
     // An initial arbitrary rank is set through registration approval, handled

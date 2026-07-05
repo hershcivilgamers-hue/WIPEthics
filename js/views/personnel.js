@@ -565,10 +565,28 @@ function fieldSelect(id, label, options, selected) {
 }
 
 function openEdit(app, u) {
+  const actor = app.user;
+  // A rank not on the operator's own org ladder is a data error (typically an
+  // Omega rank left on an Ethics/Command file after an org move). Offer a direct
+  // correction to any valid rank the actor is cleared to assign.
+  const ladder = RANKS[u.org] || [];
+  const rankOffLadder = !!u.rank && !ladder.includes(u.rank);
+  const canFixRank = canSetRank(actor, u) && rankOffLadder;
+  const rankField = canFixRank ? `
+    <div class="field">
+      <label>Correct rank <span class="muted-text">(current \u201c${esc(u.rank)}\u201d is not a ${esc(ORGS[u.org].short)} rank)</span></label>
+      <select id="ed-rank"><option value="">\u2014 choose a ${esc(ORGS[u.org].short)} rank \u2014</option>${ladder.map((r) => {
+        const clr = clearanceForRank(u.org, r);
+        return `<option value="${esc(r)}">${esc(r)}${clr ? ` \u2014 ${esc(clr)}` : ''}</option>`;
+      }).join('')}</select>
+      <div class="field__hint">Sets clearance to match the corrected rank.</div>
+    </div>` : '';
+
   const body = `
     <div class="field"><label>Codename</label><input id="ed-codename" type="text" value="${esc(u.codename)}" /></div>
     <div class="field"><label>Legal name</label><input id="ed-real" type="text" value="${esc(u.realName)}" /></div>
     ${fieldSelect('ed-status', 'Status', STATUS_ORDER, u.status)}
+    ${rankField}
   `;
   openModal({
     title: `Edit \u2014 ${u.designation}`,
@@ -579,6 +597,21 @@ function openEdit(app, u) {
           const codename = d.querySelector('#ed-codename').value.trim() || u.codename;
           const realName = d.querySelector('#ed-real').value.trim() || u.realName;
           const status = d.querySelector('#ed-status').value;
+          const newRank = canFixRank ? (d.querySelector('#ed-rank').value || '') : '';
+          // A rank correction is authorised as its own operation, so it can't be
+          // combined with other edits in one write. Do it alone, then return.
+          if (newRank && newRank !== u.rank) {
+            const tier = clearanceForRank(u.org, newRank);
+            mutate(app, u.id, u.version, (rec) => {
+              rec.rank = newRank;
+              if (tier) rec.clearance = tier;
+              rec.promoChecks = [];
+              addEvent(rec, 'edit', `Rank corrected to ${newRank}${tier ? ` \u00b7 clearance ${CLEARANCES[tier].label}` : ''}.`);
+            }, { action: 'SET_RANK', detail: `${u.designation} rank corrected to ${newRank}.` });
+            c();
+            toast('Rank corrected.', 'success');
+            return;
+          }
           mutate(app, u.id, u.version, (rec) => {
             const changes = [];
             if (rec.status !== status) changes.push(`status \u2192 ${status}`);
