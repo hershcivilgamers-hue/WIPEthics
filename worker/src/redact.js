@@ -34,6 +34,7 @@ export function redactUser(actor, user) {
     status: user.status,
     accountStatus: user.accountStatus,
     requestedOrg: user.requestedOrg ?? null,
+    requestedRank: user.requestedRank ?? null,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
     version: user.version,
@@ -163,8 +164,10 @@ export function buildSnapshot(actor, db) {
       .filter((s) => !s.deleted && canViewSubject(actor, s) && compartmentClears(actor, s, compMap))
       .map((s) => withCaveat(s, compMap)),
     cases: (db.cases || [])
-      .filter((c) => !c.deleted && canViewCase(actor, c) && compartmentClears(actor, c, compMap))
-      .map((c) => withCaveat(c, compMap)),
+      .filter((c) => !c.deleted && compartmentClears(actor, c, compMap))
+      .map((c) => (canViewCase(actor, c)
+        ? withCaveat(c, compMap)
+        : { id: c.id, clearance: c.clearance, kind: c.kind, status: c.status, redacted: true, ref: null, title: null, panelIds: [], votes: {}, entries: [], summons: [], linkedSubjectIds: [], compartment: null })),
     compartments: (db.compartments || [])
       .filter((c) => !c.deleted)
       .map((c) => redactCompartment(actor, c))

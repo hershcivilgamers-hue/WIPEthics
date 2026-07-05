@@ -14,7 +14,7 @@
 import {
   ACTIVITY_STATUS, ACTIVITY_REQ_DEFAULT, ACTIVITY_REQ_SETTING_ID, mergeActivityReqs,
   activityRequirement, activityStatus, activityInBreach,
-  ORGS, ORG_ORDER,
+  ORGS, ORG_ORDER, activeStrikeCount, STRIKE_LIMIT,
 } from '../constants.js';
 import {
   users, getUser, getActivityForUser, upsertActivity, directives, subjects, operations, getSetting, newId,
@@ -49,7 +49,7 @@ function inScope(actor, u) {
 function trackedRoster(actor) {
   return users().filter((u) => !u.deleted && u.status !== 'discharged'
     && inScope(actor, u)
-    && (!activityRequirement(u, reqs()).exempt || u.id === actor.id));
+    && (!activityRequirement(u, reqs()).exempt || u.org === 'ethics-committee' || u.id === actor.id));
 }
 
 const lastLoggedAt = (rec) => {
@@ -104,9 +104,11 @@ export function render(host, app) {
       const mo = (isOmega && !st.req.exempt) ? `${(+st.monthHours.toFixed(1))} / ${st.req.monthly}h` : '\u2014';
       const canLog = canLogActivity(actor, rec || { userId: u.id, org: u.org });
       const canOv = canOverrideActivity(actor, rec || { userId: u.id, org: u.org });
+      const strikes = activeStrikeCount(u.strikes);
+      const strikeFlag = strikes ? ` <span class="badge badge--bad" title="${strikes} active strike${strikes === 1 ? '' : 's'}">\u26a0 ${strikes} strike${strikes === 1 ? '' : 's'}${strikes >= STRIKE_LIMIT ? ' \u2014 at limit' : ''}</span>` : '';
       return `
         <tr class="${breach ? 'row-breach' : ''}" data-user="${esc(u.id)}" tabindex="0">
-          <td class="cell-name"><span class="mono">${esc(u.designation)}</span> ${esc(u.codename || '')}</td>
+          <td class="cell-name"><span class="mono">${esc(u.designation)}</span> ${esc(u.codename || '')}${strikeFlag}</td>
           <td>${statusBadge(st.key)}${st.manual ? ' <span class="muted-text">(manual)</span>' : ''}</td>
           <td class="cell-num">${wk}</td>
           ${isOmega ? `<td class="cell-num">${mo}</td>` : ''}

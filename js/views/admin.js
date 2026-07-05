@@ -8,7 +8,7 @@
 //   • System        — backend status, dataset export, full reset.
 // =============================================================================
 
-import { ORGS, RANKS, CLEARANCE_ORDER, CLEARANCES, rankUp, clearanceForRank, ACTIVITY_REQ_SETTING_ID, ACTIVITY_REQ_DEFAULT, mergeActivityReqs, PERSONNEL_TAGS_SETTING_ID, TAG_COLORS, normalizeTagCatalog } from '../constants.js';
+import { ORGS, RANKS, CLEARANCE_ORDER, CLEARANCES, rankUp, clearanceForRank, ACTIVITY_REQ_SETTING_ID, ACTIVITY_REQ_DEFAULT, mergeActivityReqs, PERSONNEL_TAGS_SETTING_ID, TAG_COLORS, normalizeTagCatalog, MEDALS_SETTING_ID, normalizeMedalCatalog } from '../constants.js';
 import {
   users, directives, subjects, cases, getUser, upsertUser, getDirective, upsertDirective,
   getSubject, upsertSubject, getCase, upsertCase, compartments, getCompartment, upsertCompartment,
@@ -39,6 +39,7 @@ export function render(host, app) {
     ['promotions', 'Promotion Reqs'],
     ['activity', 'Activity Reqs'],
     ['tags', 'Personnel Tags'],
+    ['medals', 'Medals'],
     ['recycle', 'Recycle Bin'],
     ['system', 'System'],
   ];
@@ -79,6 +80,7 @@ function drawPanel(panel, app) {
   if (activeTab === 'promotions') return drawPromoReqs(panel, app);
   if (activeTab === 'activity') return drawActivityReqs(panel, app);
   if (activeTab === 'tags') return drawTags(panel, app);
+  if (activeTab === 'medals') return drawMedals(panel, app);
   if (activeTab === 'recycle') return drawRecycle(panel, app);
   return drawSystem(panel, app);
 }
@@ -414,6 +416,98 @@ function saveTagCatalog(app, tags, note) {
   cur.data = { tags };
   upsertSetting(cur);
   logAction(app.user, 'SET_SETTING', note || 'Updated personnel tags.');
+}
+
+// --- Medals catalogue (per organisation) ------------------------------------
+function medalCatalog() {
+  const rec = getSetting(MEDALS_SETTING_ID);
+  return normalizeMedalCatalog(rec && rec.data);
+}
+function saveMedalCatalog(app, byOrg, note) {
+  const cur = getSetting(MEDALS_SETTING_ID) || { id: MEDALS_SETTING_ID, org: 'command' };
+  cur.data = { byOrg };
+  upsertSetting(cur);
+  logAction(app.user, 'SET_SETTING', note || 'Updated medals catalogue.');
+}
+
+let medalOrg = 'omega-1';
+function drawMedals(panel, app) {
+  if (!canManageSettings(app.user)) {
+    panel.innerHTML = '<div class="empty">The medals catalogue is managed at CL5.</div>';
+    return;
+  }
+  const cat = medalCatalog();
+  const orgs = ['omega-1', 'ethics-committee', 'command'];
+  const list = cat[medalOrg] || [];
+
+  const rows = list.length ? list.map((m) => `
+    <div class="tag-admin-row">
+      <span class="badge badge--info">${esc(m.label)}</span>
+      ${m.description ? `<span class="muted-text">${esc(m.description)}</span>` : ''}
+      <button class="btn btn--xs" data-medal-rename="${esc(m.id)}">Rename</button>
+      <button class="btn btn--xs btn--danger" data-medal-remove="${esc(m.id)}">Remove</button>
+    </div>`).join('') : '<div class="empty">No medals defined for this organisation yet.</div>';
+
+  panel.innerHTML = `
+    <section class="card">
+      <div class="card__title">Medals & decorations</div>
+      <div class="card__body">
+        <p class="field__hint">Define the decorations each organisation can award. Medals are awarded to personnel from their dossier. Each organisation keeps its own catalogue.</p>
+        <div class="seg" role="tablist" style="margin-bottom:var(--s3)">
+          ${orgs.map((o) => `<button class="seg__btn ${o === medalOrg ? 'is-active' : ''}" data-medal-org="${o}">${esc(ORGS[o].short)}</button>`).join('')}
+        </div>
+        <div class="tag-admin-list">${rows}</div>
+        <div class="form-row" style="margin-top:var(--s3)">
+          <input id="medal-new" class="toolbar__search" type="text" placeholder="New medal name\u2026" maxlength="60" />
+          <input id="medal-desc" class="toolbar__search" type="text" placeholder="Short description (optional)" maxlength="120" />
+          <button class="btn btn--primary" id="medal-add">Add medal</button>
+        </div>
+      </div>
+    </section>`;
+
+  panel.querySelectorAll('[data-medal-org]').forEach((b) => b.addEventListener('click', () => { medalOrg = b.dataset.medalOrg; drawMedals(panel, app); }));
+
+  panel.querySelector('#medal-add').addEventListener('click', () => {
+    const label = panel.querySelector('#medal-new').value.trim();
+    const description = panel.querySelector('#medal-desc').value.trim();
+    if (!label) { toast('Enter a medal name.', 'error'); return; }
+    if (list.some((m) => m.label.toLowerCase() === label.toLowerCase())) { toast('That medal already exists for this organisation.', 'error'); return; }
+    const next = { ...cat, [medalOrg]: [...list, { id: newId('mdl'), label, description }] };
+    saveMedalCatalog(app, next, `Added medal \u201c${label}\u201d to ${ORGS[medalOrg].short}.`);
+    toast('Medal added.', 'success');
+    drawMedals(panel, app);
+  });
+
+  panel.querySelectorAll('[data-medal-rename]').forEach((btn) => btn.addEventListener('click', () => {
+    const id = btn.dataset.medalRename;
+    const m = list.find((x) => x.id === id);
+    openModal({
+      title: 'Rename medal',
+      body: `<div class="field"><label>Name</label><input id="mdl-rn" type="text" value="${esc(m.label)}" maxlength="60" /></div><div class="field"><label>Description</label><input id="mdl-rd" type="text" value="${esc(m.description || '')}" maxlength="120" /></div>`,
+      actions: [
+        { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+        { label: 'Save', tone: 'primary', onClick: (c, d) => {
+            const label = d.querySelector('#mdl-rn').value.trim();
+            const description = d.querySelector('#mdl-rd').value.trim();
+            if (!label) { toast('Enter a name.', 'error'); return; }
+            const next = { ...cat, [medalOrg]: list.map((x) => (x.id === id ? { ...x, label, description } : x)) };
+            saveMedalCatalog(app, next, `Renamed a ${ORGS[medalOrg].short} medal.`);
+            c(); toast('Medal updated.', 'success'); drawMedals(panel, app);
+          } },
+      ],
+    });
+  }));
+
+  panel.querySelectorAll('[data-medal-remove]').forEach((btn) => btn.addEventListener('click', async () => {
+    const id = btn.dataset.medalRemove;
+    const m = list.find((x) => x.id === id);
+    const ok = await confirmDialog({ title: 'Remove medal', message: `Remove \u201c${m.label}\u201d from the ${ORGS[medalOrg].short} catalogue? Personnel already awarded it keep it on their record.`, confirmLabel: 'Remove', danger: true });
+    if (!ok) return;
+    const next = { ...cat, [medalOrg]: list.filter((x) => x.id !== id) };
+    saveMedalCatalog(app, next, `Removed a ${ORGS[medalOrg].short} medal.`);
+    toast('Medal removed.', 'success');
+    drawMedals(panel, app);
+  }));
 }
 
 function drawTags(panel, app) {

@@ -337,7 +337,7 @@ function openCreate(app) {
     <p class="modal__message">Open a Need-To-Know compartment. You are read in automatically. The clearance floor is the minimum clearance any read-in operator must hold.</p>
     <div class="field"><label>Name / codeword</label><input id="cm-name" type="text" placeholder="e.g. NIGHTJAR" /></div>
     ${selectField('cm-org', 'Organisation', orgs, orgs[0], (o) => ORGS[o].name)}
-    ${selectField('cm-clr', 'Clearance floor', allowedFloor, allowedFloor[allowedFloor.length - 1], (c) => CLEARANCES[c].label)}
+    ${selectField('cm-clr', 'Clearance floor', allowedFloor, allowedFloor[0], (c) => CLEARANCES[c].label)}
     <div class="field"><label>Charter / description</label><textarea id="cm-desc" rows="3" placeholder="What does this compartment cover?"></textarea></div>
     <div id="cm-err" class="auth__error" hidden></div>
   `;

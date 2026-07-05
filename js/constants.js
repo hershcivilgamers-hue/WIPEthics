@@ -170,6 +170,70 @@ export const BLACKLIST_STATUS = {
 };
 export const BLACKLIST_STATUS_ORDER = ['active', 'lifted'];
 
+// External blacklists: departments may publish their lists as Google Sheets.
+// A "published to the web" sheet exposes a CSV endpoint we can fetch and parse
+// client-side. Sources (a label + CSV URL) are stored in one settings row.
+export const EXTERNAL_BLACKLIST_SETTING_ID = 'external-blacklists';
+export function normalizeSheetSources(data) {
+  const list = (data && Array.isArray(data.sources)) ? data.sources : [];
+  const seen = new Set();
+  return list
+    .filter((s) => s && typeof s.id === 'string' && typeof s.label === 'string' && s.label.trim() && typeof s.url === 'string' && /^https?:\/\//.test(s.url))
+    .filter((s) => (seen.has(s.id) ? false : (seen.add(s.id), true)))
+    .map((s) => ({ id: s.id, label: s.label.trim(), url: s.url.trim() }));
+}
+// Turn a Google Sheets share/edit URL into its CSV export endpoint where we can.
+export function toSheetCsvUrl(url) {
+  const u = String(url).trim();
+  // Already a CSV/gviz endpoint.
+  if (/output=csv|tqx=out:csv/.test(u)) return u;
+  // Published-to-web pubhtml → pub?output=csv
+  let m = u.match(/\/spreadsheets\/d\/e\/([^/]+)\/pubhtml/);
+  if (m) return `https://docs.google.com/spreadsheets/d/e/${m[1]}/pub?output=csv`;
+  // Standard /spreadsheets/d/<id>/edit#gid=<gid>
+  m = u.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (m) {
+    const gid = (u.match(/[#&?]gid=(\d+)/) || [])[1] || '0';
+    return `https://docs.google.com/spreadsheets/d/${m[1]}/gviz/tq?tqx=out:csv&gid=${gid}`;
+  }
+  return u;
+}
+// Minimal RFC-4180-ish CSV parser (handles quotes, commas and newlines).
+export function parseCsv(text) {
+  const rows = []; let row = []; let field = ''; let i = 0; let inQuotes = false;
+  const s = String(text).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  while (i < s.length) {
+    const ch = s[i];
+    if (inQuotes) {
+      if (ch === '"') { if (s[i + 1] === '"') { field += '"'; i += 2; continue; } inQuotes = false; i += 1; continue; }
+      field += ch; i += 1; continue;
+    }
+    if (ch === '"') { inQuotes = true; i += 1; continue; }
+    if (ch === ',') { row.push(field); field = ''; i += 1; continue; }
+    if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; i += 1; continue; }
+    field += ch; i += 1;
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  return rows.filter((r) => r.some((c) => (c || '').trim()));
+}
+// Map parsed CSV rows into blacklist-shaped entries by matching common headers.
+export function mapSheetRows(rows) {
+  if (!rows.length) return [];
+  const headers = rows[0].map((h) => h.toLowerCase().trim());
+  const find = (...names) => { for (const n of names) { const idx = headers.findIndex((h) => h.includes(n)); if (idx >= 0) return idx; } return -1; };
+  const iName = find('name', 'user', 'handle', 'individual', 'alias');
+  const iId = find('steam', 'id', 'identifier', 'discord');
+  const iReason = find('reason', 'note', 'detail', 'offen', 'why');
+  const iSev = find('severity', 'tier', 'level', 'status');
+  return rows.slice(1).map((r, n) => ({
+    _row: n + 2,
+    name: (iName >= 0 ? r[iName] : r[0] || '').trim(),
+    identifier: (iId >= 0 ? (r[iId] || '').trim() : ''),
+    reason: (iReason >= 0 ? (r[iReason] || '').trim() : ''),
+    severity: (iSev >= 0 ? (r[iSev] || '').trim() : ''),
+  })).filter((e) => e.name);
+}
+
 // A Target is a termination authorisation, so it carries an authorisation state.
 // A target is only "live" once an Ethics Committee member has authorised it;
 // until then it is pending and must not be acted on.
@@ -290,6 +354,25 @@ export const ACTIVITY_REQ_SETTING_ID = 'activity-requirements';
 // one settings row; each user carries an array of tag ids in `user.tags`.
 export const PERSONNEL_TAGS_SETTING_ID = 'personnel-tags';
 export const TAG_COLORS = ['slate', 'cyan', 'green', 'amber', 'violet', 'red'];
+
+// --- Medals / awards catalogue ----------------------------------------------
+// A per-organisation catalogue of medals defined in Administration and awarded
+// to personnel (awards ride on user.awards). Keyed by org so Omega-1 and the
+// Ethics Committee maintain their own decorations separately.
+export const MEDALS_SETTING_ID = 'medals-catalogue';
+export function normalizeMedalCatalog(data) {
+  const src = (data && typeof data.byOrg === 'object' && data.byOrg) || {};
+  const out = {};
+  for (const org of ['omega-1', 'ethics-committee', 'command']) {
+    const list = Array.isArray(src[org]) ? src[org] : [];
+    const seen = new Set();
+    out[org] = list
+      .filter((m) => m && typeof m.id === 'string' && typeof m.label === 'string' && m.label.trim())
+      .filter((m) => (seen.has(m.id) ? false : (seen.add(m.id), true)))
+      .map((m) => ({ id: m.id, label: m.label.trim(), description: (m.description || '').trim() }));
+  }
+  return out;
+}
 // Normalise a stored catalogue into a clean [{id,label,color}] list.
 export function normalizeTagCatalog(data) {
   const list = (data && Array.isArray(data.tags)) ? data.tags : [];

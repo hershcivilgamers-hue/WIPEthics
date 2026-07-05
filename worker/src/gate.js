@@ -150,6 +150,12 @@ function authorizeUser(actor, cur, next) {
     return ok('PROMO_CHECK', `Updated ${cur.designation}'s promotion checklist.`);
   }
 
+  if (j(next.awards || []) !== j(cur.awards || []) &&
+      !changedOutside(cur, next, ['awards', 'events', 'version', 'updatedAt'])) {
+    if (!canEditPersonnel(actor, cur)) return deny('You cannot award or remove decorations for this record.');
+    return ok('SET_AWARDS', `Updated awards on ${cur.designation}.`);
+  }
+
   if (j(next.tags || []) !== j(cur.tags || []) &&
       !changedOutside(cur, next, ['tags', 'events', 'version', 'updatedAt'])) {
     if (!canEditPersonnel(actor, cur)) return deny('You cannot assign tags to this record.');

@@ -485,3 +485,9 @@
 /* --- Expired strikes -------------------------------------------------------- */
 .strike--expired { opacity: .55; }
 .strike--expired .strike__reason { text-decoration: line-through; text-decoration-thickness: 1px; }
+
+/* --- Segmented control (per-org medal picker, etc.) ------------------------- */
+.seg { display: inline-flex; gap: 2px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 2px; }
+.seg__btn { border: none; background: none; color: var(--text-3); padding: 5px 12px; border-radius: calc(var(--radius) - 2px); cursor: pointer; font: inherit; font-size: 12px; }
+.seg__btn:hover { color: var(--text); }
+.seg__btn.is-active { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.2); }

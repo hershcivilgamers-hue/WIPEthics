@@ -163,7 +163,10 @@ function openRegister(app) {
     .join('');
 
   const firstOrg = ORG_ORDER.filter((o) => o !== 'command')[0];
-  const rankOptionsFor = (o) => (RANKS[o] || []).map((r) => {
+  // Ethics Committee intake is always at Assistant — Members and the Chairman are
+  // appointed by promotion, not requested at registration.
+  const ranksForOrg = (o) => (o === 'ethics-committee' ? ['Assistant'] : (RANKS[o] || []));
+  const rankOptionsFor = (o) => ranksForOrg(o).map((r) => {
     const clr = clearanceForRank(o, r);
     return `<option value="${esc(r)}">${esc(r)}${clr ? ` \u2014 ${esc(clr)}` : ''}</option>`;
   }).join('');

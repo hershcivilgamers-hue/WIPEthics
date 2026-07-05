@@ -10,10 +10,12 @@
 import {
   BLACKLIST_SEVERITY, BLACKLIST_SEVERITY_ORDER, BLACKLIST_STATUS,
   ORGS, ORG_ORDER,
+  EXTERNAL_BLACKLIST_SETTING_ID, normalizeSheetSources, toSheetCsvUrl, parseCsv, mapSheetRows,
 } from '../constants.js';
-import { blacklist, getBlacklistEntry, upsertBlacklistEntry, newId } from '../storage.js';
-import { canManageOrg, isCL5 } from '../permissions.js';
+import { blacklist, getBlacklistEntry, upsertBlacklistEntry, newId, getSetting, upsertSetting } from '../storage.js';
+import { canManageOrg, isCL5, canManageSettings } from '../permissions.js';
 import { esc, fmtDate, orgTag, toast, openModal, confirmDialog } from '../ui.js';
+import { logAction } from '../audit.js';
 
 const filter = { q: '', severity: '', status: 'active' };
 
@@ -68,6 +70,8 @@ export function render(host, app) {
       </div>
       ${canManageAny ? '<button class="btn btn--primary" id="bl-add">+ Add entry</button>' : ''}
     </div>
+    ${canManageSettings(actor) ? '<div class="toolbar" style="justify-content:flex-end"><button class="btn btn--sm" id="bl-sources">Manage external sheets</button></div>' : ''}
+    <div id="bl-external"></div>
     <div class="toolbar">
       <input id="bl-q" class="toolbar__search" type="search" placeholder="Search name, identifier or reason\u2026" value="${esc(filter.q)}" autocomplete="off" />
       <select id="bl-sev" class="toolbar__select">${sevOpts}</select>
@@ -85,6 +89,9 @@ export function render(host, app) {
   host.querySelector('#bl-status').addEventListener('change', (e) => { filter.status = e.target.value; render(host, app); });
   const addBtn = host.querySelector('#bl-add');
   if (addBtn) addBtn.addEventListener('click', () => openCreate(app));
+  const srcBtn = host.querySelector('#bl-sources');
+  if (srcBtn) srcBtn.addEventListener('click', () => openSources(app));
+  loadExternalSheets(host.querySelector('#bl-external'));
   host.querySelectorAll('tr[data-id]').forEach((tr) => {
     const open = () => openEntry(app, tr.dataset.id);
     tr.addEventListener('click', open);
@@ -200,4 +207,85 @@ function openEdit(app, b) {
         } },
     ],
   });
+}
+
+// --- External Google Sheets --------------------------------------------------
+function sheetSources() {
+  const rec = getSetting(EXTERNAL_BLACKLIST_SETTING_ID);
+  return normalizeSheetSources(rec && rec.data);
+}
+
+// Fetch each configured sheet, parse it, and render a read-only section per
+// source. Runs client-side; a published Google Sheet serves CSV with permissive
+// CORS. Failures degrade to a per-source notice.
+async function loadExternalSheets(container) {
+  if (!container) return;
+  const sources = sheetSources();
+  if (!sources.length) { container.innerHTML = ''; return; }
+  container.innerHTML = sources.map((s) => `
+    <div class="card" data-src="${esc(s.id)}">
+      <div class="card__title">${esc(s.label)} <span class="muted-text">\u00b7 external sheet</span></div>
+      <div class="card__body" id="src-body-${esc(s.id)}"><div class="muted-text">Loading\u2026</div></div>
+    </div>`).join('');
+
+  for (const s of sources) {
+    const body = container.querySelector(`#src-body-${CSS.escape(s.id)}`);
+    try {
+      const res = await fetch(toSheetCsvUrl(s.url), { redirect: 'follow' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      const entries = mapSheetRows(parseCsv(text));
+      if (!entries.length) { body.innerHTML = '<div class="empty">No rows parsed from this sheet.</div>'; continue; }
+      body.innerHTML = `
+        <table class="data-table"><thead><tr><th>Name</th><th>Identifier</th><th>Severity</th><th>Reason</th></tr></thead>
+        <tbody>${entries.map((e) => `
+          <tr><td class="cell-name">${esc(e.name)}</td><td class="mono muted-text">${esc(e.identifier || '\u2014')}</td><td>${esc(e.severity || '\u2014')}</td><td>${esc(e.reason || '\u2014')}</td></tr>`).join('')}</tbody></table>
+        <div class="field__hint">${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} \u00b7 read-only \u00b7 <a href="${esc(s.url)}" target="_blank" rel="noopener">open sheet</a></div>`;
+    } catch (err) {
+      body.innerHTML = `<div class="empty">Could not load this sheet (${esc(err.message)}). Ensure it is published to the web or link-shared.</div>`;
+    }
+  }
+}
+
+function openSources(app) {
+  const sources = sheetSources();
+  const rows = sources.length ? sources.map((s) => `
+    <div class="tag-admin-row">
+      <span>${esc(s.label)}</span>
+      <span class="mono muted-text" style="flex:1;overflow:hidden;text-overflow:ellipsis">${esc(s.url)}</span>
+      <button class="btn btn--xs btn--danger" data-src-remove="${esc(s.id)}">Remove</button>
+    </div>`).join('') : '<div class="empty">No external sheets configured.</div>';
+  const body = `
+    <p class="modal__message">Link department blacklists published as Google Sheets. Paste a share link or a \u201cpublish to web\u201d CSV link \u2014 the sheet must be viewable by anyone with the link.</p>
+    <div class="tag-admin-list" id="src-list">${rows}</div>
+    <div class="field" style="margin-top:var(--s3)"><label>Label</label><input id="src-label" type="text" placeholder="e.g. Security Department" maxlength="60" /></div>
+    <div class="field"><label>Google Sheet URL</label><input id="src-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/\u2026" /></div>`;
+  const dlg = openModal({
+    title: 'External blacklist sheets',
+    wide: true,
+    body,
+    actions: [
+      { label: 'Close', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Add sheet', tone: 'primary', onClick: (c, d) => {
+          const label = d.querySelector('#src-label').value.trim();
+          const url = d.querySelector('#src-url').value.trim();
+          if (!label || !/^https?:\/\//.test(url)) { toast('Enter a label and a valid URL.', 'error'); return; }
+          const next = [...sources, { id: newId('sht'), label, url }];
+          const cur = getSetting(EXTERNAL_BLACKLIST_SETTING_ID) || { id: EXTERNAL_BLACKLIST_SETTING_ID, org: 'command' };
+          cur.data = { sources: next };
+          upsertSetting(cur);
+          logAction(app.user, 'SET_SETTING', `Added external blacklist sheet \u201c${label}\u201d.`);
+          c(); toast('Sheet linked.', 'success'); app.refresh();
+        } },
+    ],
+  });
+  dlg.querySelectorAll('[data-src-remove]').forEach((btn) => btn.addEventListener('click', () => {
+    const id = btn.dataset.srcRemove;
+    const cur = getSetting(EXTERNAL_BLACKLIST_SETTING_ID) || { id: EXTERNAL_BLACKLIST_SETTING_ID, org: 'command' };
+    cur.data = { sources: sources.filter((s) => s.id !== id) };
+    upsertSetting(cur);
+    logAction(app.user, 'SET_SETTING', 'Removed an external blacklist sheet.');
+    toast('Sheet removed.', 'success');
+    app.refresh();
+  }));
 }

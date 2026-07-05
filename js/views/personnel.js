@@ -12,6 +12,7 @@ import {
   rankUp, rankDown, clearanceForRank,
   TRAINING_CATEGORY, TRAINING_CURRENCY, trainingCurrency, trainingExpiry,
   PERSONNEL_TAGS_SETTING_ID, normalizeTagCatalog,
+  MEDALS_SETTING_ID, normalizeMedalCatalog,
 } from '../constants.js';
 import { users, getUser, upsertUser, promoReqs, newId, applyServerSnapshot, trainings, getTraining, getSetting } from '../storage.js';
 import {
@@ -180,6 +181,7 @@ export function renderDossier(host, app, id) {
     strike: canIssueStrike(actor, u),
     note: canEditPersonnel(actor, u),
     tags: canEditPersonnel(actor, u),
+    medal: canEditPersonnel(actor, u),
     leave: canEditPersonnel(actor, u),
     del: canDeletePersonnel(actor, u),
     // Reset an operator's sign-in passphrase: a manager with a stake, and never
@@ -208,7 +210,7 @@ export function renderDossier(host, app, id) {
   `;
 
   const serviceRecord = nameOnly ? '' : sectionService(u);
-  const awardsBlock = nameOnly ? '' : sectionAwards(u);
+  const awardsBlock = nameOnly ? '' : sectionAwards(u, acts.medal);
   const strikesBlock = sectionStrikes(u, full, full && acts.strike);
   const leaveBlock = onLeave ? sectionLeave(u, full) : '';
   const notesBlock = sectionNotes(u, full);
@@ -256,6 +258,7 @@ export function renderDossier(host, app, id) {
       ${acts.leave ? `<button class="btn btn--sm" data-act="leave">${onLeave ? 'Return from leave' : 'Place on leave'}</button>` : ''}
       ${acts.note ? '<button class="btn btn--sm" data-act="note">Add note</button>' : ''}
       ${acts.tags ? '<button class="btn btn--sm" data-act="tags">Manage tags</button>' : ''}
+      ${acts.medal ? '<button class="btn btn--sm" data-act="medal">Award medal</button>' : ''}
       ${acts.del ? '<button class="btn btn--sm btn--danger" data-act="delete">Remove</button>' : ''}
     </div>` : ''}
 
@@ -282,6 +285,7 @@ export function renderDossier(host, app, id) {
   const dispatch = {
     edit: () => openEdit(app, u),
     tags: () => openTags(app, u),
+    medal: () => openAward(app, u),
     clearance: () => openClearance(app, u),
     passphrase: () => openPassphrase(app, u),
     strike: () => openStrike(app, u),
@@ -295,6 +299,7 @@ export function renderDossier(host, app, id) {
   host.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => dispatch[b.dataset.act]()));
   host.querySelectorAll('[data-revoke-training]').forEach((b) => b.addEventListener('click', () => revokeTraining(app, u, b.dataset.revokeTraining)));
   host.querySelectorAll('[data-lift-strike]').forEach((b) => b.addEventListener('click', () => liftStrike(app, u, b.dataset.liftStrike)));
+  host.querySelectorAll('[data-remove-award]').forEach((b) => b.addEventListener('click', () => removeAward(app, u, b.dataset.removeAward)));
   host.querySelectorAll('[data-req]').forEach((b) => b.addEventListener('change', () => toggleRequirement(app, u, b.dataset.req)));
 }
 
@@ -433,12 +438,12 @@ function sectionService(u) {
     </section>`;
 }
 
-function sectionAwards(u) {
+function sectionAwards(u, canManage) {
   if (!(u.awards || []).length) return '';
   const items = u.awards.map((a) => `
     <div class="award">
-      <div class="award__title">${esc(a.title)}</div>
-      <div class="award__meta">${fmtDate(a.date)}${a.note ? ` \u00b7 ${esc(a.note)}` : ''}</div>
+      <div class="award__title">${esc(a.title)}${canManage ? ` <button class="btn btn--xs" data-remove-award="${esc(a.id)}">Remove</button>` : ''}</div>
+      <div class="award__meta">${fmtDate(a.date)}${a.note ? ` \u00b7 ${esc(a.note)}` : ''}${a.by ? ` \u00b7 ${esc(a.by)}` : ''}</div>
     </div>`).join('');
   return `<section class="card"><div class="card__title">Awards & Commendations</div><div class="card__body">${items}</div></section>`;
 }
@@ -589,6 +594,69 @@ function sectionNotes(u, full) {
 function fieldSelect(id, label, options, selected) {
   const opts = options.map((o) => `<option value="${esc(o)}" ${o === selected ? 'selected' : ''}>${esc(o)}</option>`).join('');
   return `<div class="field"><label>${esc(label)}</label><select id="${id}">${opts}</select></div>`;
+}
+
+async function removeAward(app, u, awardId) {
+  const a = (u.awards || []).find((x) => x.id === awardId);
+  if (!a) return;
+  const ok = await confirmDialog({ title: 'Remove award', message: `Remove \u201c${a.title}\u201d from ${u.designation}'s record?`, confirmLabel: 'Remove', danger: true });
+  if (!ok) return;
+  mutate(app, u.id, u.version, (r) => {
+    r.awards = (r.awards || []).filter((x) => x.id !== awardId);
+    addEvent(r, 'award', `Award removed: ${a.title}.`);
+  }, { action: 'SET_AWARDS', detail: `Removed award from ${u.designation}.` });
+  toast('Award removed.', 'success');
+}
+
+// Award a medal from the organisation's catalogue (or a one-off commendation).
+function openAward(app, u) {
+  const rec = getSetting(MEDALS_SETTING_ID);
+  const cat = normalizeMedalCatalog(rec && rec.data);
+  const medals = cat[u.org] || [];
+  const opts = medals.length
+    ? `<option value="">\u2014 select a medal \u2014</option>${medals.map((m) => `<option value="${esc(m.id)}" data-label="${esc(m.label)}">${esc(m.label)}</option>`).join('')}<option value="__custom">Other / one-off commendation\u2026</option>`
+    : '<option value="__custom">One-off commendation (no catalogue medals defined)</option>';
+  const body = `
+    <p class="modal__message">Award a decoration to ${esc(u.designation)}. Medals for ${esc(ORGS[u.org].short)} are defined in Administration \u2192 Medals.</p>
+    <div class="field"><label>Medal</label><select id="aw-medal">${opts}</select></div>
+    <div class="field" id="aw-custom-wrap" hidden><label>Commendation title</label><input id="aw-custom" type="text" placeholder="e.g. Commendation for Valour" maxlength="80" /></div>
+    <div class="field"><label>Citation <span class="muted-text">(optional)</span></label><textarea id="aw-note" rows="2" placeholder="Reason for the award\u2026"></textarea></div>`;
+  openModal({
+    title: `Award medal \u2014 ${u.designation}`,
+    wide: true,
+    body,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Award', tone: 'primary', onClick: (c, d) => {
+          const sel = d.querySelector('#aw-medal');
+          const val = sel.value;
+          const note = d.querySelector('#aw-note').value.trim();
+          let title; let medalId = null;
+          if (val === '__custom' || !medals.length) {
+            title = d.querySelector('#aw-custom').value.trim();
+            if (!title) { toast('Enter a commendation title.', 'error'); return; }
+          } else if (val) {
+            const m = medals.find((x) => x.id === val);
+            title = m ? m.label : null; medalId = m ? m.id : null;
+            if (!title) { toast('Select a medal.', 'error'); return; }
+          } else { toast('Select a medal.', 'error'); return; }
+          mutate(app, u.id, u.version, (r) => {
+            r.awards = r.awards || [];
+            r.awards.push({ id: newId('awd'), title, note, medalId, date: new Date().toISOString(), by: app.user.designation });
+            addEvent(r, 'award', `Awarded: ${title}.`);
+          }, { action: 'SET_AWARDS', detail: `Awarded ${title} to ${u.designation}.` });
+          c();
+          toast('Medal awarded.', 'success');
+        } },
+    ],
+  });
+  // Toggle the custom-title field.
+  const dlg = document.querySelector('.modal-backdrop .modal');
+  const selEl = dlg && dlg.querySelector('#aw-medal');
+  if (selEl) selEl.addEventListener('change', () => {
+    const wrap = dlg.querySelector('#aw-custom-wrap');
+    if (wrap) wrap.hidden = selEl.value !== '__custom';
+  });
 }
 
 // Assign catalogue tags to an operator via checkboxes.
