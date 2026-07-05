@@ -8,7 +8,7 @@
 //   • System        — backend status, dataset export, full reset.
 // =============================================================================
 
-import { ORGS, RANKS, CLEARANCE_ORDER, CLEARANCES, rankUp, clearanceForRank, ACTIVITY_REQ_SETTING_ID, ACTIVITY_REQ_DEFAULT, mergeActivityReqs } from '../constants.js';
+import { ORGS, RANKS, CLEARANCE_ORDER, CLEARANCES, rankUp, clearanceForRank, ACTIVITY_REQ_SETTING_ID, ACTIVITY_REQ_DEFAULT, mergeActivityReqs, PERSONNEL_TAGS_SETTING_ID, TAG_COLORS, normalizeTagCatalog } from '../constants.js';
 import {
   users, directives, subjects, cases, getUser, upsertUser, getDirective, upsertDirective,
   getSubject, upsertSubject, getCase, upsertCase, compartments, getCompartment, upsertCompartment,
@@ -38,6 +38,7 @@ export function render(host, app) {
     ['clearance', 'Clearance'],
     ['promotions', 'Promotion Reqs'],
     ['activity', 'Activity Reqs'],
+    ['tags', 'Personnel Tags'],
     ['recycle', 'Recycle Bin'],
     ['system', 'System'],
   ];
@@ -77,6 +78,7 @@ function drawPanel(panel, app) {
   if (activeTab === 'clearance') return drawClearance(panel, app);
   if (activeTab === 'promotions') return drawPromoReqs(panel, app);
   if (activeTab === 'activity') return drawActivityReqs(panel, app);
+  if (activeTab === 'tags') return drawTags(panel, app);
   if (activeTab === 'recycle') return drawRecycle(panel, app);
   return drawSystem(panel, app);
 }
@@ -400,6 +402,111 @@ function drawActivityReqs(panel, app) {
     const ok = await confirmDialog({ title: 'Reset requirements', message: 'Reset to the defaults \u2014 Omega-1 5h/week + 25h/month, Ethics Assistant 1h/week plus an interaction?', confirmLabel: 'Reset' });
     if (ok) persist(mergeActivityReqs(ACTIVITY_REQ_DEFAULT));
   });
+}
+
+// --- Personnel tags ---------------------------------------------------------
+function tagCatalog() {
+  const rec = getSetting(PERSONNEL_TAGS_SETTING_ID);
+  return normalizeTagCatalog(rec && rec.data);
+}
+function saveTagCatalog(app, tags, note) {
+  const cur = getSetting(PERSONNEL_TAGS_SETTING_ID) || { id: PERSONNEL_TAGS_SETTING_ID, org: 'command' };
+  cur.data = { tags };
+  upsertSetting(cur);
+  logAction(app.user, 'SET_SETTING', note || 'Updated personnel tags.');
+}
+
+function drawTags(panel, app) {
+  if (!canManageSettings(app.user)) {
+    panel.innerHTML = '<div class="empty">Personnel tags are managed at CL5.</div>';
+    return;
+  }
+  const tags = tagCatalog();
+  const usage = (id) => users().filter((u) => !u.deleted && Array.isArray(u.tags) && u.tags.includes(id)).length;
+
+  const rows = tags.length ? tags.map((t) => `
+    <div class="tag-admin-row">
+      <span class="badge tag-badge tag-badge--${esc(t.color)}">${esc(t.label)}</span>
+      <span class="muted-text">${usage(t.id)} assigned</span>
+      <select data-tag-color="${esc(t.id)}" class="toolbar__select">
+        ${TAG_COLORS.map((c) => `<option value="${c}" ${c === t.color ? 'selected' : ''}>${c}</option>`).join('')}
+      </select>
+      <button class="btn btn--xs" data-tag-rename="${esc(t.id)}">Rename</button>
+      <button class="btn btn--xs btn--danger" data-tag-remove="${esc(t.id)}">Remove</button>
+    </div>`).join('') : '<div class="empty">No tags defined yet.</div>';
+
+  panel.innerHTML = `
+    <section class="card">
+      <div class="card__title">Personnel tags</div>
+      <div class="card__body">
+        <p class="field__hint">Define role or attribute labels (for example \u201cDevelopment Manager\u201d) and assign them to personnel from any dossier. Removing a tag also clears it from everyone who holds it.</p>
+        <div class="tag-admin-list">${rows}</div>
+        <div class="form-row" style="margin-top:var(--s3)">
+          <input id="tag-new" class="toolbar__search" type="text" placeholder="New tag label\u2026" maxlength="40" />
+          <select id="tag-new-color" class="toolbar__select">${TAG_COLORS.map((c) => `<option value="${c}">${c}</option>`).join('')}</select>
+          <button class="btn btn--primary" id="tag-add">Add tag</button>
+        </div>
+      </div>
+    </section>`;
+
+  panel.querySelector('#tag-add').addEventListener('click', () => {
+    const label = panel.querySelector('#tag-new').value.trim();
+    const color = panel.querySelector('#tag-new-color').value;
+    if (!label) { toast('Enter a tag label.', 'error'); return; }
+    if (tags.some((t) => t.label.toLowerCase() === label.toLowerCase())) { toast('A tag with that label already exists.', 'error'); return; }
+    const next = [...tags, { id: newId('tag'), label, color }];
+    saveTagCatalog(app, next, `Created personnel tag \u201c${label}\u201d.`);
+    toast('Tag created.', 'success');
+    drawTags(panel, app);
+  });
+
+  panel.querySelectorAll('[data-tag-color]').forEach((sel) => sel.addEventListener('change', () => {
+    const id = sel.dataset.tagColor;
+    const next = tags.map((t) => (t.id === id ? { ...t, color: sel.value } : t));
+    saveTagCatalog(app, next, 'Recoloured a personnel tag.');
+    drawTags(panel, app);
+  }));
+
+  panel.querySelectorAll('[data-tag-rename]').forEach((btn) => btn.addEventListener('click', () => {
+    const id = btn.dataset.tagRename;
+    const tag = tags.find((t) => t.id === id);
+    openModal({
+      title: 'Rename tag',
+      body: `<div class="field"><label>Label</label><input id="tag-rn" type="text" value="${esc(tag.label)}" maxlength="40" /></div>`,
+      actions: [
+        { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+        { label: 'Save', tone: 'primary', onClick: (c, d) => {
+            const label = d.querySelector('#tag-rn').value.trim();
+            if (!label) { toast('Enter a label.', 'error'); return; }
+            const next = tags.map((t) => (t.id === id ? { ...t, label } : t));
+            saveTagCatalog(app, next, `Renamed a personnel tag to \u201c${label}\u201d.`);
+            c(); toast('Tag renamed.', 'success'); drawTags(panel, app);
+          } },
+      ],
+    });
+  }));
+
+  panel.querySelectorAll('[data-tag-remove]').forEach((btn) => btn.addEventListener('click', async () => {
+    const id = btn.dataset.tagRemove;
+    const tag = tags.find((t) => t.id === id);
+    const held = usage(id);
+    const ok = await confirmDialog({
+      title: 'Remove tag',
+      message: `Remove \u201c${tag.label}\u201d?${held ? ` It will be cleared from ${held} personnel record${held === 1 ? '' : 's'}.` : ''}`,
+      confirmLabel: 'Remove', danger: true,
+    });
+    if (!ok) return;
+    // Clear the tag from every holder, then drop it from the catalogue.
+    users().forEach((u) => {
+      if (Array.isArray(u.tags) && u.tags.includes(id)) {
+        const rec = { ...u, tags: u.tags.filter((x) => x !== id) };
+        upsertUser(rec);
+      }
+    });
+    saveTagCatalog(app, tags.filter((t) => t.id !== id), `Removed personnel tag \u201c${tag.label}\u201d.`);
+    toast('Tag removed.', 'success');
+    drawTags(panel, app);
+  }));
 }
 
 function drawRecycle(panel, app) {

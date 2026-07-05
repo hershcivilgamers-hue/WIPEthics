@@ -37,6 +37,7 @@ export function canManageOrg(actor, org) {
 
 export function canEditPersonnel(actor, target) {
   if (!actor || !target) return false;
+  if (isCL5(actor)) return true; // CL5 (Command tier) has cross-organisation personnel authority
   return canManageOrg(actor, target.org);
 }
 
@@ -52,6 +53,7 @@ export function canSetClearance(actor, target, nextClearance) {
 export function canSetRank(actor, target) {
   if (!actor || !target) return false;
   if (actor.id === target.id) return false;
+  if (isCL5(actor)) return true; // CL5 has cross-organisation authority
   return canManageOrg(actor, target.org);
 }
 
@@ -97,8 +99,10 @@ export function canManageSettings(actor) {
 }
 
 export function canIssueStrike(actor, target) {
-  if (!canManageOrg(actor, target?.org)) return false;
-  return actor.id !== target.id;
+  if (!actor || !target) return false;
+  if (actor.id === target.id) return false;
+  if (isCL5(actor)) return true; // CL5 has cross-organisation disciplinary authority
+  return canManageOrg(actor, target?.org);
 }
 
 export function canDeletePersonnel(actor, target) {

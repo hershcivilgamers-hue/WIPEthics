@@ -20,7 +20,7 @@ import {
   compartmentClears, canManageCompartment, canReadOperatorInto,
   canManageOrg, canParticipateRecruitment, canLogToOperation, canLogIntel, canManageTraining, isCL5,
 } from '../../js/permissions.js';
-import { rankUp, rankDown, clearanceForRank, clearanceWeight, tallyVotes, RANKS } from '../../js/constants.js';
+import { rankUp, rankDown, clearanceForRank, clearanceWeight, tallyVotes, RANKS, caseTakesVote } from '../../js/constants.js';
 
 const deny = (msg) => ({ ok: false, status: 403, error: msg || 'Not permitted.' });
 const ok = (action, detail) => ({ ok: true, action, detail });
@@ -150,6 +150,12 @@ function authorizeUser(actor, cur, next) {
     return ok('PROMO_CHECK', `Updated ${cur.designation}'s promotion checklist.`);
   }
 
+  if (j(next.tags || []) !== j(cur.tags || []) &&
+      !changedOutside(cur, next, ['tags', 'events', 'version', 'updatedAt'])) {
+    if (!canEditPersonnel(actor, cur)) return deny('You cannot assign tags to this record.');
+    return ok('SET_TAGS', `Updated tags on ${cur.designation}.`);
+  }
+
   if (!canEditPersonnel(actor, cur)) return deny('You cannot edit this record.');
   return ok('EDIT_PERSONNEL', `Updated ${cur.designation}.`);
 }
@@ -181,12 +187,44 @@ function authorizeDirective(actor, cur, next, ctx) {
 }
 
 function authorizeSubject(actor, cur, next, ctx) {
+  const ref = (next || cur).ref || 'subject';
+
+  // A Target is a termination authorisation, and Ethics oversight is deliberately
+  // cross-organisational: an Ethics Committee member may authorise or refuse a
+  // Target on ANY unit's subject. So the authorisation block is checked first,
+  // before the owning-org management gate.
+  const authChanged = j(next && next.authorization) !== j(cur && cur.authorization);
+  if (authChanged) {
+    if (!canManageTribunal(actor)) return deny('Only an Ethics Committee member may authorise or refuse a Target.');
+    const block = compartmentWriteBlock(actor, cur, next, ctx);
+    if (block) return block;
+    const st = next.authorization && next.authorization.status;
+    if (st === 'authorised') return ok('AUTHORISE_TARGET', `Target ${ref} authorised for termination.`);
+    if (st === 'refused') return ok('REFUSE_TARGET', `Target authorisation refused for ${ref}.`);
+    return ok('EDIT_SUBJECT', `Updated ${ref}.`);
+  }
+
+  // Everything else requires management of the owning organisation.
   if (!canManageSubject(actor, next || cur)) return deny('You cannot manage this surveillance subject.');
   const block = compartmentWriteBlock(actor, cur, next, ctx);
   if (block) return block;
-  const ref = (next || cur).ref || 'subject';
+
+  // Becoming a Target (created as target, or a POI reclassified to target)
+  // requires a completed Ethics authorisation already present on the record.
+  // A surveillance manager can request it, but the write that makes something a
+  // live target cannot land without Ethics sign-off — enforced here regardless
+  // of what the client sends.
+  const becomingTarget = (next && next.kind === 'target') && (!cur || cur.kind !== 'target');
+  if (becomingTarget) {
+    const a = next.authorization;
+    if (!a || a.status !== 'authorised' || !a.by) {
+      return deny('A Target requires authorisation by an Ethics Committee member.');
+    }
+  }
+
   if (!cur) return ok('CREATE_SUBJECT', `Opened ${ref}.`);
   if (!!next.deleted !== !!cur.deleted) return next.deleted ? ok('REMOVE_SUBJECT', `Closed ${ref}.`) : ok('RESTORE_SUBJECT', `Reopened ${ref}.`);
+  if ((next.kind === 'target') !== (cur.kind === 'target')) return ok('RECLASSIFY_SUBJECT', `${ref} reclassified.`);
   return ok('EDIT_SUBJECT', `Updated ${ref}.`);
 }
 
@@ -199,6 +237,25 @@ function authorizeCase(actor, cur, next, ctx) {
     if (!canRuleTribunal(actor)) return deny('Only CL5 may enter a ruling.');
     return ok('ENTER_RULING', `Ruling entered on ${ref}.`);
   }
+
+  // Deliberative vote: a seated panel member may cast exactly their own vote on
+  // a non-tribunal matter, changing nothing else. Checked before the manager
+  // gate so an ordinary Committee member (not necessarily a manager) can vote on
+  // a matter they are seated on. Mirrors the recruitment ballot rule.
+  if (cur && j(next.votes || {}) !== j(cur.votes || {})) {
+    const vb = cur.votes || {}, va = next.votes || {};
+    const keys = new Set([...Object.keys(vb), ...Object.keys(va)]);
+    for (const k of keys) {
+      if (j(vb[k]) !== j(va[k]) && k !== actor.id) return deny('You can only cast your own vote.');
+    }
+    if (!caseTakesVote(cur.kind)) return deny('This matter is not decided by a vote.');
+    if (!(cur.panelIds || []).includes(actor.id)) return deny('Only a seated panel member may vote on this matter.');
+    if (changedOutside(cur, next, ['votes', 'entries', 'version', 'updatedAt'])) {
+      return deny('A vote cannot be combined with other changes.');
+    }
+    return ok('VOTE_CASE', `Vote recorded on ${ref}.`);
+  }
+
   if (!canManageTribunal(actor)) return deny('You cannot manage tribunal cases.');
   if (!cur) return ok('CREATE_CASE', `Opened ${ref}.`);
   if (!!next.deleted !== !!cur.deleted) return next.deleted ? ok('REMOVE_CASE', `Closed ${ref}.`) : ok('RESTORE_CASE', `Reopened ${ref}.`);

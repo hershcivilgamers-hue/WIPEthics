@@ -13,7 +13,7 @@
 import {
   CASE_KIND, CASE_KIND_ORDER, CASE_STATUS, CASE_STATUS_ORDER,
   RULING_FINDING, RULING_FINDING_ORDER, CLEARANCE_ORDER, CLEARANCES,
-  ORGS, clearanceWeight,
+  ORGS, clearanceWeight, CASE_VOTE, CASE_VOTE_ORDER, tallyCaseVotes, caseTakesVote,
 } from '../constants.js';
 import {
   cases, getCase, upsertCase, users, getUser, subjects, getSubject, compartments, getCompartment, newId,
@@ -100,6 +100,22 @@ function mutate(app, id, expectedVersion, patch, { action, detail }) {
 function addEntry(record, type, by, text) {
   record.entries = record.entries || [];
   record.entries.unshift({ id: newId('ent'), ts: new Date().toISOString(), by, type, text });
+}
+
+// A seated panel member records (or changes) their own position on a
+// deliberative matter. The Worker re-checks: seated, non-tribunal, own vote only.
+function castVote(app, c, position) {
+  const actor = app.user;
+  if (!caseTakesVote(c.kind)) { toast('This matter is not decided by a vote.', 'error'); return; }
+  if (!(c.panelIds || []).includes(actor.id)) { toast('Only a seated panel member may vote.', 'error'); return; }
+  if (!CASE_VOTE[position]) return;
+  mutate(app, c.id, c.version, (rec) => {
+    rec.votes = { ...(rec.votes || {}) };
+    const prior = rec.votes[actor.id];
+    if (prior === position) { delete rec.votes[actor.id]; addEntry(rec, 'filing', actor.designation, 'Withdrew their vote.'); }
+    else { rec.votes[actor.id] = position; addEntry(rec, 'filing', actor.designation, `Voted ${CASE_VOTE[position].label}.`); }
+  }, { action: 'VOTE_CASE', detail: `Vote recorded on ${c.ref}.` });
+  toast('Vote recorded.', 'success');
 }
 
 // ===========================================================================
@@ -227,6 +243,44 @@ export function renderCase(host, app, id) {
   // Panel members (links to dossiers).
   const panel = (c.panelIds || []).map((pid) => personLink(pid)).join('') || '<span class="empty-inline">No panel seated.</span>';
 
+  // Record of the Vote — for deliberative (non-tribunal) matters. Each seated
+  // panel member shows their position; the actor can cast/change their own.
+  let voteBlock = '';
+  if (caseTakesVote(c.kind)) {
+    const votes = c.votes || {};
+    const seated = c.panelIds || [];
+    const t = tallyCaseVotes(votes);
+    const iAmSeated = seated.includes(actor.id);
+    const myVote = votes[actor.id] || null;
+
+    const memberRows = seated.length ? seated.map((pid) => {
+      const pos = votes[pid];
+      const badge = pos
+        ? `<span class="badge badge--${CASE_VOTE[pos].tone}">${esc(CASE_VOTE[pos].label)}</span>`
+        : '<span class="muted-text">Not yet voted</span>';
+      return `<div class="ack-row"><span class="ack-row__name">${personLink(pid)}</span>${badge}</div>`;
+    }).join('') : '<div class="empty">No panel seated to vote.</div>';
+
+    const castRow = iAmSeated ? `
+      <div class="vote-cast">
+        <span class="vote-cast__label">Your vote:</span>
+        ${CASE_VOTE_ORDER.map((v) => `<button class="btn btn--sm ${myVote === v ? 'btn--primary' : ''}" data-vote="${v}">${esc(CASE_VOTE[v].label)}</button>`).join('')}
+      </div>` : '<div class="field__hint">Only a seated panel member may vote on this matter.</div>';
+
+    voteBlock = `
+      <section class="card">
+        <div class="card__title">Record of the Vote</div>
+        <div class="card__body">
+          <table class="votetbl">
+            <thead><tr><th>In Favour</th><th>Opposed</th><th>Abstaining</th><th>Cast</th></tr></thead>
+            <tbody><tr><td>${t.favour}</td><td>${t.oppose}</td><td>${t.abstain}</td><td>${t.cast}</td></tr></tbody>
+          </table>
+          <div class="vote-members">${memberRows}</div>
+          ${castRow}
+        </div>
+      </section>`;
+  }
+
   // Linked subjects — each respects its own sensitivity gate.
   const linkedSubjects = (c.linkedSubjectIds || []).map((sid) => {
     const s = getSubject(sid);
@@ -335,6 +389,7 @@ export function renderCase(host, app, id) {
           <div class="card__title">Proceedings</div>
           <div class="card__body">${(c.entries || []).length ? `<ul class="timeline">${entryItems}</ul>` : entryItems}</div>
         </section>
+        ${voteBlock}
         ${rulingBlock}
       </div>
     </div>
@@ -356,6 +411,7 @@ export function renderCase(host, app, id) {
     remove: () => removeCase(app, c),
   };
   host.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => dispatch[b.dataset.act]()));
+  host.querySelectorAll('[data-vote]').forEach((b) => b.addEventListener('click', () => castVote(app, c, b.dataset.vote)));
 }
 
 // ===========================================================================
@@ -442,7 +498,7 @@ function openCreate(app) {
           upsertCase({
             id: newId('case'), ref, title, kind, clearance: clr, status: 'open', summary,
             respondentId: respId, respondentName: respId ? null : (respName || (respDept ? null : '[UNNAMED]')), respondentDept: respId ? null : (respDept || null),
-            panelIds: [], linkedSubjectIds: [], summons: [],
+            panelIds: [], votes: {}, linkedSubjectIds: [], summons: [],
             compartment: comp,
             entries: [{ id: newId('ent'), ts: now, by: actor.designation, type: 'filing', text: `Case opened by ${actor.designation}.` }],
             ruling: null, createdBy: actor.designation, createdAt: now, updatedAt: now,

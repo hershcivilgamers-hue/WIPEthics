@@ -11,8 +11,9 @@ import {
   ORGS, RANKS, STATUS_ORDER, CLEARANCE_ORDER, CLEARANCES, STRIKE_LIMIT,
   rankUp, rankDown, clearanceForRank,
   TRAINING_CATEGORY, TRAINING_CURRENCY, trainingCurrency, trainingExpiry,
+  PERSONNEL_TAGS_SETTING_ID, normalizeTagCatalog,
 } from '../constants.js';
-import { users, getUser, upsertUser, promoReqs, newId, applyServerSnapshot, trainings, getTraining } from '../storage.js';
+import { users, getUser, upsertUser, promoReqs, newId, applyServerSnapshot, trainings, getTraining, getSetting } from '../storage.js';
 import {
   canEditPersonnel, canSetClearance, canSetRank, canIssueStrike,
   canDeletePersonnel, canPromote, canDemote, accessLevel, isCL5, canManageOrg, canManageTraining,
@@ -26,6 +27,21 @@ import {
 
 // Roster filter state, preserved across navigation.
 const filter = { q: '', status: '', clearance: '' };
+
+// --- Personnel tags ---------------------------------------------------------
+function tagCatalog() {
+  const rec = getSetting(PERSONNEL_TAGS_SETTING_ID);
+  return normalizeTagCatalog(rec && rec.data);
+}
+// Render a user's assigned tags as chips (ignores ids no longer in the catalogue).
+function tagChips(u, { compact = false } = {}) {
+  const cat = tagCatalog();
+  const held = (Array.isArray(u.tags) ? u.tags : [])
+    .map((id) => cat.find((t) => t.id === id))
+    .filter(Boolean);
+  if (!held.length) return '';
+  return `<span class="tag-chips${compact ? ' tag-chips--compact' : ''}">${held.map((t) => `<span class="badge tag-badge tag-badge--${esc(t.color)}">${esc(t.label)}</span>`).join('')}</span>`;
+}
 
 // --- Shared mutation helper -------------------------------------------------
 // Applies a change with optimistic conflict detection (version stamps). If the
@@ -82,7 +98,7 @@ export function renderList(host, app, org) {
   const rows = roster.length ? roster.map((u) => `
     <tr data-id="${esc(u.id)}" tabindex="0">
       <td class="mono">${esc(u.designation)}</td>
-      <td class="cell-name">${esc(u.codename)}</td>
+      <td class="cell-name">${esc(u.codename)}${tagChips(u, { compact: true })}</td>
       <td>${esc(u.rank || '\u2014')}</td>
       <td>${clearanceBadge(u.clearance)}</td>
       <td>${statusBadge(u.status)}</td>
@@ -163,6 +179,7 @@ export function renderDossier(host, app, id) {
     clearance: canSetClearance(actor, u, 'CL3') || isCL5(actor),
     strike: canIssueStrike(actor, u),
     note: canEditPersonnel(actor, u),
+    tags: canEditPersonnel(actor, u),
     leave: canEditPersonnel(actor, u),
     del: canDeletePersonnel(actor, u),
     // Reset an operator's sign-in passphrase: a manager with a stake, and never
@@ -187,6 +204,7 @@ export function renderDossier(host, app, id) {
     <div class="kv"><span class="kv__k">Operator ID</span><span class="kv__v mono">${full ? esc(u.username) : redacted(8)}</span></div>
     <div class="kv"><span class="kv__k">Account</span><span class="kv__v">${accountBadge(u.accountStatus)}</span></div>
     <div class="kv"><span class="kv__k">Record updated</span><span class="kv__v">${fmtDateTime(u.updatedAt)}</span></div>
+    ${tagChips(u) ? `<div class="kv"><span class="kv__k">Tags</span><span class="kv__v">${tagChips(u)}</span></div>` : ''}
   `;
 
   const serviceRecord = nameOnly ? '' : sectionService(u);
@@ -237,6 +255,7 @@ export function renderDossier(host, app, id) {
       ${acts.strike ? '<button class="btn btn--sm" data-act="strike">Add strike</button>' : ''}
       ${acts.leave ? `<button class="btn btn--sm" data-act="leave">${onLeave ? 'Return from leave' : 'Place on leave'}</button>` : ''}
       ${acts.note ? '<button class="btn btn--sm" data-act="note">Add note</button>' : ''}
+      ${acts.tags ? '<button class="btn btn--sm" data-act="tags">Manage tags</button>' : ''}
       ${acts.del ? '<button class="btn btn--sm btn--danger" data-act="delete">Remove</button>' : ''}
     </div>` : ''}
 
@@ -262,6 +281,7 @@ export function renderDossier(host, app, id) {
 
   const dispatch = {
     edit: () => openEdit(app, u),
+    tags: () => openTags(app, u),
     clearance: () => openClearance(app, u),
     passphrase: () => openPassphrase(app, u),
     strike: () => openStrike(app, u),
@@ -562,6 +582,43 @@ function sectionNotes(u, full) {
 function fieldSelect(id, label, options, selected) {
   const opts = options.map((o) => `<option value="${esc(o)}" ${o === selected ? 'selected' : ''}>${esc(o)}</option>`).join('');
   return `<div class="field"><label>${esc(label)}</label><select id="${id}">${opts}</select></div>`;
+}
+
+// Assign catalogue tags to an operator via checkboxes.
+function openTags(app, u) {
+  const cat = tagCatalog();
+  if (!cat.length) {
+    toast('No tags defined yet. Create them in Administration \u2192 Personnel Tags.', 'info');
+    return;
+  }
+  const held = new Set(Array.isArray(u.tags) ? u.tags : []);
+  const body = `
+    <p class="modal__message">Assign tags to ${esc(u.designation)}. Tags are defined in Administration.</p>
+    <div class="tag-pick">
+      ${cat.map((t) => `
+        <label class="check-line">
+          <input type="checkbox" value="${esc(t.id)}" ${held.has(t.id) ? 'checked' : ''} />
+          <span class="badge tag-badge tag-badge--${esc(t.color)}">${esc(t.label)}</span>
+        </label>`).join('')}
+    </div>`;
+  openModal({
+    title: `Tags \u2014 ${u.designation}`,
+    body,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Save tags', tone: 'primary', onClick: (c, d) => {
+          const chosen = [...d.querySelectorAll('input[type="checkbox"]:checked')].map((x) => x.value);
+          // Keep only ids that exist in the catalogue, preserving catalogue order.
+          const next = cat.filter((t) => chosen.includes(t.id)).map((t) => t.id);
+          mutate(app, u.id, u.version, (rec) => {
+            rec.tags = next;
+            addEvent(rec, 'edit', `Tags updated (${next.length ? cat.filter((t) => next.includes(t.id)).map((t) => t.label).join(', ') : 'none'}).`);
+          }, { action: 'SET_TAGS', detail: `Tags updated on ${u.designation}.` });
+          c();
+          toast('Tags updated.', 'success');
+        } },
+    ],
+  });
 }
 
 function openEdit(app, u) {

@@ -40,6 +40,7 @@ export function redactUser(actor, user) {
     deleted: !!user.deleted,
     deletedAt: user.deletedAt ?? null,
     accessLevel: level,
+    tags: Array.isArray(user.tags) ? user.tags : [],
   };
 
   if (level === 'full') {

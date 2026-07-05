@@ -11,12 +11,12 @@
 import {
   SUBJECT_CLASS, SUBJECT_CLASS_ORDER, THREAT_LEVELS, THREAT_ORDER,
   SUBJECT_STATUS, SUBJECT_STATUS_ORDER, CLEARANCE_ORDER, CLEARANCES,
-  ORGS, ORG_ORDER, clearanceWeight,
+  ORGS, ORG_ORDER, clearanceWeight, TARGET_AUTH, targetAuthState,
 } from '../constants.js';
-import { subjects, getSubject, upsertSubject, compartments, getCompartment, newId } from '../storage.js';
+import { subjects, getSubject, upsertSubject, compartments, getCompartment, newId, upsertCase } from '../storage.js';
 import {
   canViewSubject, canManageSubject, canClassifySubjectAt, canManageOrg,
-  isCL5, readIntoCompartment,
+  isCL5, readIntoCompartment, canManageTribunal,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { exportSubject } from '../export.js';
@@ -233,6 +233,24 @@ export function renderSubject(host, app, id) {
   const canManage = canManageSubject(actor, s);
   const logs = s.logs || [];
 
+  // Target authorisation banner + Ethics decision controls.
+  const authState = targetAuthState(s);
+  const canDecide = canManageTribunal(actor);
+  let authBanner = '';
+  if (authState === 'pending') {
+    authBanner = `<div class="ntk-banner" style="border-color:var(--warn)">
+      <strong>Pending Ethics authorisation.</strong> This Target was requested by
+      <span class="mono">${esc((s.authorization && s.authorization.requestedBy) || 'surveillance')}</span>
+      and is <em>not</em> authorised for termination until an Ethics Committee member signs off.
+      ${canDecide ? '<div class="actionbar" style="margin-top:8px"><button class="btn btn--sm btn--danger" data-act="auth-approve">Authorise termination</button><button class="btn btn--sm btn--ghost" data-act="auth-refuse">Refuse</button></div>' : ''}
+    </div>`;
+  } else if (authState === 'authorised') {
+    authBanner = `<div class="ntk-banner" style="border-color:var(--bad)">
+      <strong>Authorised for termination.</strong> Signed off by
+      <span class="mono">${esc((s.authorization && s.authorization.by) || 'Ethics Committee')}</span>${s.authorization && s.authorization.at ? ` on ${fmtDate(s.authorization.at)}` : ''}.
+    </div>`;
+  }
+
   const logItems = logs.length ? logs.map((l) => `
     <li class="tl__item">
       <span class="tl__dot tl__dot--${esc(l.type)}"></span>
@@ -264,6 +282,7 @@ export function renderSubject(host, app, id) {
     </header>
 
     ${caveatBanner(s)}
+    ${authBanner}
 
     ${canManage ? `<div class="actionbar">
       <button class="btn btn--sm" data-act="log">Add log entry</button>
@@ -325,6 +344,8 @@ export function renderSubject(host, app, id) {
     edit: () => openEdit(app, s),
     close: () => closeSubject(app, s),
     remove: () => removeSubject(app, s),
+    'auth-approve': () => decideTarget(app, s, true),
+    'auth-refuse': () => decideTarget(app, s, false),
   };
   host.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => dispatch[b.dataset.act]()));
   host.querySelectorAll('[data-img]').forEach((b) => b.addEventListener('click', () => openLightbox(app, s, b.dataset.img)));
@@ -452,7 +473,8 @@ function openCreate(app) {
 
   const body = `
     <p class="modal__message">Open a surveillance record. Sensitivity cannot exceed your own clearance.</p>
-    ${selectField('su-kind', 'Classification', SUBJECT_CLASS_ORDER, 'poi', (k) => SUBJECT_CLASS[k].label)}
+    ${selectField('su-kind', 'Classification', (canManageTribunal(actor) ? SUBJECT_CLASS_ORDER : ['poi']), 'poi', (k) => SUBJECT_CLASS[k].label)}
+    ${canManageTribunal(actor) ? '<div class="field__hint">A Target is a termination authorisation. Creating one here records your Ethics authorisation. Others must open a Person of Interest and request conversion.</div>' : ''}
     <div class="field"><label>Reference</label><input id="su-ref" type="text" placeholder="e.g. POI-2240" /></div>
     <div class="field"><label>Alias / designation</label><input id="su-alias" type="text" placeholder="e.g. Courier" /></div>
     ${selectField('su-org', 'Organisation', orgs, orgs[0], (o) => ORGS[o].name)}
@@ -488,11 +510,16 @@ function openCreate(app) {
           if (!canClassifySubjectAt(actor, clr)) { err.textContent = 'Sensitivity cannot exceed your own clearance.'; err.hidden = false; return; }
           if (subjects().some((x) => !x.deleted && x.ref.toLowerCase() === ref.toLowerCase())) { err.textContent = 'That reference is already in use.'; err.hidden = false; return; }
 
+          if (kind === 'target' && !canManageTribunal(actor)) { err.textContent = 'Only an Ethics Committee member may open a Target. Open a Person of Interest and request conversion.'; err.hidden = false; return; }
+
           const now = new Date().toISOString();
+          const authorization = kind === 'target'
+            ? { status: 'authorised', by: actor.designation, at: now, requestedBy: actor.designation, note: 'Opened directly by Ethics member.' }
+            : null;
           upsertSubject({
             id: newId('sub'), ref, alias, realName: '[UNIDENTIFIED]', kind, org,
             threat, clearance: clr, status: 'active', summary, lastKnownLocation: loc,
-            compartment: comp, images: [],
+            compartment: comp, images: [], authorization,
             logs: [{ id: newId('log'), ts: now, by: actor.designation, type: 'intel', text: `Record opened by ${actor.designation}.` }],
             createdBy: actor.designation, createdAt: now, updatedAt: now,
             version: 1, deleted: false, deletedAt: null,
@@ -617,17 +644,128 @@ function openReclassify(app, s) {
 }
 
 async function closeSubject(app, s) {
-  const ok = await confirmDialog({
-    title: 'Close watch',
-    message: `Close the surveillance record for ${s.ref} \u00b7 ${s.alias}? It stays on file and can be reopened.`,
-    confirmLabel: 'Close watch',
+  // Targets close plainly (their lifecycle is governed by authorisation, below).
+  // A Person of Interest closes with an OUTCOME.
+  if (s.kind !== 'poi') {
+    const ok = await confirmDialog({
+      title: 'Close watch',
+      message: `Close the surveillance record for ${s.ref} \u00b7 ${s.alias}? It stays on file and can be reopened.`,
+      confirmLabel: 'Close watch',
+    });
+    if (!ok) return;
+    mutate(app, s.id, s.version, (rec) => {
+      rec.status = 'closed';
+      addLog(rec, 'status', app.user.designation, 'Watch closed.');
+    }, { action: 'CLOSE_SUBJECT', detail: `${s.ref} watch closed.` });
+    toast('Watch closed.', 'success');
+    return;
+  }
+
+  const canEthics = canManageTribunal(app.user);
+  const body = `
+    <p class="modal__message">Record the outcome of the watch on <strong>${esc(s.alias)}</strong> (${esc(s.ref)}).</p>
+    <label class="radio-row"><input type="radio" name="poi-outcome" value="absolved" checked /> <span><strong>Absolved</strong> — no further action. The watch is closed.</span></label>
+    <label class="radio-row"><input type="radio" name="poi-outcome" value="summoned" /> <span><strong>Summoned to Tribunal</strong> — closes the watch and opens an Ethics case naming the subject.</span></label>
+    <label class="radio-row"><input type="radio" name="poi-outcome" value="assassination" /> <span><strong>Assassination</strong> — converts the subject into a Target for termination. <em>Requires authorisation by an Ethics Committee member.</em></span></label>
+    <div class="field" style="margin-top:10px"><label>Note <span class="muted-text">(recorded on the file)</span></label><textarea id="poi-note" rows="2" placeholder="Reason / context for the outcome\u2026"></textarea></div>
+    <div id="poi-err" class="auth__error" hidden></div>
+  `;
+  openModal({
+    title: `Close watch \u2014 ${s.ref}`,
+    wide: true,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Record outcome', tone: 'primary', onClick: (c, d) => {
+          const outcome = (d.querySelector('input[name="poi-outcome"]:checked') || {}).value;
+          const note = d.querySelector('#poi-note').value.trim();
+          const err = d.querySelector('#poi-err');
+          err.hidden = true;
+
+          if (outcome === 'absolved') {
+            mutate(app, s.id, s.version, (rec) => {
+              rec.status = 'closed';
+              addLog(rec, 'status', app.user.designation, `Absolved${note ? `: ${note}` : '.'} No further action.`);
+            }, { action: 'CLOSE_SUBJECT', detail: `${s.ref} absolved.` });
+            c(); toast('Subject absolved; watch closed.', 'success');
+            return;
+          }
+
+          if (outcome === 'summoned') {
+            // Close the watch and open a linked Ethics case naming the subject.
+            const n = subjects().filter((x) => (x.ref || '').startsWith('EC-CASE-')).length; // cheap unique-ish
+            const caseRef = `EC-CASE-${String(Date.now()).slice(-4)}`;
+            const now = new Date().toISOString();
+            upsertCase({
+              id: newId('case'), ref: caseRef, title: `Tribunal — ${s.alias}`, kind: 'tribunal',
+              clearance: s.clearance, status: 'open',
+              summary: `Referred from surveillance ${s.ref}.${note ? ` ${note}` : ''}`,
+              respondentId: null, respondentName: s.alias, respondentDept: null,
+              panelIds: [], votes: {}, linkedSubjectIds: [s.id], summons: [],
+              entries: [{ id: newId('ce'), ts: now, by: app.user.designation, type: 'filing', text: `Case opened from surveillance referral ${s.ref}.` }],
+              ruling: null, compartment: s.compartment || null,
+              createdBy: app.user.designation, createdAt: now, updatedAt: now,
+              version: 1, deleted: false, deletedAt: null,
+            });
+            logAction(app.user, 'OPEN_CASE', `Opened ${caseRef} from surveillance ${s.ref}.`);
+            mutate(app, s.id, s.version, (rec) => {
+              rec.status = 'closed';
+              addLog(rec, 'status', app.user.designation, `Summoned to Ethics tribunal (${caseRef})${note ? `: ${note}` : '.'}`);
+            }, { action: 'CLOSE_SUBJECT', detail: `${s.ref} summoned to tribunal.` });
+            c(); toast(`Watch closed; case ${caseRef} opened.`, 'success');
+            app.navigate(`#/case/${caseRef}`);
+            return;
+          }
+
+          // Assassination -> request conversion to a Target, pending Ethics sign-off.
+          requestTargetConversion(app, s, note, c);
+        } },
+    ],
   });
-  if (!ok) return;
+}
+
+// Convert a POI into a Target. The record is flipped to a target but flagged
+// PENDING — the server will not accept it as a live target until an Ethics
+// member authorises. If the requester is themselves an Ethics member they may
+// authorise in the same step.
+function requestTargetConversion(app, s, note, closeOuter) {
+  const iAmEthics = canManageTribunal(app.user);
+  const now = new Date().toISOString();
   mutate(app, s.id, s.version, (rec) => {
-    rec.status = 'closed';
-    addLog(rec, 'status', app.user.designation, 'Watch closed.');
-  }, { action: 'CLOSE_SUBJECT', detail: `${s.ref} watch closed.` });
-  toast('Watch closed.', 'success');
+    rec.kind = 'target';
+    rec.status = 'active';
+    rec.threat = 'critical' in THREAT_LEVELS ? 'critical' : rec.threat;
+    rec.authorization = iAmEthics
+      ? { status: 'authorised', by: app.user.designation, at: now, requestedBy: app.user.designation, note: note || '' }
+      : { status: 'pending', by: null, at: null, requestedBy: app.user.designation, requestedAt: now, note: note || '' };
+    addLog(rec, 'status', app.user.designation, iAmEthics
+      ? `Converted to Target and authorised for termination${note ? `: ${note}` : '.'}`
+      : `Conversion to Target requested — pending Ethics authorisation${note ? `: ${note}` : '.'}`);
+  }, iAmEthics
+    ? { action: 'AUTHORISE_TARGET', detail: `${s.ref} converted to Target and authorised.` }
+    : { action: 'EDIT_SUBJECT', detail: `${s.ref} conversion to Target requested.` });
+  if (closeOuter) closeOuter();
+  toast(iAmEthics ? 'Target authorised.' : 'Conversion requested — awaiting Ethics authorisation.', iAmEthics ? 'success' : 'info');
+}
+
+// Ethics authorisation / refusal of a pending Target.
+function decideTarget(app, s, approve) {
+  if (!canManageTribunal(app.user)) { toast('Only an Ethics Committee member may decide this.', 'error'); return; }
+  const now = new Date().toISOString();
+  if (approve) {
+    mutate(app, s.id, s.version, (rec) => {
+      rec.authorization = { ...(rec.authorization || {}), status: 'authorised', by: app.user.designation, at: now };
+      addLog(rec, 'status', app.user.designation, 'Target authorised for termination by Ethics Committee.');
+    }, { action: 'AUTHORISE_TARGET', detail: `${s.ref} authorised for termination.` });
+    toast('Target authorised.', 'success');
+  } else {
+    mutate(app, s.id, s.version, (rec) => {
+      rec.authorization = { ...(rec.authorization || {}), status: 'refused', by: app.user.designation, at: now };
+      rec.kind = 'poi';
+      rec.status = 'active';
+      addLog(rec, 'status', app.user.designation, 'Target authorisation refused by Ethics Committee; reverted to Person of Interest.');
+    }, { action: 'REFUSE_TARGET', detail: `${s.ref} target authorisation refused.` });
+    toast('Authorisation refused; reverted to POI.', 'info');
+  }
 }
 
 async function removeSubject(app, s) {

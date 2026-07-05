@@ -144,6 +144,22 @@ export const SUBJECT_CLASS = {
 };
 export const SUBJECT_CLASS_ORDER = ['poi', 'target'];
 
+// A Target is a termination authorisation, so it carries an authorisation state.
+// A target is only "live" once an Ethics Committee member has authorised it;
+// until then it is pending and must not be acted on.
+export const TARGET_AUTH = {
+  pending:  { code: 'pending',  label: 'Pending Ethics Authorisation', tone: 'warn' },
+  authorised: { code: 'authorised', label: 'Authorised for Termination', tone: 'bad' },
+  refused:  { code: 'refused',  label: 'Authorisation Refused', tone: 'muted' },
+};
+// Returns the authorisation state of a subject record (POIs have none).
+export function targetAuthState(subject) {
+  if (!subject || subject.kind !== 'target') return null;
+  const a = subject.authorization;
+  if (a && a.status) return a.status;
+  return 'pending';
+}
+
 // --- Surveillance: threat assessment ----------------------------------------
 export const THREAT_LEVELS = {
   low:      { code: 'low',      label: 'Low',      tone: 'ok',    weight: 1 },
@@ -241,6 +257,23 @@ export const ACTIVITY_REQ_DEFAULT = {
 // into a safe, complete requirements object, falling back to the defaults for
 // any missing or malformed field.
 export const ACTIVITY_REQ_SETTING_ID = 'activity-requirements';
+
+// --- Personnel tags ---------------------------------------------------------
+// A managed vocabulary of role/attribute labels (e.g. "Development Manager")
+// defined in Administration and assigned to personnel. The catalogue lives in
+// one settings row; each user carries an array of tag ids in `user.tags`.
+export const PERSONNEL_TAGS_SETTING_ID = 'personnel-tags';
+export const TAG_COLORS = ['slate', 'cyan', 'green', 'amber', 'violet', 'red'];
+// Normalise a stored catalogue into a clean [{id,label,color}] list.
+export function normalizeTagCatalog(data) {
+  const list = (data && Array.isArray(data.tags)) ? data.tags : [];
+  const seen = new Set();
+  return list
+    .filter((t) => t && typeof t.id === 'string' && typeof t.label === 'string' && t.label.trim())
+    .filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)))
+    .map((t) => ({ id: t.id, label: t.label.trim(), color: TAG_COLORS.includes(t.color) ? t.color : 'slate' }));
+}
+
 export function mergeActivityReqs(data) {
   const d = data || {};
   const num = (v, fb) => (Number.isFinite(+v) && +v >= 0 ? +v : fb);
@@ -403,6 +436,28 @@ export function tryoutStrikeTotal(strikes) {
 }
 
 // Count votes on a candidate -> { yes, no, total, majorityYes }.
+// --- Ethics committee: deliberative votes -----------------------------------
+// For non-tribunal matters (an inquiry, or a vote on whether to open one) the
+// seated panel records a position. Formal tribunals are decided by a ruling,
+// not a poll, so voting is offered for reviews and inquiries.
+export const CASE_VOTE = {
+  favour:  { code: 'favour',  label: 'In Favour',  tone: 'ok' },
+  oppose:  { code: 'oppose',  label: 'Opposed',    tone: 'bad' },
+  abstain: { code: 'abstain', label: 'Abstaining', tone: 'muted' },
+};
+export const CASE_VOTE_ORDER = ['favour', 'oppose', 'abstain'];
+export function tallyCaseVotes(votes) {
+  const vals = Object.values(votes || {});
+  const favour = vals.filter((v) => v === 'favour').length;
+  const oppose = vals.filter((v) => v === 'oppose').length;
+  const abstain = vals.filter((v) => v === 'abstain').length;
+  return { favour, oppose, abstain, cast: vals.length, carried: favour > oppose && favour > 0 };
+}
+// Voting applies to deliberative (non-tribunal) matters.
+export function caseTakesVote(kind) {
+  return kind === 'inquiry' || kind === 'review';
+}
+
 export function tallyVotes(votes) {
   const vals = Object.values(votes || {});
   const yes = vals.filter((v) => v === 'yes').length;

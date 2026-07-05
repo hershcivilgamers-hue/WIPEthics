@@ -102,3 +102,11 @@
 .tl__dot--testimony { background: var(--ok); }
 .tl__dot--motion { background: var(--amber); }
 .tl__dot--ruling { background: var(--bad); }
+
+/* --- Record of the Vote ---------------------------------------------------- */
+.votetbl { width: 100%; border-collapse: collapse; margin-bottom: var(--s3); }
+.votetbl th { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); text-align: center; padding: 4px 6px; border-bottom: 1px solid var(--line); font-weight: 600; }
+.votetbl td { text-align: center; padding: 8px 6px; font-family: var(--mono); font-size: 20px; }
+.vote-members { display: flex; flex-direction: column; margin: var(--s2) 0; }
+.vote-cast { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-top: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--line); }
+.vote-cast__label { font-size: 12px; color: var(--text-3); margin-right: var(--s1); }
