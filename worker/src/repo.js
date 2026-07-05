@@ -70,10 +70,16 @@ export function makeD1Repo(DB) {
 
     // Optimistic update: only succeeds if the stored version still matches.
     // Returns the number of rows changed (0 means a concurrent write won).
+    // Collections whose schema has no `version` column (e.g. settings) update
+    // by id alone — they are low-contention and can't use the version guard.
     async update(collection, record, expectedVersion) {
       const cols = COLUMNS[collection].filter((c) => c !== 'id');
       const setClause = cols.map((c) => `${c} = ?`).join(', ');
       const values = cols.map((c) => rowValue(c, record));
+      if (!COLUMNS[collection].includes('version')) {
+        const res = await DB.prepare(`UPDATE ${collection} SET ${setClause} WHERE id = ?`).bind(...values, record.id).run();
+        return res?.meta?.changes ?? 0;
+      }
       const sql = `UPDATE ${collection} SET ${setClause} WHERE id = ? AND version = ?`;
       const res = await DB.prepare(sql).bind(...values, record.id, expectedVersion).run();
       return res?.meta?.changes ?? 0;
