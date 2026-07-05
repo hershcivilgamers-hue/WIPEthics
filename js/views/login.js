@@ -3,7 +3,7 @@
 // =============================================================================
 
 import { CONFIG } from '../config.js';
-import { ORGS, ORG_ORDER } from '../constants.js';
+import { ORGS, ORG_ORDER, RANKS, clearanceForRank } from '../constants.js';
 import { users, upsertUser, newId, applyServerSnapshot } from '../storage.js';
 import { verifyPassword, makeCredential } from '../crypto.js';
 import { startSession, setServerUser } from '../state.js';
@@ -162,13 +162,21 @@ function openRegister(app) {
     .map((o) => `<option value="${o}">${esc(ORGS[o].name)}</option>`)
     .join('');
 
+  const firstOrg = ORG_ORDER.filter((o) => o !== 'command')[0];
+  const rankOptionsFor = (o) => (RANKS[o] || []).map((r) => {
+    const clr = clearanceForRank(o, r);
+    return `<option value="${esc(r)}">${esc(r)}${clr ? ` \u2014 ${esc(clr)}` : ''}</option>`;
+  }).join('');
+
   const body = `
     <p class="modal__message">
-      Submit a request for access. Command (CL5) reviews and assigns your
-      clearance before the account is activated.
+      Submit a request for access. Command (CL5) reviews your requested rank and
+      assigns your clearance before the account is activated.
     </p>
     <div class="field"><label>Preferred codename</label><input id="reg-codename" type="text" placeholder="e.g. Sentinel" /></div>
     <div class="field"><label>Organisation</label><select id="reg-org">${orgOptions}</select></div>
+    <div class="field"><label>Rank sought</label><select id="reg-rank">${rankOptionsFor(firstOrg)}</select></div>
+    <div class="field__hint">Your requested rank sets the clearance you're asking for. Command may adjust it on approval.</div>
     <div class="field"><label>Operator ID</label><input id="reg-username" type="text" placeholder="login name" spellcheck="false" /></div>
     <div class="field"><label>Passphrase</label><input id="reg-password" type="password" placeholder="choose a passphrase" /></div>
     <div id="reg-error" class="auth__error" hidden></div>
@@ -185,6 +193,7 @@ function openRegister(app) {
         onClick: async (close, dlg) => {
           const codename = dlg.querySelector('#reg-codename').value.trim();
           const org = dlg.querySelector('#reg-org').value;
+          const requestedRank = dlg.querySelector('#reg-rank').value || null;
           const username = dlg.querySelector('#reg-username').value.trim();
           const password = dlg.querySelector('#reg-password').value;
           const err = dlg.querySelector('#reg-error');
@@ -200,7 +209,7 @@ function openRegister(app) {
           // pending account for Command to approve later. No local write.
           if (api.serverMode()) {
             try {
-              await api.register({ codename, username, password, requestedOrg: org });
+              await api.register({ codename, username, password, requestedOrg: org, requestedRank });
             } catch (e) {
               err.textContent = e && e.status === 409
                 ? 'That operator ID is already in use.'
@@ -236,8 +245,9 @@ function openRegister(app) {
             passwordHash: hash,
             accountStatus: 'pending',
             requestedOrg: org,
+            requestedRank,
             awards: [], strikes: [], leave: null, notes: [],
-            events: [{ id: newId('evt'), date: now, type: 'registration', text: `Access request submitted for ${ORGS[org].name}.` }],
+            events: [{ id: newId('evt'), date: now, type: 'registration', text: `Access request submitted for ${ORGS[org].name}${requestedRank ? ` \u2014 rank sought: ${requestedRank}` : ''}.` }],
             createdAt: now, updatedAt: now, version: 1, deleted: false, deletedAt: null,
           });
           logAction(null, 'REGISTRATION', `New access request: ${codename} \u2192 ${ORGS[org].short}.`);
@@ -247,6 +257,13 @@ function openRegister(app) {
       },
     ],
   });
+
+  // Keep the rank-sought list in step with the chosen organisation.
+  const regOrg = dialog.querySelector('#reg-org');
+  const regRank = dialog.querySelector('#reg-rank');
+  if (regOrg && regRank) {
+    regOrg.addEventListener('change', () => { regRank.innerHTML = rankOptionsFor(regOrg.value); });
+  }
 
   return dialog;
 }

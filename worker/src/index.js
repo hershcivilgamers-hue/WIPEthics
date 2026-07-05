@@ -175,7 +175,7 @@ async function login(request, repo, env) {
 
 async function register(request, repo, env) {
   const body = await request.json().catch(() => ({}));
-  const { codename, username, password, requestedOrg } = body;
+  const { codename, username, password, requestedOrg, requestedRank } = body;
   if (!codename || !username || !password || !requestedOrg) {
     return json({ error: 'Codename, username, password and organisation are required.' }, 400, env);
   }
@@ -198,11 +198,12 @@ async function register(request, repo, env) {
     passwordHash: hash,
     accountStatus: 'pending',
     requestedOrg,
+    requestedRank: requestedRank || null,
     awards: [], strikes: [], promoChecks: [], leave: null, notes: [], events: [],
     createdAt: now, updatedAt: now, version: 1, deleted: false, deletedAt: null,
   };
   await repo.insert('users', record);
-  await repo.addAudit({ id: uid(), ts: now, actor: codename, action: 'REGISTRATION', detail: `Access requested for ${requestedOrg}.` });
+  await repo.addAudit({ id: uid(), ts: now, actor: codename, action: 'REGISTRATION', detail: `Access requested for ${requestedOrg}${requestedRank ? ` (rank sought: ${requestedRank})` : ''}.` });
   return json({ ok: true }, 201, env);
 }
 

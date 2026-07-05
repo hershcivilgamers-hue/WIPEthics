@@ -8,7 +8,7 @@
 //   • System        — backend status, dataset export, full reset.
 // =============================================================================
 
-import { ORGS, RANKS, CLEARANCE_ORDER, CLEARANCES, rankUp, ACTIVITY_REQ_SETTING_ID, ACTIVITY_REQ_DEFAULT, mergeActivityReqs } from '../constants.js';
+import { ORGS, RANKS, CLEARANCE_ORDER, CLEARANCES, rankUp, clearanceForRank, ACTIVITY_REQ_SETTING_ID, ACTIVITY_REQ_DEFAULT, mergeActivityReqs } from '../constants.js';
 import {
   users, directives, subjects, cases, getUser, upsertUser, getDirective, upsertDirective,
   getSubject, upsertSubject, getCase, upsertCase, compartments, getCompartment, upsertCompartment,
@@ -92,7 +92,7 @@ function drawRegistrations(panel, app) {
     <div class="card req-card">
       <div class="req-card__main">
         <div class="req-card__name">${esc(u.codename)} <span class="mono req-card__id">${esc(u.designation)}</span></div>
-        <div class="req-card__meta">Requested ${orgTag(u.requestedOrg || u.org)} ${esc(ORGS[u.requestedOrg || u.org].name)} \u00b7 ${fmtDate(u.createdAt)} \u00b7 operator ID <span class="mono">${esc(u.username)}</span></div>
+        <div class="req-card__meta">Requested ${orgTag(u.requestedOrg || u.org)} ${esc(ORGS[u.requestedOrg || u.org].name)}${u.requestedRank ? ` \u00b7 rank sought <strong>${esc(u.requestedRank)}</strong>${clearanceForRank(u.requestedOrg || u.org, u.requestedRank) ? ` (${esc(clearanceForRank(u.requestedOrg || u.org, u.requestedRank))})` : ''}` : ''} \u00b7 ${fmtDate(u.createdAt)} \u00b7 operator ID <span class="mono">${esc(u.username)}</span></div>
       </div>
       <div class="req-card__actions">
         <button class="btn btn--primary btn--sm" data-approve="${esc(u.id)}">Approve</button>
@@ -111,10 +111,13 @@ function approve(app, id) {
   const ranks = RANKS[org] || [];
   const ceiling = CLEARANCES[app.user.clearance].weight;
   const allowed = CLEARANCE_ORDER.filter((c) => CLEARANCES[c].weight <= ceiling);
-  const rankOpts = ranks.map((r) => `<option value="${esc(r)}">${esc(r)}</option>`).join('');
-  const clrOpts = allowed.map((c) => `<option value="${c}">${esc(CLEARANCES[c].label)}</option>`).join('');
+  // Pre-select what the applicant asked for, when it's valid for this org.
+  const wantRank = ranks.includes(u.requestedRank) ? u.requestedRank : ranks[0];
+  const wantClr = clearanceForRank(org, wantRank);
+  const rankOpts = ranks.map((r) => `<option value="${esc(r)}" ${r === wantRank ? 'selected' : ''}>${esc(r)}</option>`).join('');
+  const clrOpts = allowed.map((c) => `<option value="${c}" ${c === wantClr ? 'selected' : ''}>${esc(CLEARANCES[c].label)}</option>`).join('');
 
-  openModal({
+  const dlg = openModal({
     title: `Approve \u2014 ${u.codename}`,
     body: `
       <p class="modal__message">Confirm organisation, assign a rank and clearance. A permanent designation is issued on approval.</p>
@@ -150,6 +153,25 @@ function approve(app, id) {
         } },
     ],
   });
+
+  // Keep the rank list in step with the chosen organisation, and nudge the
+  // clearance to match the selected rank's tier.
+  const orgSel = dlg.querySelector('#ap-org');
+  const rankSel = dlg.querySelector('#ap-rank');
+  const clrSel = dlg.querySelector('#ap-clr');
+  const syncClr = () => {
+    if (!clrSel || !rankSel) return;
+    const want = clearanceForRank(orgSel ? orgSel.value : org, rankSel.value);
+    if (want && [...clrSel.options].some((o) => o.value === want)) clrSel.value = want;
+  };
+  if (orgSel && rankSel) {
+    orgSel.addEventListener('change', () => {
+      const list = RANKS[orgSel.value] || [];
+      rankSel.innerHTML = list.map((r) => `<option value="${esc(r)}">${esc(r)}</option>`).join('');
+      syncClr();
+    });
+    rankSel.addEventListener('change', syncClr);
+  }
 }
 
 async function reject(app, id) {
