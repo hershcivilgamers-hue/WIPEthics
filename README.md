@@ -117,6 +117,175 @@ dossier to see the redaction bars in action.
 
 ---
 
+## Deploying to live & resetting the database
+
+This covers the Cloudflare Worker + D1 backend that turns CAIRO.AIC into a real
+multi-user system. Everything here is run from **PowerShell**, and *folders
+matter* — one command runs from the **project root** (the folder containing both
+`tools\` and `worker\`), and the rest run from inside **`worker\`**. Each block
+below says which. If a command errors, stop and fix that before running the next.
+
+Two facts that explain why a "reset" needs care:
+
+- `schema.sql` uses `CREATE TABLE IF NOT EXISTS`, so re-running it never wipes
+  anything — it only creates tables that are missing.
+- `seed.sql` uses `INSERT OR REPLACE`, so it overwrites the demo rows by id but
+  leaves anything you added untouched.
+
+So *starting genuinely fresh* means an explicit **drop** first (`reset.sql`),
+then rebuild. Re-running schema/seed alone is **not** a reset.
+
+### Pushing updates to GitHub (the everyday workflow)
+
+You do **not** need to re-download and unpack the whole zip for every change.
+Once the project is a Git repository linked to GitHub, updating the live site is
+three commands from the **project root**:
+
+```
+git add -A
+git commit -m "short note describing the change"
+git push
+```
+
+`git add -A` stages everything you changed, `git commit` records it with a note,
+and `git push` sends it to GitHub — Pages redeploys the site within a minute or
+so. Then hard-refresh the site with **Ctrl+F5**. That's the entire loop for any
+front-end edit.
+
+Two situations worth spelling out:
+
+- **You edited files yourself** (in VS Code, Notepad, etc.) — just run the three
+  commands above. Git figures out what changed; you don't list files by hand.
+  To see what will be sent first, run `git status`.
+
+- **You received a new build from me as a zip** — extract it *over* your existing
+  project folder, letting it overwrite, then run the same three commands. The
+  hidden `.git` folder (your repository history and GitHub link) is **not** in
+  the zip, so overwriting never touches it — your connection to GitHub is
+  preserved. Only the files that actually differ get committed and pushed. If you
+  prefer to check first, `git status` after extracting shows exactly which files
+  the new build changed.
+
+If a push ever complains that the remote has changes you don't (rare, if you
+only edit in one place), run `git pull` first, then `git push` again.
+
+**First time only** — if the folder isn't a Git repository yet, set it up once:
+
+```
+git init
+git add -A
+git commit -m "CAIRO.AIC"
+git branch -M main
+git remote add origin https://github.com/<your-username>/<your-repo>.git
+git push -u origin main
+```
+
+After that one-time setup, every future update is just the three-command loop
+above. (Git will ask you to sign in to GitHub on the first push; it remembers
+after that.)
+
+### Which command changes what
+
+| You changed…                     | Run this                                            |
+| -------------------------------- | --------------------------------------------------- |
+| Front-end files (anything in `js/`, `styles/`, `index.html`) | `git push` — GitHub Pages redeploys the site. Hard-refresh with **Ctrl+F5**. |
+| Anything in `worker/` (Worker code, permission rules) | `npx wrangler deploy` from `worker\`, **plus** the site push. |
+| `schema.sql` (a new table/column) | `npx wrangler d1 execute cairo-aic --remote --file=./schema.sql` from `worker\`. |
+
+Most updates are just a site push. You only touch the database for the resets
+below or when a change note explicitly says the schema changed.
+
+### Always back up first
+
+Before any `reset.sql`, `schema.sql`, or `seed.sql` command against the live
+database — from `worker\`:
+
+```
+npx wrangler d1 export cairo-aic --remote --output="backup-before-reset.sql"
+```
+
+Restoring is the reverse:
+`npx wrangler d1 execute cairo-aic --remote --file="backup-before-reset.sql"`.
+
+### Reset to a CLEAN, EMPTY database (recommended for going live)
+
+This wipes everything and leaves a single Command / CL5 account that you create,
+with a passphrase only you know — no demo data.
+
+```
+# 1. From the PROJECT ROOT — generate your one account.
+#    Choose your own operator ID, passphrase (8+ chars), and codename.
+node tools/make_bootstrap_sql.mjs CMD-1 "choose-a-long-passphrase" "OVERSEER"
+
+# 2. Move into the worker folder for everything below.
+cd worker
+
+# 3. Back up the current database (see above).
+npx wrangler d1 export cairo-aic --remote --output="backup-before-reset.sql"
+
+# 4. Drop every table.
+npx wrangler d1 execute cairo-aic --remote --file=./reset.sql
+
+# 5. Rebuild the (empty) schema.
+npx wrangler d1 execute cairo-aic --remote --file=./schema.sql
+
+# 6. VERIFY the tables exist — the output must include "users".
+npx wrangler d1 execute cairo-aic --remote --command "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
+
+# 7. Load your single admin account.
+npx wrangler d1 execute cairo-aic --remote --file=./bootstrap.sql
+
+# 8. Confirm the API is up and locked — you want HTTP 401.
+curl.exe -i https://cairo-aic-api.hershcivilgamers.workers.dev/api/data
+```
+
+Then open the site, hard-refresh (**Ctrl+F5**), and sign in with the operator ID
+and passphrase from step 1. Change the passphrase from the top bar, then build
+your roster — approve people under **Administration → Registrations**, or create
+files directly. Once you're in, delete `worker\bootstrap.sql` (it's your
+credential). No site push or `wrangler deploy` is needed for a data reset — the
+code is unchanged; everyone is simply signed out and logs back in.
+
+> Why the bootstrap account is required: on an empty database anyone *can*
+> self-register, but every registration lands **pending with no clearance**, and
+> only an existing manager can approve it. With no accounts at all, there is no
+> manager — so you would be locked out. The one seeded Command account is the way
+> in.
+
+### Reset to the DEMONSTRATION data instead
+
+Same as above, but at the seed step load `seed.sql` rather than your bootstrap
+file — this gives you the full sample roster, cases, sources and demo logins:
+
+```
+cd worker
+npx wrangler d1 export cairo-aic --remote --output="backup-before-reset.sql"
+npx wrangler d1 execute cairo-aic --remote --file=./reset.sql
+npx wrangler d1 execute cairo-aic --remote --file=./schema.sql
+npx wrangler d1 execute cairo-aic --remote --file=./seed.sql
+```
+
+> **If you seed:** the demonstration accounts come back with their **known**
+> passphrases (listed above). Immediately sign in as the seeded Command CL5,
+> change its passphrase, create your own real Command file, then set a new
+> passphrase on — or suspend — every demo account. Never leave a demo passphrase
+> reachable once real members can sign in.
+
+### Troubleshooting
+
+- **`no such table: users`** — the schema wasn't built (or you're pointed at the
+  wrong database). Run step 5, then step 6 to confirm `users` appears, then
+  continue.
+- **`NOT NULL constraint failed` / `no such column`** — a table's shape doesn't
+  match the file being loaded. Re-run `reset.sql` then `schema.sql` from the
+  current build so table and data agree, then reload.
+- **`Cannot find module …make_bootstrap_sql.mjs`** — you ran the generator from
+  the wrong folder. It runs from the **project root**, not `worker\`.
+- **Wrong database** — `npx wrangler d1 list` should show `cairo-aic` with id
+  `7402770b-c4be-4066-8925-0a518b380855`.
+
+---
+
 ## How the rules work
 
 **Clearance tiers** (lowest to highest): CL3 → CL4·Junior → CL4·Senior → CL5.
