@@ -491,3 +491,13 @@
 .seg__btn { border: none; background: none; color: var(--text-3); padding: 5px 12px; border-radius: calc(var(--radius) - 2px); cursor: pointer; font: inherit; font-size: 12px; }
 .seg__btn:hover { color: var(--text); }
 .seg__btn.is-active { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+
+/* --- Organisation crest in page headers ------------------------------------ */
+.page-head__lead { display: flex; align-items: center; gap: var(--s4); }
+.org-crest {
+  width: 60px; height: 60px; flex: 0 0 auto; display: inline-block;
+  background-color: var(--text-2);
+  -webkit-mask: var(--crest) center / contain no-repeat;
+  mask: var(--crest) center / contain no-repeat;
+}
+@media (max-width: 640px) { .org-crest { width: 46px; height: 46px; } }

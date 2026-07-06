@@ -15,6 +15,7 @@
 // =============================================================================
 
 import { getUser, getSubject } from './storage.js';
+import { orgLogo } from './logos.js';
 import {
   OPERATION_KIND, OPERATION_STATUS, OPERATION_RESULT, OP_LOG_TYPE,
   INTEL_SOURCE_TYPE, INTEL_STATUS, INTEL_RELIABILITY, INTEL_CREDIBILITY,
@@ -163,8 +164,8 @@ const OMEGA_SEAL = sealSvg({ id: 'o1', top: 'MOBILE TASK FORCE \u03a9-1', topSiz
 const ETHICS_SEAL = sealSvg({ id: 'ec', top: 'ETHICS COMMITTEE', topSize: 8, banner: 'IN CONSCIENCE BOUND', motif: ETHICS_MOTIF });
 
 export function orgSeal(orgKey) {
-  if (orgKey === 'omega-1') return OMEGA_SEAL;
-  if (orgKey === 'ethics-committee') return ETHICS_SEAL;
+  const logo = orgLogo(orgKey);
+  if (logo) return `<img src="${logo}" alt="" width="88" height="88" style="display:block;object-fit:contain;" />`;
   return SEAL;
 }
 

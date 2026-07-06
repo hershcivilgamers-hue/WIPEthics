@@ -15,6 +15,7 @@ import {
   MEDALS_SETTING_ID, normalizeMedalCatalog,
 } from '../constants.js';
 import { users, getUser, upsertUser, promoReqs, newId, applyServerSnapshot, trainings, getTraining, getSetting } from '../storage.js';
+import { orgLogo } from '../logos.js';
 import {
   canEditPersonnel, canSetClearance, canSetRank, canIssueStrike,
   canDeletePersonnel, canPromote, canDemote, accessLevel, isCL5, canManageOrg, canManageTraining,
@@ -111,10 +112,13 @@ export function renderList(host, app, org) {
 
   host.innerHTML = `
     <div class="page-head">
-      <div>
-        <div class="eyebrow">${esc(meta.name)}</div>
-        <h1 class="page-title">Personnel Files</h1>
-        <div class="page-sub">${esc(meta.motto)} \u00b7 ${roster.length} on roster</div>
+      <div class="page-head__lead">
+        ${orgLogo(org) ? `<span class="org-crest" style="--crest:url('${orgLogo(org)}')" role="img" aria-label="${esc(meta.name)} crest"></span>` : ''}
+        <div>
+          <div class="eyebrow">${esc(meta.name)}</div>
+          <h1 class="page-title">Personnel Files</h1>
+          <div class="page-sub">${esc(meta.motto)} \u00b7 ${roster.length} on roster</div>
+        </div>
       </div>
       ${canManage ? `<button class="btn btn--primary" id="add-personnel">+ New personnel</button>` : ''}
     </div>
