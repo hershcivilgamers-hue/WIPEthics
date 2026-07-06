@@ -215,36 +215,70 @@ function sheetSources() {
   return normalizeSheetSources(rec && rec.data);
 }
 
-// Fetch each configured sheet, parse it, and render a read-only section per
-// source. Runs client-side; a published Google Sheet serves CSV with permissive
-// CORS. Failures degrade to a per-source notice.
+// Cache of parsed external entries for this render, so the SteamID search is
+// instant after the initial fetch. Each item: { source, entry }.
+let externalCache = [];
+let externalState = 'idle';
+
+// Fetch and parse configured sheets, but DON'T display them. Entries stay hidden
+// behind a SteamID search — the register is only revealed for a specific lookup.
 async function loadExternalSheets(container) {
   if (!container) return;
   const sources = sheetSources();
   if (!sources.length) { container.innerHTML = ''; return; }
-  container.innerHTML = sources.map((s) => `
-    <div class="card" data-src="${esc(s.id)}">
-      <div class="card__title">${esc(s.label)} <span class="muted-text">\u00b7 external sheet</span></div>
-      <div class="card__body" id="src-body-${esc(s.id)}"><div class="muted-text">Loading\u2026</div></div>
-    </div>`).join('');
 
-  for (const s of sources) {
-    const body = container.querySelector(`#src-body-${CSS.escape(s.id)}`);
+  container.innerHTML = `
+    <div class="card">
+      <div class="card__title">External department blacklists</div>
+      <div class="card__body">
+        <p class="field__hint">${sources.length} linked sheet${sources.length === 1 ? '' : 's'}. Enter a SteamID (or identifier) to search the external registers \u2014 entries are hidden until you search.</p>
+        <div class="toolbar" style="margin:0">
+          <input id="bl-ext-q" class="toolbar__search" type="search" placeholder="Search external sheets by SteamID\u2026" autocomplete="off" disabled />
+        </div>
+        <div id="bl-ext-results" class="bl-ext-results"><div class="muted-text">Loading external sheets\u2026</div></div>
+      </div>
+    </div>`;
+
+  const input = container.querySelector('#bl-ext-q');
+  const results = container.querySelector('#bl-ext-results');
+
+  // Fetch all sources into the cache (client-side; a published sheet serves CSV
+  // with permissive CORS). Per-source failures are noted but don't block others.
+  externalCache = [];
+  externalState = 'loading';
+  const problems = [];
+  await Promise.all(sources.map(async (s) => {
     try {
       const res = await fetch(toSheetCsvUrl(s.url), { redirect: 'follow' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const text = await res.text();
-      const entries = mapSheetRows(parseCsv(text));
-      if (!entries.length) { body.innerHTML = '<div class="empty">No rows parsed from this sheet.</div>'; continue; }
-      body.innerHTML = `
-        <table class="data-table"><thead><tr><th>Name</th><th>Identifier</th><th>Severity</th><th>Reason</th></tr></thead>
-        <tbody>${entries.map((e) => `
-          <tr><td class="cell-name">${esc(e.name)}</td><td class="mono muted-text">${esc(e.identifier || '\u2014')}</td><td>${esc(e.severity || '\u2014')}</td><td>${esc(e.reason || '\u2014')}</td></tr>`).join('')}</tbody></table>
-        <div class="field__hint">${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} \u00b7 read-only \u00b7 <a href="${esc(s.url)}" target="_blank" rel="noopener">open sheet</a></div>`;
+      const entries = mapSheetRows(parseCsv(await res.text()));
+      for (const e of entries) externalCache.push({ source: s.label, url: s.url, entry: e });
     } catch (err) {
-      body.innerHTML = `<div class="empty">Could not load this sheet (${esc(err.message)}). Ensure it is published to the web or link-shared.</div>`;
+      problems.push(`${s.label}: ${err.message}`);
     }
-  }
+  }));
+  externalState = 'ready';
+
+  input.disabled = false;
+  const problemNote = problems.length ? `<div class="field__hint" style="color:var(--warn)">Could not load: ${esc(problems.join('; '))}. Sheets must be published to the web or link-shared.</div>` : '';
+  const idle = () => { results.innerHTML = `<div class="muted-text">Enter a SteamID above to search ${externalCache.length} external entr${externalCache.length === 1 ? 'y' : 'ies'}.</div>${problemNote}`; };
+  idle();
+
+  const runSearch = () => {
+    const q = input.value.trim().toLowerCase();
+    if (!q) { idle(); return; }
+    // Match primarily on the identifier (SteamID); also match the name as a fallback.
+    const hits = externalCache.filter(({ entry }) =>
+      (entry.identifier && entry.identifier.toLowerCase().includes(q))
+      || (entry.name && entry.name.toLowerCase().includes(q)));
+    if (!hits.length) { results.innerHTML = `<div class="empty">No external entries match \u201c${esc(input.value.trim())}\u201d.</div>`; return; }
+    results.innerHTML = `
+      <table class="data-table"><thead><tr><th>Name</th><th>Identifier</th><th>Severity</th><th>Reason</th><th>Source</th></tr></thead>
+      <tbody>${hits.map(({ source, entry }) => `
+        <tr><td class="cell-name">${esc(entry.name)}</td><td class="mono">${esc(entry.identifier || '\u2014')}</td><td>${esc(entry.severity || '\u2014')}</td><td>${esc(entry.reason || '\u2014')}</td><td class="muted-text">${esc(source)}</td></tr>`).join('')}</tbody></table>
+      <div class="field__hint">${hits.length} match${hits.length === 1 ? '' : 'es'} \u00b7 read-only from linked sheets.</div>`;
+  };
+  input.addEventListener('input', runSearch);
 }
 
 function openSources(app) {

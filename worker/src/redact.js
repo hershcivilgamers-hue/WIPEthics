@@ -123,6 +123,7 @@ export function redactCompartment(actor, c) {
     id: c.id, ref: c.ref, name: c.name, codeword: c.codeword ?? c.name,
     org: c.org, clearance: c.clearance, status: c.status,
     membersCount: Array.isArray(c.members) ? c.members.length : 0,
+    createdBy: c.createdBy ?? null,
     createdAt: c.createdAt, updatedAt: c.updatedAt, version: c.version,
     deleted: !!c.deleted, deletedAt: c.deletedAt ?? null, access,
   };

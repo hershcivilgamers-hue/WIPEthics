@@ -53,8 +53,10 @@ export function render(host, app) {
   const groups = ORG_ORDER.map((org) => {
     const list = all.filter((d) => d.org === org)
       .sort((a, b) => (a.status === b.status ? 0 : a.status === 'active' ? -1 : 1) || a.ref.localeCompare(b.ref));
-    if (!list.length) return '';
     const canManage = canManageDirectives(actor, org);
+    // Skip an org only if it has no directives AND the viewer can't issue any —
+    // otherwise a clean database would hide the "Issue directive" button entirely.
+    if (!list.length && !canManage) return '';
 
     const cards = list.map((d) => {
       const visible = bodyReadable(actor, d);
@@ -89,7 +91,7 @@ export function render(host, app) {
           ${orgTag(org)} <span class="dir-group__name">${esc(ORGS[org].name)}</span>
           ${canManage ? `<button class="btn btn--sm" data-add="${esc(org)}">+ Issue directive</button>` : ''}
         </div>
-        <div class="dir-grid">${cards}</div>
+        <div class="dir-grid">${cards || '<div class="empty">No standing orders issued yet.</div>'}</div>
       </section>`;
   }).join('');
 
