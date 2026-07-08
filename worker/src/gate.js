@@ -20,7 +20,7 @@ import {
   compartmentClears, canManageCompartment, canReadOperatorInto,
   canManageOrg, canParticipateRecruitment, canLogToOperation, canLogIntel, canManageTraining, isCL5,
 } from '../../js/permissions.js';
-import { rankUp, rankDown, clearanceForRank, clearanceWeight, tallyVotes, RANKS, caseTakesVote } from '../../js/constants.js';
+import { rankUp, rankDown, clearanceForRank, clearanceWeight, tallyVotes, RANKS, caseTakesVote, strikeActive } from '../../js/constants.js';
 
 const deny = (msg) => ({ ok: false, status: 403, error: msg || 'Not permitted.' });
 const ok = (action, detail) => ({ ok: true, action, detail });
@@ -81,6 +81,31 @@ function authorizeUser(actor, cur, next) {
     return ok('APPROVE_REGISTRATION', `Approved ${next.codename || next.designation}.`);
   }
 
+  // Unit transfer: moving an operator to another organisation. This necessarily
+  // changes org, rank (the old rank isn't on the new ladder), clearance and the
+  // re-minted designation together, so it needs its own authorised path — the
+  // one-step rank branch below would otherwise reject it. Authority spans two
+  // chains of command, so the actor must manage BOTH the source and destination
+  // organisation (in practice CL5, or Command staff who hold a stake in every
+  // org). Disciplinary history, tags and awards ride along unchanged; the
+  // promotion checklist resets for the new ladder.
+  if (j(next.org) !== j(cur.org)) {
+    if (!canManageOrg(actor, cur.org) || !canManageOrg(actor, next.org)) {
+      return deny('A unit transfer requires authority over both the source and destination organisation.');
+    }
+    if (!(RANKS[next.org] || []).includes(next.rank)) {
+      return deny('The assigned rank is not valid for the destination organisation.');
+    }
+    const tier = clearanceForRank(next.org, next.rank);
+    if (tier && j(next.clearance) !== j(tier)) return deny('Transfer must align clearance to the new rank.');
+    if (tier && !canSetClearance(actor, { ...cur, org: next.org }, tier)) return deny('That rank\u0027s clearance is above your own ceiling.');
+    if (len(next.promoChecks) !== 0) return deny('A transfer must reset the promotion checklist.');
+    if (changedOutside(cur, next, ['org', 'rank', 'clearance', 'designation', 'promoChecks', 'events', 'version', 'updatedAt'])) {
+      return deny('A unit transfer cannot be combined with other edits.');
+    }
+    return ok('TRANSFER_UNIT', `${cur.designation} transferred ${cur.org} \u2192 ${next.org} as ${next.designation}.`);
+  }
+
   if (j(next.rank) !== j(cur.rank)) {
     // A rank that isn't on the org's ladder at all is a data error (e.g. an
     // Omega "Commander" left on an Ethics file after an org change). Correcting
@@ -139,9 +164,73 @@ function authorizeUser(actor, cur, next) {
   if (len(next.strikes) < len(cur.strikes)) {
     if (!canIssueStrike(actor, cur)) return deny('You cannot amend this operator\u2019s disciplinary record.');
     if (changedOutside(cur, next, ['strikes', 'events', 'version', 'updatedAt'])) {
-      return deny('A strike appeal cannot be combined with other edits.');
+      return deny('A strike change cannot be combined with other edits.');
     }
-    return ok('LIFT_STRIKE', `Strike lifted for ${cur.designation}.`);
+    return ok('LIFT_STRIKE', `Strike removed for ${cur.designation}.`);
+  }
+
+  // Equal-length strike change: an in-place amendment to exactly one strike.
+  // The only lawful amendments are (a) the operator filing an appeal against
+  // their own strike, (b) an authority resolving that appeal, or (c) an
+  // authority lifting the strike in place. Anything else — rewriting reasons,
+  // doctoring appeal grounds, deleting an appeal — is refused outright, so the
+  // disciplinary record is append-only in substance.
+  if (j(next.strikes || []) !== j(cur.strikes || [])) {
+    if (changedOutside(cur, next, ['strikes', 'events', 'version', 'updatedAt'])) {
+      return deny('A strike change cannot be combined with other edits.');
+    }
+    const cs = cur.strikes || []; const ns = next.strikes || [];
+    if (cs.length !== ns.length || cs.some((s, i) => s.id !== ns[i].id)) {
+      return deny('Strike records may not be reordered.');
+    }
+    const changedIdx = cs.map((s, i) => (j(s) !== j(ns[i]) ? i : -1)).filter((i) => i >= 0);
+    if (changedIdx.length !== 1) return deny('Amend one strike at a time.');
+    const a = cs[changedIdx[0]]; const b = ns[changedIdx[0]];
+    const strip = (s) => { const { appeal, lifted, ...rest } = s; return rest; };
+    if (j(strip(a)) !== j(strip(b))) {
+      return deny('A strike\u2019s substance cannot be rewritten \u2014 only appealed, resolved, or lifted.');
+    }
+
+    // (a) APPEAL — the struck operator, on their own record, one appeal per
+    // strike, active strikes only. The appeal lands as pending; nothing else.
+    if (!a.appeal && b.appeal && j(a.lifted ?? null) === j(b.lifted ?? null)) {
+      if (actor.id !== cur.id) return deny('Only the operator concerned may appeal their strike.');
+      if (!strikeActive(a)) return deny('Only an active strike can be appealed.');
+      const ap = b.appeal;
+      if (ap.status !== 'pending' || !String(ap.text || '').trim()) {
+        return deny('An appeal must state its grounds and land as pending.');
+      }
+      if (ap.resolvedBy || ap.resolvedAt || ap.resolution) return deny('An appeal cannot arrive pre-resolved.');
+      return ok('APPEAL_STRIKE', `${cur.designation} appealed a strike.`);
+    }
+
+    // (b) RESOLVE — an authority rules on a pending appeal. The grounds are
+    // immutable; the issuing authority is recused from their own strike (CL5,
+    // as Command, may always rule so a small site cannot deadlock).
+    if (a.appeal && a.appeal.status === 'pending' && b.appeal && j(a.lifted ?? null) === j(b.lifted ?? null)) {
+      if (!canIssueStrike(actor, cur)) return deny('You cannot rule on this operator\u2019s appeals.');
+      if (!isCL5(actor) && a.by && actor.designation === a.by) {
+        return deny('The issuing authority is recused from ruling on the appeal against their own strike.');
+      }
+      if (b.appeal.text !== a.appeal.text || j(b.appeal.at) !== j(a.appeal.at)) {
+        return deny('The grounds of an appeal cannot be rewritten.');
+      }
+      if (b.appeal.status !== 'upheld' && b.appeal.status !== 'overturned') {
+        return deny('An appeal is resolved as upheld or overturned.');
+      }
+      if (!b.appeal.resolvedBy) return deny('A resolution must be signed.');
+      return ok('RESOLVE_APPEAL', `Appeal ${b.appeal.status} for ${cur.designation}.`);
+    }
+
+    // (c) LIFT IN PLACE — an authority voids the strike; it stays on the record
+    // marked lifted. The appeal (if any) is untouched.
+    if (!a.lifted && b.lifted && j(a.appeal ?? null) === j(b.appeal ?? null)) {
+      if (!canIssueStrike(actor, cur)) return deny('You cannot amend this operator\u2019s disciplinary record.');
+      if (!b.lifted.by) return deny('A lift must be signed.');
+      return ok('LIFT_STRIKE', `Strike lifted for ${cur.designation}.`);
+    }
+
+    return deny('Strike records may only be appealed, resolved, or lifted.');
   }
 
   if (j(next.promoChecks) !== j(cur.promoChecks) &&
@@ -446,6 +535,47 @@ function authorizeRecruit(actor, cur, next, ctx) {
 function authorizeBlacklist(actor, cur, next) {
   const org = (next || cur).org;
   const ref = (next || cur).name || 'entry';
+
+  // Appeals: filed by ANY signed-in operator on the barred individual's behalf
+  // (they hold no account), resolved by a manager of the raising organisation.
+  // Once filed, an appeal's grounds are immutable — it can only be resolved,
+  // never doctored or deleted, by anyone.
+  const appealChanged = cur && j(next.appeal ?? null) !== j(cur.appeal ?? null);
+  if (appealChanged) {
+    // (a) Filing: one pending appeal per entry, active entries only, and the
+    // write may carry nothing else.
+    if (!cur.appeal && next.appeal && next.appeal.status === 'pending') {
+      if ((cur.status || 'active') !== 'active') return deny('Only an active blacklist entry can be appealed.');
+      if (!String(next.appeal.text || '').trim()) return deny('An appeal must state its grounds.');
+      if (next.appeal.filedBy !== actor.designation) return deny('An appeal is filed in your own name.');
+      if (next.appeal.resolvedBy || next.appeal.resolution) return deny('An appeal cannot arrive pre-resolved.');
+      if (changedOutside(cur, next, ['appeal', 'version', 'updatedAt'])) {
+        return deny('An appeal cannot be combined with other changes.');
+      }
+      return ok('APPEAL_BLACKLIST', `Appeal filed against the blacklist entry for ${ref}.`);
+    }
+    // (b) Resolution: a manager rules upheld (entry stands) or overturned (the
+    // entry is lifted in the same write). Grounds and filer are immutable.
+    if (cur.appeal && cur.appeal.status === 'pending' && next.appeal) {
+      if (!canManageOrg(actor, org)) return deny('Only a manager of the raising organisation may resolve this appeal.');
+      if (next.appeal.text !== cur.appeal.text || next.appeal.filedBy !== cur.appeal.filedBy || j(next.appeal.at) !== j(cur.appeal.at)) {
+        return deny('The grounds of an appeal cannot be rewritten.');
+      }
+      if (next.appeal.status !== 'upheld' && next.appeal.status !== 'overturned') {
+        return deny('An appeal is resolved as upheld or overturned.');
+      }
+      if (!next.appeal.resolvedBy) return deny('A resolution must be signed.');
+      if (next.appeal.status === 'overturned' && next.status !== 'lifted') {
+        return deny('An overturned entry must be lifted.');
+      }
+      if (changedOutside(cur, next, ['appeal', 'status', 'version', 'updatedAt'])) {
+        return deny('A resolution cannot be combined with other changes.');
+      }
+      return ok('RESOLVE_BLACKLIST_APPEAL', `Blacklist appeal ${next.appeal.status} for ${ref}.`);
+    }
+    return deny('Appeals may only be filed once, and then resolved \u2014 never altered or removed.');
+  }
+
   if (!canManageOrg(actor, org)) return deny('You cannot maintain the blacklist for that organisation.');
   if (!cur) return ok('CREATE_BLACKLIST', `Blacklisted ${ref}.`);
   if (!!next.deleted !== !!cur.deleted) return next.deleted ? ok('REMOVE_BLACKLIST', `Removed blacklist entry for ${ref}.`) : ok('RESTORE_BLACKLIST', `Restored blacklist entry for ${ref}.`);

@@ -14,17 +14,14 @@
 
 import {
   activityStatus, mergeActivityReqs, ACTIVITY_REQ_SETTING_ID,
-  RECRUIT_PIPELINE_OMEGA, RECRUIT_PIPELINE_ETHICS,
-} from '../constants.js';
+  RECRUIT_PIPELINE_OMEGA, RECRUIT_PIPELINE_ETHICS, strikeActive } from '../constants.js';
 import {
   users, operations, intel, recruits, directives, cases, compartments,
-  getActivityForUser, getSetting,
-} from '../storage.js';
+  getActivityForUser, getSetting, blacklist } from '../storage.js';
 import {
   isAssignedToOperation, isAssignedToIntel, canViewOperation, canViewIntel,
   canReadDirective, canManageOrg, canParticipateRecruitment, canRuleTribunal,
-  canManageDirectives, isCL5,
-} from '../permissions.js';
+  canManageDirectives, isCL5, canIssueStrike } from '../permissions.js';
 import { esc, relTime } from '../ui.js';
 
 const SEVEN_DAYS = 7 * 24 * 3600000;
@@ -89,6 +86,30 @@ export function buildNotifications(actor, now = Date.now()) {
   if (isCL5(actor) || canManageOrg(actor, actor.org)) {
     const pending = users().filter((u) => !u.deleted && u.accountStatus === 'pending' && (isCL5(actor) || u.requestedOrg === actor.org || actor.org === 'command'));
     if (pending.length) add('warn', '\u2295', `${pending.length} access request${pending.length > 1 ? 's' : ''} awaiting approval.`, '#/admin', null);
+  }
+
+  // 8a. A pending appeal against one of YOUR OWN strikes — reassure the operator it's lodged.
+  const me = users().find((u) => u.id === actor.id);
+  if (me) {
+    for (const st of (me.strikes || [])) {
+      if (st.appeal && st.appeal.status === 'pending') { add('info', '\u2696', 'Your strike appeal is lodged and awaiting a ruling.', `#/personnel/${actor.id}`, new Date(st.appeal.at).getTime()); break; }
+      if (st.appeal && st.appeal.status === 'overturned') { add('ok', '\u2696', 'A strike against you was overturned on appeal.', `#/personnel/${actor.id}`, st.appeal.resolvedAt ? new Date(st.appeal.resolvedAt).getTime() : null); break; }
+    }
+  }
+
+  // 8b. Strike appeals awaiting an authority who may rule (issuer recused).
+  for (const u of users()) {
+    if (u.deleted || !canIssueStrike(actor, u)) continue;
+    const waiting = (u.strikes || []).some((st) => st.appeal && st.appeal.status === 'pending' && (isCL5(actor) || !st.by || actor.designation !== st.by));
+    if (waiting) add('warn', '\u2696', `Strike appeal awaiting review \u2014 ${u.designation}.`, `#/personnel/${u.id}`, null);
+  }
+
+  // 9. Blacklist appeals awaiting a manager of the raising organisation.
+  for (const e of blacklist()) {
+    if (e.deleted) continue;
+    if (e.appeal && e.appeal.status === 'pending' && canManageOrg(actor, e.org)) {
+      add('warn', '\u2298', `Blacklist appeal awaiting review \u2014 ${e.name}.`, '#/blacklist', e.appeal.at ? new Date(e.appeal.at).getTime() : null);
+    }
   }
 
   // Newest first; undated items sink to the bottom.

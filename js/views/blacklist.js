@@ -154,9 +154,22 @@ function openEntry(app, id) {
     <div class="kv"><span class="kv__k">Severity</span><span class="kv__v">${sevBadge(b.severity)}</span></div>
     <div class="kv"><span class="kv__k">Raised by</span><span class="kv__v">${orgTag(b.org)} \u00b7 <span class="mono">${esc(b.addedBy || '')}</span> \u00b7 ${fmtDate(b.createdAt)}</span></div>
     <div class="kv"><span class="kv__k">Status</span><span class="kv__v">${statusBadge(b.status || 'active')}</span></div>
-    <div class="kv kv--stack"><span class="kv__k">Reason</span><span class="kv__v">${esc(b.reason || '\u2014')}</span></div>`;
+    <div class="kv kv--stack"><span class="kv__k">Reason</span><span class="kv__v">${esc(b.reason || '\u2014')}</span></div>
+    ${b.appeal ? `<div class="kv kv--stack"><span class="kv__k">Appeal</span><span class="kv__v">
+        <div>${b.appeal.status === 'pending' ? 'Pending review' : `<strong>${esc(b.appeal.status)}</strong> by ${esc(b.appeal.resolvedBy || '')}`} \u00b7 filed by ${esc(b.appeal.filedBy || '')} ${b.appeal.at ? `\u00b7 ${fmtDate(b.appeal.at)}` : ''}</div>
+        <div class="muted-text">\u201c${esc(b.appeal.text)}\u201d</div>
+        ${b.appeal.resolution ? `<div>Resolution: ${esc(b.appeal.resolution)}</div>` : ''}
+      </span></div>` : ''}`;
 
   const actions = [{ label: 'Close', tone: 'ghost', onClick: (c) => c() }];
+  // Any signed-in operator may file an appeal on the barred individual's behalf.
+  if (!b.appeal && !lifted) {
+    actions.push({ label: 'File appeal', tone: 'ghost', onClick: (c) => { c(); openBlacklistAppeal(app, b); } });
+  }
+  // A manager of the raising org rules on a pending appeal.
+  if (canManage && b.appeal && b.appeal.status === 'pending') {
+    actions.push({ label: 'Rule on appeal', tone: 'primary', onClick: (c) => { c(); openResolveBlacklistAppeal(app, b); } });
+  }
   if (canManage) {
     actions.push({ label: 'Edit', tone: 'primary', onClick: (c) => { c(); openEdit(app, b); } });
     actions.push({ label: lifted ? 'Reinstate' : 'Lift', tone: 'ghost', onClick: (c) => {
@@ -178,6 +191,62 @@ function openEntry(app, id) {
   }
 
   openModal({ title: `Blacklist \u2014 ${b.name}`, wide: true, body: detail, actions });
+}
+
+// Any operator may file an appeal against a blacklist entry on the barred
+// individual's behalf. One appeal per entry; grounds are immutable once filed.
+function openBlacklistAppeal(app, b) {
+  const actor = app.user;
+  openModal({
+    title: 'Appeal blacklist entry',
+    wide: true,
+    body: `
+      <p class="modal__message">File an appeal against the entry for <strong>${esc(b.name)}</strong>${b.identifier ? ` (<span class="mono">${esc(b.identifier)}</span>)` : ''}. Record it in your own name; the grounds cannot be edited once filed.</p>
+      <div class="field"><label>Grounds of appeal</label><textarea id="bla-grounds" rows="4" placeholder="State why this entry should be overturned\u2026"></textarea></div>`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'File appeal', tone: 'primary', onClick: (c, d) => {
+          const text = d.querySelector('#bla-grounds').value.trim();
+          if (!text) { toast('State the grounds of the appeal.', 'error'); return; }
+          const cur = getBlacklistEntry(b.id);
+          upsertBlacklistEntry({ ...cur, appeal: { text, at: new Date().toISOString(), status: 'pending', filedBy: actor.designation }, updatedAt: new Date().toISOString(), version: (cur.version || 1) + 1 });
+          logAction(actor, 'APPEAL_BLACKLIST', `Appeal filed against the blacklist entry for ${cur.name}.`);
+          c(); toast('Appeal filed \u2014 awaiting a ruling.', 'success'); app.refresh();
+        } },
+    ],
+  });
+}
+
+// A manager rules on a pending blacklist appeal. Overturning lifts the entry in
+// the same act; it remains on the register marked overturned.
+function openResolveBlacklistAppeal(app, b) {
+  const actor = app.user;
+  if (!canManageOrg(actor, b.org)) { toast('Only a manager of the raising organisation may rule on this.', 'error'); return; }
+  if (!b.appeal || b.appeal.status !== 'pending') return;
+  openModal({
+    title: 'Rule on appeal',
+    wide: true,
+    body: `
+      <p class="modal__message">Entry: <strong>${esc(b.name)}</strong> \u2014 ${esc(b.reason || '')}</p>
+      <p class="modal__message">Grounds: \u201c${esc(b.appeal.text)}\u201d (filed by ${esc(b.appeal.filedBy || '')})</p>
+      <label class="radio-row"><input type="radio" name="bla-ruling" value="overturned" checked /> <span><strong>Overturn</strong> \u2014 the appeal succeeds; the entry is lifted but remains on the register, marked overturned.</span></label>
+      <label class="radio-row"><input type="radio" name="bla-ruling" value="upheld" /> <span><strong>Uphold</strong> \u2014 the entry stands. The appeal and ruling remain on record.</span></label>
+      <div class="field" style="margin-top:10px"><label>Resolution</label><textarea id="bla-res" rows="3" placeholder="Reasoning for the ruling\u2026"></textarea></div>`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Enter ruling', tone: 'primary', onClick: (c, d) => {
+          const ruling = (d.querySelector('input[name="bla-ruling"]:checked') || {}).value;
+          const resolution = d.querySelector('#bla-res').value.trim();
+          if (!resolution) { toast('A ruling must state its reasoning.', 'error'); return; }
+          const cur = getBlacklistEntry(b.id);
+          const next = { ...cur, appeal: { ...cur.appeal, status: ruling, resolvedBy: actor.designation, resolvedAt: new Date().toISOString(), resolution }, updatedAt: new Date().toISOString(), version: (cur.version || 1) + 1 };
+          if (ruling === 'overturned') next.status = 'lifted';
+          upsertBlacklistEntry(next);
+          logAction(actor, 'RESOLVE_BLACKLIST_APPEAL', `Blacklist appeal ${ruling} for ${cur.name}.`);
+          c(); toast(ruling === 'overturned' ? 'Appeal overturned \u2014 entry lifted.' : 'Appeal upheld \u2014 entry stands.', 'success'); app.refresh();
+        } },
+    ],
+  });
 }
 
 function openEdit(app, b) {

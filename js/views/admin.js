@@ -86,14 +86,30 @@ function drawPanel(panel, app) {
 }
 
 // --- Registrations ----------------------------------------------------------
+const regSel = new Set();
 function drawRegistrations(panel, app) {
   const pending = users().filter((u) => !u.deleted && u.accountStatus === 'pending');
   if (!pending.length) {
+    regSel.clear();
     panel.innerHTML = '<div class="card"><div class="card__body empty">No access requests awaiting approval.</div></div>';
     return;
   }
-  panel.innerHTML = `<div class="stack">${pending.map((u) => `
+  // Drop stale ids from the selection (already handled or gone).
+  const ids = new Set(pending.map((u) => u.id));
+  [...regSel].forEach((id) => { if (!ids.has(id)) regSel.delete(id); });
+  const selCount = regSel.size;
+
+  panel.innerHTML = `
+    <div class="bulk-bar ${selCount ? 'is-active' : ''}">
+      <label class="bulk-bar__all"><input type="checkbox" id="reg-all" ${selCount === pending.length ? 'checked' : ''} /> Select all (${pending.length})</label>
+      <span class="bulk-bar__count">${selCount} selected</span>
+      <div class="bulk-bar__actions">
+        <button class="btn btn--primary btn--sm" id="reg-bulk-approve" ${selCount ? '' : 'disabled'}>Approve ${selCount || ''} selected</button>
+      </div>
+    </div>
+    <div class="stack">${pending.map((u) => `
     <div class="card req-card">
+      <label class="req-card__check"><input type="checkbox" data-reg-check="${esc(u.id)}" ${regSel.has(u.id) ? 'checked' : ''} /></label>
       <div class="req-card__main">
         <div class="req-card__name">${esc(u.codename)} <span class="mono req-card__id">${esc(u.designation)}</span></div>
         <div class="req-card__meta">Requested ${orgTag(u.requestedOrg || u.org)} ${esc(ORGS[u.requestedOrg || u.org].name)}${u.requestedRank ? ` \u00b7 rank sought <strong>${esc(u.requestedRank)}</strong>${clearanceForRank(u.requestedOrg || u.org, u.requestedRank) ? ` (${esc(clearanceForRank(u.requestedOrg || u.org, u.requestedRank))})` : ''}` : ''} \u00b7 ${fmtDate(u.createdAt)} \u00b7 operator ID <span class="mono">${esc(u.username)}</span></div>
@@ -106,6 +122,80 @@ function drawRegistrations(panel, app) {
 
   panel.querySelectorAll('[data-approve]').forEach((b) => b.addEventListener('click', () => approve(app, b.dataset.approve)));
   panel.querySelectorAll('[data-reject]').forEach((b) => b.addEventListener('click', () => reject(app, b.dataset.reject)));
+  panel.querySelectorAll('[data-reg-check]').forEach((cb) => cb.addEventListener('change', () => {
+    if (cb.checked) regSel.add(cb.dataset.regCheck); else regSel.delete(cb.dataset.regCheck);
+    drawRegistrations(panel, app);
+  }));
+  const all = panel.querySelector('#reg-all');
+  if (all) all.addEventListener('change', () => {
+    if (all.checked) pending.forEach((u) => regSel.add(u.id)); else regSel.clear();
+    drawRegistrations(panel, app);
+  });
+  const bulk = panel.querySelector('#reg-bulk-approve');
+  if (bulk) bulk.addEventListener('click', () => bulkApprove(app, panel, [...regSel]));
+}
+
+// Approve several pending registrations at once. Each applicant's rank is
+// pre-filled from what they requested (valid for their requested org), and a
+// CL5 approver can adjust any before confirming. Approvals run sequentially so
+// designations mint cleanly (O1-5, O1-6, …) without collisions.
+function bulkApprove(app, panel, idList) {
+  const applicants = idList.map((id) => getUser(id)).filter((u) => u && u.accountStatus === 'pending');
+  if (!applicants.length) { toast('Nothing to approve.', 'info'); return; }
+
+  const rows = applicants.map((u) => {
+    const org = u.requestedOrg || u.org;
+    const ranks = RANKS[org] || [];
+    const want = ranks.includes(u.requestedRank) ? u.requestedRank : ranks[0];
+    const opts = ranks.map((r) => `<option value="${esc(r)}" ${r === want ? 'selected' : ''}>${esc(r)}${clearanceForRank(org, r) ? ` \u2014 ${esc(clearanceForRank(org, r))}` : ''}</option>`).join('');
+    return `<tr>
+      <td class="cell-name">${esc(u.codename)} <span class="mono muted-text">${esc(u.username)}</span></td>
+      <td>${orgTag(org)} ${esc(ORGS[org].short)}</td>
+      <td><select data-bulk-rank="${esc(u.id)}">${opts}</select></td>
+    </tr>`;
+  }).join('');
+
+  openModal({
+    title: `Approve ${applicants.length} registration${applicants.length === 1 ? '' : 's'}`,
+    wide: true,
+    body: `
+      <p class="modal__message">Ranks are pre-filled from each applicant's request \u2014 adjust any before approving. Clearance follows the rank. Each is approved into the organisation they requested.</p>
+      <table class="data-table"><thead><tr><th>Applicant</th><th>Unit</th><th>Rank</th></tr></thead><tbody>${rows}</tbody></table>`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: `Approve all`, tone: 'primary', onClick: (c, d) => {
+          const choices = {};
+          d.querySelectorAll('[data-bulk-rank]').forEach((sel) => { choices[sel.dataset.bulkRank] = sel.value; });
+          c();
+          let approved = 0;
+          // Sequential: mint designation, write, then the next applicant sees it.
+          for (const u of applicants) {
+            const fresh = getUser(u.id);
+            if (!fresh || fresh.accountStatus !== 'pending') continue;
+            const org = fresh.requestedOrg || fresh.org;
+            const rank = choices[u.id] || (RANKS[org] || [])[0];
+            const clr = clearanceForRank(org, rank);
+            const designation = nextDesignation(org);
+            fresh.org = org;
+            fresh.rank = rank;
+            if (clr) fresh.clearance = clr;
+            fresh.designation = designation;
+            fresh.accountStatus = 'active';
+            fresh.requestedOrg = null;
+            fresh.version += 1;
+            fresh.updatedAt = new Date().toISOString();
+            fresh.events = fresh.events || [];
+            fresh.events.unshift({ id: newId('evt'), date: new Date().toISOString(), type: 'appointment', text: `Access approved by ${app.user.designation}; assigned ${rank}${clr ? `, ${CLEARANCES[clr].label}` : ''}.` });
+            upsertUser(fresh);
+            logAction(app.user, 'APPROVE_REGISTRATION', `Approved ${designation} (${fresh.codename}) into ${ORGS[org].short}.`);
+            approved += 1;
+          }
+          regSel.clear();
+          toast(`Approved ${approved} operator${approved === 1 ? '' : 's'}.`, 'success', 4200);
+          app.refresh();
+        } },
+    ],
+  });
 }
 
 function approve(app, id) {

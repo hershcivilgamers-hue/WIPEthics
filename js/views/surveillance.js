@@ -13,10 +13,10 @@ import {
   SUBJECT_STATUS, SUBJECT_STATUS_ORDER, CLEARANCE_ORDER, CLEARANCES,
   ORGS, ORG_ORDER, clearanceWeight, TARGET_AUTH, targetAuthState,
 } from '../constants.js';
-import { subjects, getSubject, upsertSubject, compartments, getCompartment, newId, upsertCase } from '../storage.js';
+import { subjects, getSubject, upsertSubject, compartments, getCompartment, newId, upsertCase, cases } from '../storage.js';
 import {
   canViewSubject, canManageSubject, canClassifySubjectAt, canManageOrg,
-  isCL5, readIntoCompartment, canManageTribunal,
+  isCL5, readIntoCompartment, canManageTribunal, canViewCase,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { exportSubject } from '../export.js';
@@ -251,7 +251,19 @@ export function renderSubject(host, app, id) {
     </div>`;
   }
 
-  const logItems = logs.length ? logs.map((l) => `
+  // Cross-reference: cases citing this subject. Derived at render and inherently
+  // clearance-safe — only cases already in the viewer's snapshot are visible;
+  // any the viewer cannot open appear as a sealed stub.
+  const citing = cases().filter((c) => !c.deleted && (c.linkedSubjectIds || []).includes(s.id));
+  const refItems = citing.map((c) => (canViewCase(actor, c) && !c.redacted)
+    ? `<a href="#/case/${esc(c.id)}">${esc(c.ref)} \u2014 ${esc(c.title)} <span class="muted-text">(${esc(c.kind)} \u00b7 ${esc(c.status)})</span></a>`
+    : `<span class="sealed-ref">\u25a0 Sealed matter \u00b7 ${esc((CLEARANCES[c.clearance] || {}).label || c.clearance || 'restricted')}</span>`).join('');
+  const refCard = citing.length ? `<section class="card">
+      <div class="card__title">Referenced in Proceedings</div>
+      <div class="card__body link-list">${refItems}</div>
+    </section>` : '';
+
+    const logItems = logs.length ? logs.map((l) => `
     <li class="tl__item">
       <span class="tl__dot tl__dot--${esc(l.type)}"></span>
       <div class="tl__body">
@@ -314,6 +326,7 @@ export function renderSubject(host, app, id) {
           <div class="card__title">Assessment</div>
           <div class="card__body"><p class="subj-summary">${esc(s.summary || 'No summary on record.')}</p></div>
         </section>
+        ${refCard}
         <section class="card">
           <div class="card__title">Imagery</div>
           <div class="card__body">

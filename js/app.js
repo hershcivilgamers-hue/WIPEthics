@@ -21,6 +21,7 @@ import * as sync from './sync.js';
 import * as loginView from './views/login.js';
 import * as overviewView from './views/overview.js';
 import * as searchView from './views/search.js';
+import { maybeOfferTutorial, startTutorial } from './tutorial.js';
 import * as personnelView from './views/personnel.js';
 import * as surveillanceView from './views/surveillance.js';
 import * as compartmentsView from './views/compartments.js';
@@ -136,6 +137,7 @@ function renderShell(user, route) {
                 <span class="op-chip__name">${esc(user.codename)}</span>
                 ${clearanceBadge(user.clearance)}
               </div>
+              <button class="btn btn--ghost btn--sm" id="tour-btn" title="Re-run the system tour">Tour</button>
               <button class="btn btn--ghost btn--sm" id="change-pass">Change passphrase</button>
               <button class="btn btn--ghost btn--sm" id="logout">Sign out</button>
             </div>
@@ -148,6 +150,8 @@ function renderShell(user, route) {
 
   const changePass = root.querySelector('#change-pass');
   if (changePass) changePass.addEventListener('click', () => personnelView.openChangePassphrase(app));
+  const tourBtn = root.querySelector('#tour-btn');
+  if (tourBtn) tourBtn.addEventListener('click', () => startTutorial(app));
 
   root.querySelector('#logout').addEventListener('click', () => {
     logAction(user, 'LOGOUT', `${user.designation} signed out.`);
@@ -221,6 +225,7 @@ function renderApp() {
     return;
   }
   renderShell(user, parseHash());
+  maybeOfferTutorial(app);
 }
 
 // --- Boot -------------------------------------------------------------------

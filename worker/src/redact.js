@@ -19,6 +19,7 @@ import {
   canViewActivity, canViewRecruitment, canViewOperation, isAssignedToOperation,
   canViewIntel, isAssignedToIntel, canViewTraining,
 } from '../../js/permissions.js';
+import { strikeVoided } from '../../js/constants.js';
 
 // A user record with credential material and (per access level) sensitive
 // fields removed. salt/passwordHash are NEVER sent to any client.
@@ -65,7 +66,7 @@ export function redactUser(actor, user) {
       realName: '[REDACTED]',
       // Disciplinary reasons, command notes and leave reason are withheld;
       // counts/dates remain so the UI can show "N strikes" and leave status.
-      strikes: (user.strikes ?? []).map((s) => ({ id: s.id, date: s.date, expiresAt: s.expiresAt ?? null })),
+      strikes: (user.strikes ?? []).map((s) => ({ id: s.id, date: s.date, expiresAt: s.expiresAt ?? null, voided: strikeVoided(s) })),
       leave: user.leave ? { type: user.leave.type, from: user.leave.from, to: user.leave.to } : null,
       awards: user.awards ?? [],
       events: user.events ?? [],

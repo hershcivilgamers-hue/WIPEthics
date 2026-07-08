@@ -8,17 +8,17 @@
 // =============================================================================
 
 import {
-  ORGS, RANKS, STATUS_ORDER, CLEARANCE_ORDER, CLEARANCES, STRIKE_LIMIT, strikeActive, activeStrikeCount,
+  ORGS, RANKS, STATUS_ORDER, CLEARANCE_ORDER, CLEARANCES, STRIKE_LIMIT, strikeActive, activeStrikeCount, strikeVoided,
   rankUp, rankDown, clearanceForRank,
   TRAINING_CATEGORY, TRAINING_CURRENCY, trainingCurrency, trainingExpiry,
   PERSONNEL_TAGS_SETTING_ID, normalizeTagCatalog,
   MEDALS_SETTING_ID, normalizeMedalCatalog,
 } from '../constants.js';
-import { users, getUser, upsertUser, promoReqs, newId, applyServerSnapshot, trainings, getTraining, getSetting } from '../storage.js';
+import { users, getUser, upsertUser, promoReqs, newId, applyServerSnapshot, trainings, getTraining, getSetting, cases } from '../storage.js';
 import { orgLogo } from '../logos.js';
 import {
   canEditPersonnel, canSetClearance, canSetRank, canIssueStrike,
-  canDeletePersonnel, canPromote, canDemote, accessLevel, isCL5, canManageOrg, canManageTraining,
+  canDeletePersonnel, canPromote, canDemote, accessLevel, isCL5, canManageOrg, canManageTraining, canViewCase,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { exportPersonnel } from '../export.js';
@@ -29,6 +29,9 @@ import {
 
 // Roster filter state, preserved across navigation.
 const filter = { q: '', status: '', clearance: '' };
+// Roster bulk-selection state (cleared when the viewed org changes).
+const rosterSel = new Set();
+let rosterSelOrg = null;
 
 // --- Personnel tags ---------------------------------------------------------
 function tagCatalog() {
@@ -77,6 +80,8 @@ export function renderList(host, app, org) {
   const meta = ORGS[org];
   const actor = app.user;
   const canManage = canEditPersonnel(actor, { org });
+  // Bulk selection is scoped to the viewed org.
+  if (rosterSelOrg !== org) { rosterSel.clear(); rosterSelOrg = org; }
 
   const roster = users()
     .filter((u) => u.org === org && !u.deleted && u.accountStatus !== 'pending')
@@ -97,8 +102,13 @@ export function renderList(host, app, org) {
   const clrOpts = ['', ...CLEARANCE_ORDER]
     .map((c) => `<option value="${c}" ${filter.clearance === c ? 'selected' : ''}>${c ? esc(CLEARANCES[c].label) : 'All clearances'}</option>`).join('');
 
+  // Prune selection of ids no longer visible in the full org roster.
+  const orgIds = new Set(users().filter((u) => u.org === org && !u.deleted && u.accountStatus !== 'pending').map((u) => u.id));
+  [...rosterSel].forEach((id) => { if (!orgIds.has(id)) rosterSel.delete(id); });
+
   const rows = roster.length ? roster.map((u) => `
     <tr data-id="${esc(u.id)}" tabindex="0">
+      ${canManage ? `<td class="cell-check"><input type="checkbox" data-row-check="${esc(u.id)}" ${rosterSel.has(u.id) ? 'checked' : ''} /></td>` : ''}
       <td class="mono">${esc(u.designation)}</td>
       <td class="cell-name">${esc(u.codename)}${tagChips(u, { compact: true })}</td>
       <td>${esc(u.rank || '\u2014')}</td>
@@ -107,7 +117,7 @@ export function renderList(host, app, org) {
       <td class="cell-right"><span class="row-go">Open \u2192</span></td>
     </tr>
   `).join('') : `
-    <tr><td colspan="6" class="empty">No personnel match the current filters.</td></tr>
+    <tr><td colspan="${canManage ? 7 : 6}" class="empty">No personnel match the current filters.</td></tr>
   `;
 
   host.innerHTML = `
@@ -129,10 +139,20 @@ export function renderList(host, app, org) {
       <select id="flt-clr" class="toolbar__select">${clrOpts}</select>
     </div>
 
+    ${canManage ? `<div class="bulk-bar ${rosterSel.size ? 'is-active' : ''}">
+      <span class="bulk-bar__count">${rosterSel.size} selected</span>
+      <div class="bulk-bar__actions">
+        <button class="btn btn--sm" id="bulk-clr" ${rosterSel.size ? '' : 'disabled'}>Set clearance</button>
+        <button class="btn btn--sm" id="bulk-status" ${rosterSel.size ? '' : 'disabled'}>Change status</button>
+        <button class="btn btn--sm btn--danger" id="bulk-recycle" ${rosterSel.size ? '' : 'disabled'}>Move to recycle bin</button>
+      </div>
+    </div>` : ''}
+
     <div class="card">
       <table class="table">
         <thead>
           <tr>
+            ${canManage ? '<th class="cell-check"><input type="checkbox" id="roster-all" /></th>' : ''}
             <th>Designation</th><th>Codename</th><th>Rank</th>
             <th>Clearance</th><th>Status</th><th></th>
           </tr>
@@ -144,9 +164,33 @@ export function renderList(host, app, org) {
 
   const go = (id) => app.navigate(`#/personnel/${id}`);
   host.querySelectorAll('tr[data-id]').forEach((tr) => {
-    tr.addEventListener('click', () => go(tr.dataset.id));
+    tr.addEventListener('click', (e) => { if (e.target.closest('.cell-check')) return; go(tr.dataset.id); });
     tr.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(tr.dataset.id); });
   });
+
+  // Bulk selection.
+  host.querySelectorAll('[data-row-check]').forEach((cb) => {
+    cb.addEventListener('click', (e) => e.stopPropagation());
+    cb.addEventListener('change', () => {
+      if (cb.checked) rosterSel.add(cb.dataset.rowCheck); else rosterSel.delete(cb.dataset.rowCheck);
+      renderList(host, app, org);
+    });
+  });
+  const allCb = host.querySelector('#roster-all');
+  if (allCb) {
+    allCb.checked = roster.length > 0 && roster.every((u) => rosterSel.has(u.id));
+    allCb.addEventListener('change', () => {
+      if (allCb.checked) roster.forEach((u) => rosterSel.add(u.id)); else roster.forEach((u) => rosterSel.delete(u.id));
+      renderList(host, app, org);
+    });
+  }
+  const selected = () => [...rosterSel].map((id) => getUser(id)).filter(Boolean);
+  const bClr = host.querySelector('#bulk-clr');
+  if (bClr) bClr.addEventListener('click', () => bulkSetClearance(app, selected(), () => renderList(host, app, org)));
+  const bSt = host.querySelector('#bulk-status');
+  if (bSt) bSt.addEventListener('click', () => bulkSetStatus(app, selected(), () => renderList(host, app, org)));
+  const bRec = host.querySelector('#bulk-recycle');
+  if (bRec) bRec.addEventListener('click', () => bulkRecycle(app, selected(), () => renderList(host, app, org)));
 
   const q = host.querySelector('#flt-q');
   q.addEventListener('input', () => { filter.q = q.value; renderList(host, app, org); q.focus(); q.setSelectionRange(q.value.length, q.value.length); });
@@ -155,6 +199,103 @@ export function renderList(host, app, org) {
 
   const addBtn = host.querySelector('#add-personnel');
   if (addBtn) addBtn.addEventListener('click', () => openCreate(app, org));
+}
+
+// --- Bulk roster actions ----------------------------------------------------
+// Each acts as a loop over the same gated single-record writes, so a bulk action
+// can never exceed the actor's individual authority — records they cannot act on
+// are skipped and reported. Writes are direct (version-bumped) to avoid firing a
+// per-item toast/refresh mid-loop.
+function bulkSetClearance(app, list, done) {
+  if (!list.length) return;
+  const actor = app.user;
+  const ceiling = CLEARANCES[actor.clearance].weight;
+  const allowed = CLEARANCE_ORDER.filter((c) => CLEARANCES[c].weight <= ceiling);
+  openModal({
+    title: `Set clearance \u2014 ${list.length} selected`,
+    body: `<p class="modal__message">Apply a clearance level to the ${list.length} selected operator${list.length === 1 ? '' : 's'}. Any above your own clearance are skipped.</p>${fieldSelect('bulk-cl', 'Clearance', allowed, allowed[0])}`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Apply clearance', tone: 'primary', onClick: (c, d) => {
+          const level = d.querySelector('#bulk-cl').value;
+          c();
+          let applied = 0; let skipped = 0;
+          for (const u of list) {
+            const fresh = getUser(u.id);
+            if (!fresh || fresh.deleted) continue;
+            if (!canSetClearance(actor, fresh, level)) { skipped += 1; continue; }
+            if (fresh.clearance === level) continue;
+            const from = fresh.clearance || 'none';
+            fresh.clearance = level;
+            addEvent(fresh, 'clearance', `Clearance changed ${from} \u2192 ${level} by ${actor.designation}.`);
+            fresh.version += 1; fresh.updatedAt = new Date().toISOString();
+            upsertUser(fresh);
+            logAction(actor, 'SET_CLEARANCE', `${fresh.designation} set to ${level}.`);
+            applied += 1;
+          }
+          rosterSel.clear();
+          toast(`Clearance applied to ${applied}${skipped ? ` \u00b7 ${skipped} skipped` : ''}.`, 'success', 4000);
+          if (done) done();
+        } },
+    ],
+  });
+}
+
+function bulkSetStatus(app, list, done) {
+  if (!list.length) return;
+  const actor = app.user;
+  openModal({
+    title: `Change status \u2014 ${list.length} selected`,
+    body: `<p class="modal__message">Set the duty status for the ${list.length} selected operator${list.length === 1 ? '' : 's'}. Records you cannot edit are skipped.</p>${fieldSelect('bulk-st', 'Status', STATUS_ORDER, STATUS_ORDER[0])}`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Apply status', tone: 'primary', onClick: (c, d) => {
+          const status = d.querySelector('#bulk-st').value;
+          c();
+          let applied = 0; let skipped = 0;
+          for (const u of list) {
+            const fresh = getUser(u.id);
+            if (!fresh || fresh.deleted) continue;
+            if (!canEditPersonnel(actor, fresh)) { skipped += 1; continue; }
+            if (fresh.status === status) continue;
+            fresh.status = status;
+            addEvent(fresh, 'edit', `Status set to ${status} by ${actor.designation}.`);
+            fresh.version += 1; fresh.updatedAt = new Date().toISOString();
+            upsertUser(fresh);
+            logAction(actor, 'EDIT_PERSONNEL', `${fresh.designation} status \u2192 ${status}.`);
+            applied += 1;
+          }
+          rosterSel.clear();
+          toast(`Status applied to ${applied}${skipped ? ` \u00b7 ${skipped} skipped` : ''}.`, 'success', 4000);
+          if (done) done();
+        } },
+    ],
+  });
+}
+
+async function bulkRecycle(app, list, done) {
+  if (!list.length) return;
+  const actor = app.user;
+  const ok = await confirmDialog({
+    title: 'Move to recycle bin',
+    message: `Move ${list.length} selected operator${list.length === 1 ? '' : 's'} to the recycle bin? This revokes their access. Records can be restored by Command. Any you cannot remove are skipped.`,
+    confirmLabel: 'Move to recycle bin', danger: true,
+  });
+  if (!ok) return;
+  let applied = 0; let skipped = 0;
+  for (const u of list) {
+    const fresh = getUser(u.id);
+    if (!fresh || fresh.deleted) continue;
+    if (!canDeletePersonnel(actor, fresh)) { skipped += 1; continue; }
+    fresh.deleted = true; fresh.deletedAt = new Date().toISOString();
+    fresh.version += 1; fresh.updatedAt = new Date().toISOString();
+    upsertUser(fresh);
+    logAction(actor, 'REMOVE_RECORD', `${fresh.designation} moved to recycle bin.`);
+    applied += 1;
+  }
+  rosterSel.clear();
+  toast(`Moved ${applied} to the recycle bin${skipped ? ` \u00b7 ${skipped} skipped` : ''}.`, 'success', 4000);
+  if (done) done();
 }
 
 // ===========================================================================
@@ -186,6 +327,10 @@ export function renderDossier(host, app, id) {
     note: canEditPersonnel(actor, u),
     tags: canEditPersonnel(actor, u),
     medal: canEditPersonnel(actor, u),
+    // Unit transfer: the actor must be able to manage the operator's current org
+    // AND at least one other org to move them into. Never yourself.
+    transfer: actor.id !== u.id && canManageOrg(actor, u.org)
+      && Object.keys(ORGS).some((o) => o !== u.org && canManageOrg(actor, o)),
     leave: canEditPersonnel(actor, u),
     del: canDeletePersonnel(actor, u),
     // Reset an operator's sign-in passphrase: a manager with a stake, and never
@@ -215,7 +360,23 @@ export function renderDossier(host, app, id) {
 
   const serviceRecord = nameOnly ? '' : sectionService(u);
   const awardsBlock = nameOnly ? '' : sectionAwards(u, acts.medal);
-  const strikesBlock = sectionStrikes(u, full, full && acts.strike);
+
+  // Cross-reference: matters before the Committee involving this operator —
+  // derived at render, inherently clearance-safe (only cases already in the
+  // viewer's own snapshot can appear), and shown on full-access files only.
+  let mattersBlock = '';
+  if (full) {
+    const matters = cases().filter((c) => !c.deleted && !c.redacted
+      && (c.respondentId === u.id || (c.panelIds || []).includes(u.id))
+      && canViewCase(actor, c));
+    if (matters.length) {
+      mattersBlock = `<section class="card">
+        <div class="card__title">Matters before the Committee</div>
+        <div class="card__body link-list">${matters.map((c) => `<a href="#/case/${esc(c.id)}">${esc(c.ref)} \u2014 ${esc(c.title)} <span class="muted-text">(${esc(c.kind)} \u00b7 ${esc(c.status)} \u00b7 ${c.respondentId === u.id ? 'respondent' : 'panel'})</span></a>`).join('')}</div>
+      </section>`;
+    }
+  }
+  const strikesBlock = sectionStrikes(u, full, actor, full && acts.strike);
   const leaveBlock = onLeave ? sectionLeave(u, full) : '';
   const notesBlock = sectionNotes(u, full);
   const promoBlock = nameOnly ? '' : sectionPromotion(u, actor);
@@ -263,6 +424,7 @@ export function renderDossier(host, app, id) {
       ${acts.note ? '<button class="btn btn--sm" data-act="note">Add note</button>' : ''}
       ${acts.tags ? '<button class="btn btn--sm" data-act="tags">Manage tags</button>' : ''}
       ${acts.medal ? '<button class="btn btn--sm" data-act="medal">Award medal</button>' : ''}
+      ${acts.transfer ? '<button class="btn btn--sm" data-act="transfer">Transfer unit</button>' : ''}
       ${acts.del ? '<button class="btn btn--sm btn--danger" data-act="delete">Remove</button>' : ''}
     </div>` : ''}
 
@@ -276,6 +438,7 @@ export function renderDossier(host, app, id) {
         ${leaveBlock}
         ${strikesBlock}
         ${awardsBlock}
+        ${mattersBlock}
         ${trainingBlock}
         ${serviceRecord}
         ${notesBlock}
@@ -290,6 +453,7 @@ export function renderDossier(host, app, id) {
     edit: () => openEdit(app, u),
     tags: () => openTags(app, u),
     medal: () => openAward(app, u),
+    transfer: () => openTransfer(app, u),
     clearance: () => openClearance(app, u),
     passphrase: () => openPassphrase(app, u),
     strike: () => openStrike(app, u),
@@ -303,6 +467,8 @@ export function renderDossier(host, app, id) {
   host.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => dispatch[b.dataset.act]()));
   host.querySelectorAll('[data-revoke-training]').forEach((b) => b.addEventListener('click', () => revokeTraining(app, u, b.dataset.revokeTraining)));
   host.querySelectorAll('[data-lift-strike]').forEach((b) => b.addEventListener('click', () => liftStrike(app, u, b.dataset.liftStrike)));
+  host.querySelectorAll('[data-appeal-strike]').forEach((b) => b.addEventListener('click', () => openAppealStrike(app, u, b.dataset.appealStrike)));
+  host.querySelectorAll('[data-resolve-appeal]').forEach((b) => b.addEventListener('click', () => openResolveAppeal(app, u, b.dataset.resolveAppeal)));
   host.querySelectorAll('[data-remove-award]').forEach((b) => b.addEventListener('click', () => removeAward(app, u, b.dataset.removeAward)));
   host.querySelectorAll('[data-req]').forEach((b) => b.addEventListener('change', () => toggleRequirement(app, u, b.dataset.req)));
 }
@@ -536,22 +702,64 @@ async function revokeTraining(app, u, completionId) {
   toast('Completion revoked.', 'success'); app.refresh();
 }
 
-function sectionStrikes(u, full, canLift) {
+function sectionStrikes(u, full, actor, canManageStrikes) {
   const count = (u.strikes || []).length;
   if (!count) return '';
   const activeCount = activeStrikeCount(u.strikes);
+  const isSelf = actor && actor.id === u.id;
   let body;
   if (full) {
     body = u.strikes.map((s) => {
+      const voided = strikeVoided(s);
       const active = strikeActive(s);
+      // State badge: appealed-and-overturned takes precedence, then lifted, then expired.
+      let badge = '';
+      if (s.appeal && s.appeal.status === 'overturned') badge = ' <span class="badge badge--ok">Overturned on appeal</span>';
+      else if (s.lifted) badge = ' <span class="badge badge--muted">Lifted</span>';
+      else if (!active) badge = ' <span class="badge badge--muted">Expired</span>';
+      else if (s.appeal && s.appeal.status === 'pending') badge = ' <span class="badge badge--warn">Appeal pending</span>';
+      else if (s.appeal && s.appeal.status === 'upheld') badge = ' <span class="badge badge--bad">Appeal upheld</span>';
+
       const expiryLine = s.expiresAt
-        ? (active ? `expires ${fmtDate(s.expiresAt)}` : `expired ${fmtDate(s.expiresAt)}`)
+        ? (new Date(s.expiresAt).getTime() > Date.now() ? `expires ${fmtDate(s.expiresAt)}` : `expired ${fmtDate(s.expiresAt)}`)
         : 'permanent';
+
+      // The appeal, laid out under the strike: grounds, then the resolution.
+      let appealBlock = '';
+      if (s.appeal) {
+        const ap = s.appeal;
+        const head = ap.status === 'pending'
+          ? `Appeal filed ${fmtDate(ap.at)} \u2014 awaiting a ruling.`
+          : `Appeal ${ap.status} by <span class="mono">${esc(ap.resolvedBy || '')}</span> \u00b7 ${fmtDate(ap.resolvedAt)}`;
+        appealBlock = `
+        <div class="strike__appeal">
+          <div class="strike__appeal-head">${head}</div>
+          <div class="strike__appeal-text">\u201c${esc(ap.text)}\u201d</div>
+          ${ap.resolution ? `<div class="strike__appeal-res">Resolution: ${esc(ap.resolution)}</div>` : ''}
+        </div>`;
+      }
+      if (s.lifted) {
+        appealBlock += `<div class="strike__appeal-res">Lifted by <span class="mono">${esc(s.lifted.by)}</span> \u00b7 ${fmtDate(s.lifted.at)}${s.lifted.note ? ` \u2014 ${esc(s.lifted.note)}` : ''}</div>`;
+      }
+
+      // Controls: the operator may appeal their own active, un-appealed strike;
+      // an authority may lift, or rule a pending appeal (issuer recused).
+      const recused = !isCL5(actor) && s.by && actor && actor.designation === s.by;
+      const buttons = [];
+      if (isSelf && active && !s.appeal) buttons.push(`<button class="btn btn--xs" data-appeal-strike="${esc(s.id)}">Appeal</button>`);
+      if (canManageStrikes && s.appeal && s.appeal.status === 'pending') {
+        buttons.push(recused
+          ? '<span class="muted-text">Recused \u2014 issuing authority</span>'
+          : `<button class="btn btn--xs btn--primary" data-resolve-appeal="${esc(s.id)}">Rule on appeal</button>`);
+      }
+      if (canManageStrikes && active && !s.lifted) buttons.push(`<button class="btn btn--xs" data-lift-strike="${esc(s.id)}">Lift</button>`);
+
       return `
-      <div class="strike ${active ? '' : 'strike--expired'}">
-        <div class="strike__reason">${esc(s.reason)}${active ? '' : ' <span class="badge badge--muted">Expired</span>'}</div>
-        <div class="strike__meta">${fmtDate(s.date)} \u00b7 issued by <span class="mono">${esc(s.by)}</span> \u00b7 ${esc(expiryLine)}${s.liftedNote ? ` \u00b7 <span class="muted-text">${esc(s.liftedNote)}</span>` : ''}</div>
-        ${canLift ? `<button class="btn btn--xs" data-lift-strike="${esc(s.id)}">Lift</button>` : ''}
+      <div class="strike ${voided || !active ? 'strike--expired' : ''}">
+        <div class="strike__reason">${esc(s.reason)}${badge}</div>
+        <div class="strike__meta">${fmtDate(s.date)} \u00b7 issued by <span class="mono">${esc(s.by)}</span> \u00b7 ${esc(expiryLine)}</div>
+        ${appealBlock}
+        ${buttons.length ? `<div class="strike__actions">${buttons.join(' ')}</div>` : ''}
       </div>`;
     }).join('');
   } else {
@@ -661,6 +869,78 @@ function openAward(app, u) {
     const wrap = dlg.querySelector('#aw-custom-wrap');
     if (wrap) wrap.hidden = selEl.value !== '__custom';
   });
+}
+
+// Mint the next free designation for an organisation (e.g. O1-5, EC-9).
+function nextDesignationFor(org) {
+  const prefix = org === 'omega-1' ? 'O1' : org === 'ethics-committee' ? 'EC' : 'CMD';
+  const nums = users()
+    .filter((x) => x.org === org && /-(\d+)$/.test(x.designation || ''))
+    .map((x) => parseInt(x.designation.split('-')[1], 10));
+  return `${prefix}-${(nums.length ? Math.max(...nums) : 0) + 1}`;
+}
+
+// Transfer an operator to another organisation. Re-slots rank + clearance for the
+// new ladder, re-mints the designation, resets the promotion checklist, and
+// records the move. Disciplinary history, tags and awards carry over unchanged.
+function openTransfer(app, u) {
+  const actor = app.user;
+  const dests = Object.keys(ORGS).filter((o) => o !== u.org && canManageOrg(actor, o));
+  if (!dests.length) { toast('There is no destination organisation you can manage.', 'error'); return; }
+  const rankOptionsFor = (o) => (RANKS[o] || []).map((r) => {
+    const clr = clearanceForRank(o, r);
+    return `<option value="${esc(r)}">${esc(r)}${clr ? ` \u2014 ${esc(clr)}` : ''}</option>`;
+  }).join('');
+
+  const body = `
+    <p class="modal__message">Transfer <strong>${esc(u.designation)} \u00b7 ${esc(u.codename)}</strong> from ${esc(ORGS[u.org].short)} to another organisation. A new designation is issued; strikes, tags and awards carry over; the promotion checklist resets.</p>
+    <div class="field"><label>Destination organisation</label><select id="tr-org">${dests.map((o) => `<option value="${o}">${esc(ORGS[o].name)}</option>`).join('')}</select></div>
+    <div class="field"><label>New rank</label><select id="tr-rank">${rankOptionsFor(dests[0])}</select></div>
+    <div class="field"><label>Clearance</label><input id="tr-clr" type="text" readonly /><div class="field__hint">Set automatically from the new rank.</div></div>
+    <div class="ntk-banner" style="border-color:var(--warn)"><strong>Reminder:</strong> a transfer does not remove this operator from their current unit's Need-To-Know compartments. Review and read them out manually if that access should not follow them.</div>
+    <div id="tr-err" class="auth__error" hidden></div>`;
+
+  const dlg = openModal({
+    title: `Transfer \u2014 ${u.designation}`,
+    wide: true,
+    body,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Transfer', tone: 'primary', onClick: (c, d) => {
+          const org = d.querySelector('#tr-org').value;
+          const rank = d.querySelector('#tr-rank').value;
+          const clr = clearanceForRank(org, rank);
+          const err = d.querySelector('#tr-err');
+          err.hidden = true;
+          if (!canManageOrg(actor, org)) { err.textContent = 'You cannot manage that organisation.'; err.hidden = false; return; }
+          if (!(RANKS[org] || []).includes(rank)) { err.textContent = 'Select a valid rank for the destination.'; err.hidden = false; return; }
+          if (clr && (CLEARANCES[clr]?.weight || 0) > (CLEARANCES[actor.clearance]?.weight || 0) && !isCL5(actor)) {
+            err.textContent = 'That rank\u2019s clearance is above your own ceiling.'; err.hidden = false; return;
+          }
+          const designation = nextDesignationFor(org);
+          const fromOrg = u.org; const fromDesig = u.designation;
+          mutate(app, u.id, u.version, (rec) => {
+            rec.org = org;
+            rec.rank = rank;
+            if (clr) rec.clearance = clr;
+            rec.designation = designation;
+            rec.promoChecks = [];
+            addEvent(rec, 'appointment', `Transferred from ${ORGS[fromOrg].short} (${fromDesig}) to ${ORGS[org].short}; assigned ${rank}${clr ? `, ${CLEARANCES[clr].label}` : ''}.`);
+          }, { action: 'TRANSFER_UNIT', detail: `${fromDesig} transferred to ${ORGS[org].short} as ${designation}.` });
+          c();
+          toast(`Transferred to ${ORGS[org].short} as ${designation}. Review compartment access.`, 'success', 5200);
+          app.navigate(`#/personnel/${u.id}`);
+        } },
+    ],
+  });
+
+  const orgSel = dlg.querySelector('#tr-org');
+  const rankSel = dlg.querySelector('#tr-rank');
+  const clrField = dlg.querySelector('#tr-clr');
+  const syncClr = () => { const clr = clearanceForRank(orgSel.value, rankSel.value); clrField.value = clr ? CLEARANCES[clr].label : '\u2014'; };
+  orgSel.addEventListener('change', () => { rankSel.innerHTML = rankOptionsFor(orgSel.value); syncClr(); });
+  rankSel.addEventListener('change', syncClr);
+  syncClr();
 }
 
 // Assign catalogue tags to an operator via checkboxes.
@@ -943,23 +1223,101 @@ function openStrike(app, u) {
   });
 }
 
-async function liftStrike(app, u, strikeId) {
+function liftStrike(app, u, strikeId) {
   const actor = app.user;
   if (!canIssueStrike(actor, u)) { toast('You cannot amend this operator\u2019s record.', 'error'); return; }
   const strike = (u.strikes || []).find((s) => s.id === strikeId);
-  if (!strike) return;
-  const ok = await confirmDialog({
-    title: 'Lift strike',
-    message: `Lift this strike against ${u.designation}? It will be removed from the disciplinary record on appeal.`,
-    confirmLabel: 'Lift strike',
-    danger: true,
+  if (!strike || strike.lifted) return;
+  openModal({
+    title: `Lift strike \u2014 ${u.designation}`,
+    body: `
+      <p class="modal__message">Lift this strike? It remains on the record, marked as lifted, and no longer counts toward the ${STRIKE_LIMIT}-strike limit. Nothing on a disciplinary record is erased.</p>
+      <div class="field"><label>Note <span class="muted-text">(optional \u2014 recorded with the lift)</span></label><textarea id="ls-note" rows="2" placeholder="Reason for lifting\u2026"></textarea></div>`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Lift strike', tone: 'danger', onClick: (c, d) => {
+          const note = d.querySelector('#ls-note').value.trim();
+          mutate(app, u.id, u.version, (rec) => {
+            rec.strikes = (rec.strikes || []).map((x) => (x.id === strikeId
+              ? { ...x, lifted: { by: actor.designation, at: new Date().toISOString(), note: note || null } }
+              : x));
+            addEvent(rec, 'strike', `Strike lifted: ${strike.reason}${note ? ` \u2014 ${note}` : ''}`);
+          }, { action: 'LIFT_STRIKE', detail: `Strike lifted for ${u.designation}.` });
+          c();
+          toast('Strike lifted \u2014 it stays on the record as history.', 'success');
+        } },
+    ],
   });
-  if (!ok) return;
-  mutate(app, u.id, u.version, (rec) => {
-    rec.strikes = (rec.strikes || []).filter((s) => s.id !== strikeId);
-    addEvent(rec, 'strike', `Strike lifted on appeal: ${strike.reason}`);
-  }, { action: 'LIFT_STRIKE', detail: `Strike lifted for ${u.designation}.` });
-  toast('Strike lifted.', 'success');
+}
+
+// The struck operator files an appeal against their own active strike. One
+// appeal per strike; the grounds become immutable once filed.
+function openAppealStrike(app, u, strikeId) {
+  const actor = app.user;
+  const strike = (u.strikes || []).find((s) => s.id === strikeId);
+  if (!strike || strike.appeal || actor.id !== u.id || !strikeActive(strike)) return;
+  openModal({
+    title: 'Appeal strike',
+    wide: true,
+    body: `
+      <p class="modal__message">You are appealing the strike issued ${fmtDate(strike.date)} by <span class="mono">${esc(strike.by)}</span>: \u201c${esc(strike.reason)}\u201d.</p>
+      <div class="field"><label>Grounds of appeal</label><textarea id="ap-grounds" rows="4" placeholder="State why this strike should be overturned\u2026"></textarea></div>
+      <div class="field__hint">Your grounds cannot be edited once filed. An authority other than the issuer will rule on the appeal; the outcome is recorded either way.</div>`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'File appeal', tone: 'primary', onClick: (c, d) => {
+          const text = d.querySelector('#ap-grounds').value.trim();
+          if (!text) { toast('State the grounds of your appeal.', 'error'); return; }
+          mutate(app, u.id, u.version, (rec) => {
+            rec.strikes = (rec.strikes || []).map((x) => (x.id === strikeId
+              ? { ...x, appeal: { text, at: new Date().toISOString(), status: 'pending' } }
+              : x));
+            addEvent(rec, 'strike', 'Appeal filed against a strike.');
+          }, { action: 'APPEAL_STRIKE', detail: `${u.designation} appealed a strike.` });
+          c();
+          toast('Appeal filed \u2014 awaiting a ruling.', 'success');
+        } },
+    ],
+  });
+}
+
+// An authority rules on a pending appeal. The issuing authority is recused
+// (CL5, as Command, may always rule). Overturning voids the strike in place.
+function openResolveAppeal(app, u, strikeId) {
+  const actor = app.user;
+  const strike = (u.strikes || []).find((s) => s.id === strikeId);
+  if (!strike || !strike.appeal || strike.appeal.status !== 'pending') return;
+  if (!canIssueStrike(actor, u)) { toast('You cannot rule on this appeal.', 'error'); return; }
+  if (!isCL5(actor) && strike.by && actor.designation === strike.by) {
+    toast('You issued this strike \u2014 another authority must rule on the appeal.', 'error');
+    return;
+  }
+  openModal({
+    title: `Rule on appeal \u2014 ${u.designation}`,
+    wide: true,
+    body: `
+      <p class="modal__message">Strike (${fmtDate(strike.date)}, issued by <span class="mono">${esc(strike.by)}</span>): \u201c${esc(strike.reason)}\u201d</p>
+      <p class="modal__message">Grounds of appeal: \u201c${esc(strike.appeal.text)}\u201d</p>
+      <label class="radio-row"><input type="radio" name="ap-ruling" value="overturned" checked /> <span><strong>Overturn</strong> \u2014 the appeal succeeds. The strike stays on the record marked \u201cOverturned on appeal\u201d and no longer counts.</span></label>
+      <label class="radio-row"><input type="radio" name="ap-ruling" value="upheld" /> <span><strong>Uphold</strong> \u2014 the strike stands. The appeal and this ruling remain on the record.</span></label>
+      <div class="field" style="margin-top:10px"><label>Resolution</label><textarea id="ap-res" rows="3" placeholder="Reasoning for the ruling\u2026"></textarea></div>`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Enter ruling', tone: 'primary', onClick: (c, d) => {
+          const ruling = (d.querySelector('input[name="ap-ruling"]:checked') || {}).value;
+          const resolution = d.querySelector('#ap-res').value.trim();
+          if (!resolution) { toast('A ruling must state its reasoning.', 'error'); return; }
+          mutate(app, u.id, u.version, (rec) => {
+            rec.strikes = (rec.strikes || []).map((x) => (x.id === strikeId
+              ? { ...x, appeal: { ...x.appeal, status: ruling, resolvedBy: actor.designation, resolvedAt: new Date().toISOString(), resolution } }
+              : x));
+            addEvent(rec, 'strike', `Strike appeal ${ruling}: ${resolution}`);
+          }, { action: 'RESOLVE_APPEAL', detail: `Appeal ${ruling} for ${u.designation}.` });
+          c();
+          toast(ruling === 'overturned' ? 'Appeal overturned \u2014 the strike is voided but remains on record.' : 'Appeal upheld \u2014 the strike stands.', 'success');
+        } },
+    ],
+  });
 }
 
 function openNote(app, u) {

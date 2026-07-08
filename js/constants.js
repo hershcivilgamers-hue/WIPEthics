@@ -135,10 +135,21 @@ export const ACCOUNT_STATUS = {
 // --- Strike policy ----------------------------------------------------------
 // Number of active strikes that flags a record for command review.
 export const STRIKE_LIMIT = 3;
-// A strike may carry an optional expiry. An expired strike remains on the record
-// as history but no longer counts toward the flag/limit.
+// A strike is VOIDED if it was lifted by a manager or overturned on appeal.
+// Voided strikes remain on the record as history — nothing on a disciplinary
+// record ever disappears — but they no longer count toward the flag/limit.
+// (The redaction layer sends partial viewers a precomputed `voided` flag.)
+export function strikeVoided(strike) {
+  if (!strike) return false;
+  if (strike.voided === true) return true;
+  if (strike.lifted) return true;
+  return !!(strike.appeal && strike.appeal.status === 'overturned');
+}
+// A strike may also carry an optional expiry. An expired strike likewise stays
+// on the record as history but no longer counts toward the flag/limit.
 export function strikeActive(strike, now = Date.now()) {
   if (!strike) return false;
+  if (strikeVoided(strike)) return false;
   if (!strike.expiresAt) return true;
   return new Date(strike.expiresAt).getTime() > now;
 }
