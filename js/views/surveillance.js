@@ -15,7 +15,7 @@ import {
 } from '../constants.js';
 import { subjects, getSubject, upsertSubject, compartments, getCompartment, newId, upsertCase, cases } from '../storage.js';
 import {
-  canViewSubject, canManageSubject, canClassifySubjectAt, canManageOrg,
+  canViewSubject, canManageSubject, canClassifySubjectAt, canManageOrg, canManageSubjectsIn,
   isCL5, readIntoCompartment, canManageTribunal, canViewCase,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
@@ -88,7 +88,7 @@ function addLog(subject, type, by, text) {
 
 // Orgs the actor is allowed to manage subjects for (used for creation).
 function manageableOrgs(actor) {
-  return ORG_ORDER.filter((o) => canManageOrg(actor, o));
+  return ORG_ORDER.filter((o) => canManageSubjectsIn(actor, o));
 }
 
 // ===========================================================================

@@ -119,6 +119,7 @@ export const STATUSES = {
   loa:        { code: 'loa',        label: 'On Leave',   tone: 'warn' },
   suspended:  { code: 'suspended',  label: 'Suspended',  tone: 'bad' },
   reassigned: { code: 'reassigned', label: 'Reassigned', tone: 'muted' },
+  discharged: { code: 'discharged', label: 'Discharged', tone: 'muted' },
   terminated: { code: 'terminated', label: 'Terminated', tone: 'muted' },
   deceased:   { code: 'deceased',   label: 'Deceased',   tone: 'muted' },
 };

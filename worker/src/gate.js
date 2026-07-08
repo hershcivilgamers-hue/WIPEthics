@@ -19,6 +19,7 @@ import {
   canManageDirectives, canReadDirective, canManageSubject, canManageTribunal, canRuleTribunal,
   compartmentClears, canManageCompartment, canReadOperatorInto,
   canManageOrg, canParticipateRecruitment, canLogToOperation, canLogIntel, canManageTraining, isCL5,
+  canDischarge, canManageLeave,
 } from '../../js/permissions.js';
 import { rankUp, rankDown, clearanceForRank, clearanceWeight, tallyVotes, RANKS, caseTakesVote, strikeActive } from '../../js/constants.js';
 
@@ -249,6 +250,37 @@ function authorizeUser(actor, cur, next) {
       !changedOutside(cur, next, ['tags', 'events', 'version', 'updatedAt'])) {
     if (!canEditPersonnel(actor, cur)) return deny('You cannot assign tags to this record.');
     return ok('SET_TAGS', `Updated tags on ${cur.designation}.`);
+  }
+
+  // Discharge (honourable / dishonourable) and reinstatement. Junior command
+  // (CL4·J with a stake, over a subordinate) or CL5. Only the status, the
+  // discharge record and events may change.
+  if (j(next.status) !== j(cur.status) && (next.status === 'discharged' || cur.status === 'discharged')) {
+    if (!canDischarge(actor, cur)) return deny('You cannot discharge or reinstate this operator.');
+    if (changedOutside(cur, next, ['status', 'discharge', 'events', 'version', 'updatedAt'])) {
+      return deny('A discharge cannot be combined with other edits.');
+    }
+    if (next.status === 'discharged') {
+      const dc = next.discharge;
+      if (!dc || (dc.type !== 'honourable' && dc.type !== 'dishonourable') || !dc.by) {
+        return deny('A discharge must record its character and the discharging authority.');
+      }
+      return ok('DISCHARGE', `${cur.designation} discharged (${dc.type}).`);
+    }
+    return ok('REINSTATE', `${cur.designation} reinstated to duty.`);
+  }
+
+  // Placing on / returning from leave. Junior command over a subordinate, or a
+  // full manager. Only leave, the active<->on-leave status flip and events.
+  if (j(next.leave ?? null) !== j(cur.leave ?? null)) {
+    if (!canManageLeave(actor, cur)) return deny('You cannot manage leave for this operator.');
+    if (j(next.status) !== j(cur.status) && next.status !== 'loa' && next.status !== 'active') {
+      return deny('A leave change may only set the on-leave or active status.');
+    }
+    if (changedOutside(cur, next, ['leave', 'status', 'events', 'version', 'updatedAt'])) {
+      return deny('A leave change cannot be combined with other edits.');
+    }
+    return ok('SET_LEAVE', `Updated leave for ${cur.designation}.`);
   }
 
   if (!canEditPersonnel(actor, cur)) return deny('You cannot edit this record.');

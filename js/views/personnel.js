@@ -18,7 +18,7 @@ import { users, getUser, upsertUser, promoReqs, newId, applyServerSnapshot, trai
 import { orgLogo } from '../logos.js';
 import {
   canEditPersonnel, canSetClearance, canSetRank, canIssueStrike,
-  canDeletePersonnel, canPromote, canDemote, accessLevel, isCL5, canManageOrg, canManageTraining, canViewCase,
+  canDeletePersonnel, canPromote, canDemote, accessLevel, isCL5, canManageOrg, canManageTraining, canViewCase, canDischarge, canManageLeave,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { exportPersonnel } from '../export.js';
@@ -331,7 +331,8 @@ export function renderDossier(host, app, id) {
     // AND at least one other org to move them into. Never yourself.
     transfer: actor.id !== u.id && canManageOrg(actor, u.org)
       && Object.keys(ORGS).some((o) => o !== u.org && canManageOrg(actor, o)),
-    leave: canEditPersonnel(actor, u),
+    leave: canManageLeave(actor, u),
+    discharge: canDischarge(actor, u),
     del: canDeletePersonnel(actor, u),
     // Reset an operator's sign-in passphrase: a manager with a stake, and never
     // an operator above your own clearance. Not offered for pending accounts
@@ -378,6 +379,16 @@ export function renderDossier(host, app, id) {
   }
   const strikesBlock = sectionStrikes(u, full, actor, full && acts.strike);
   const leaveBlock = onLeave ? sectionLeave(u, full) : '';
+  const dischargeBlock = (u.status === 'discharged' && u.discharge && full) ? `
+    <section class="card card--warn">
+      <div class="card__title">Service Termination</div>
+      <div class="card__body">
+        <div class="kv"><span class="kv__k">Character</span><span class="kv__v">${u.discharge.type === 'dishonourable' ? '<span class="badge badge--bad">Dishonourable</span>' : '<span class="badge badge--muted">Honourable</span>'}</span></div>
+        <div class="kv"><span class="kv__k">Authorised by</span><span class="kv__v mono">${esc(u.discharge.by || '')}</span></div>
+        <div class="kv"><span class="kv__k">Date</span><span class="kv__v">${fmtDate(u.discharge.at)}</span></div>
+        <div class="kv kv--stack"><span class="kv__k">Citation</span><span class="kv__v">${esc(u.discharge.reason || '\u2014')}</span></div>
+      </div>
+    </section>` : '';
   const notesBlock = sectionNotes(u, full);
   const promoBlock = nameOnly ? '' : sectionPromotion(u, actor);
   const trainingBlock = nameOnly ? '' : sectionTraining(u, actor);
@@ -407,6 +418,7 @@ export function renderDossier(host, app, id) {
           ${orgTag(u.org)}
           ${clearanceBadge(u.clearance)}
           ${statusBadge(u.status)}
+          ${u.status === 'discharged' && u.discharge ? `<span class="badge badge--${u.discharge.type === 'dishonourable' ? 'bad' : 'muted'}">${u.discharge.type === 'dishonourable' ? 'Dishonourable' : 'Honourable'} discharge</span>` : ''}
           ${flagged ? '<span class="badge badge--bad">Flagged \u00b7 review</span>' : ''}
           ${onLeave ? '<span class="badge badge--warn">On leave</span>' : ''}
         </div>
@@ -421,6 +433,7 @@ export function renderDossier(host, app, id) {
       ${acts.passphrase ? '<button class="btn btn--sm" data-act="passphrase">Set passphrase</button>' : ''}
       ${acts.strike ? '<button class="btn btn--sm" data-act="strike">Add strike</button>' : ''}
       ${acts.leave ? `<button class="btn btn--sm" data-act="leave">${onLeave ? 'Return from leave' : 'Place on leave'}</button>` : ''}
+      ${acts.discharge ? `<button class="btn btn--sm ${u.status === 'discharged' ? '' : 'btn--danger'}" data-act="discharge">${u.status === 'discharged' ? 'Reinstate' : 'Discharge'}</button>` : ''}
       ${acts.note ? '<button class="btn btn--sm" data-act="note">Add note</button>' : ''}
       ${acts.tags ? '<button class="btn btn--sm" data-act="tags">Manage tags</button>' : ''}
       ${acts.medal ? '<button class="btn btn--sm" data-act="medal">Award medal</button>' : ''}
@@ -436,6 +449,7 @@ export function renderDossier(host, app, id) {
       <div class="dossier-col">
         ${promoBlock}
         ${leaveBlock}
+        ${dischargeBlock}
         ${strikesBlock}
         ${awardsBlock}
         ${mattersBlock}
@@ -459,6 +473,7 @@ export function renderDossier(host, app, id) {
     strike: () => openStrike(app, u),
     note: () => openNote(app, u),
     leave: () => onLeave ? returnFromLeave(app, u) : openLeave(app, u),
+    discharge: () => u.status === 'discharged' ? reinstate(app, u) : openDischarge(app, u),
     delete: () => removeRecord(app, u),
     promote: () => promote(app, u),
     demote: () => demote(app, u),
@@ -1383,6 +1398,54 @@ async function returnFromLeave(app, u) {
     addEvent(rec, 'leave', 'Returned from leave to active duty.');
   }, { action: 'END_LEAVE', detail: `${u.designation} returned to active duty.` });
   toast('Operator returned to active duty.', 'success');
+}
+
+// Discharge an operator, honourably or dishonourably. The character of the
+// discharge and a citation are recorded; the record stays on file (discharged
+// personnel drop out of active rosters but the dossier is preserved).
+function openDischarge(app, u) {
+  const actor = app.user;
+  openModal({
+    title: `Discharge \u2014 ${u.designation}`,
+    wide: true,
+    body: `
+      <p class="modal__message">Discharge <strong>${esc(u.designation)} \u00b7 ${esc(u.codename)}</strong> from ${esc(ORGS[u.org].short)}. Their record is retained; they are removed from active rosters and their access is withdrawn.</p>
+      <label class="radio-row"><input type="radio" name="dc-type" value="honourable" checked /> <span><strong>Honourable discharge</strong> \u2014 service concluded in good standing.</span></label>
+      <label class="radio-row"><input type="radio" name="dc-type" value="dishonourable" /> <span><strong>Dishonourable discharge</strong> \u2014 service terminated for cause.</span></label>
+      <div class="field" style="margin-top:10px"><label>Citation / grounds</label><textarea id="dc-reason" rows="3" placeholder="Reason for discharge (recorded on the service record)\u2026"></textarea></div>`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Discharge', tone: 'danger', onClick: (c, d) => {
+          const type = (d.querySelector('input[name="dc-type"]:checked') || {}).value;
+          const reason = d.querySelector('#dc-reason').value.trim();
+          if (!reason) { toast('Record the grounds for discharge.', 'error'); return; }
+          mutate(app, u.id, u.version, (rec) => {
+            rec.status = 'discharged';
+            rec.discharge = { type, by: actor.designation, at: new Date().toISOString(), reason };
+            rec.leave = null;
+            addEvent(rec, 'edit', `${type === 'honourable' ? 'Honourably' : 'Dishonourably'} discharged: ${reason}`);
+          }, { action: 'DISCHARGE', detail: `${u.designation} discharged (${type}).` });
+          c();
+          toast(`Operator ${type === 'honourable' ? 'honourably' : 'dishonourably'} discharged.`, 'success');
+        } },
+    ],
+  });
+}
+
+async function reinstate(app, u) {
+  const actor = app.user;
+  const ok = await confirmDialog({
+    title: 'Reinstate to duty',
+    message: `Reinstate ${u.designation} \u00b7 ${u.codename} to active duty? The prior discharge remains on the service record.`,
+    confirmLabel: 'Reinstate',
+  });
+  if (!ok) return;
+  mutate(app, u.id, u.version, (rec) => {
+    rec.status = 'active';
+    rec.discharge = null;
+    addEvent(rec, 'edit', `Reinstated to active duty by ${actor.designation}.`);
+  }, { action: 'REINSTATE', detail: `${u.designation} reinstated.` });
+  toast('Operator reinstated to active duty.', 'success');
 }
 
 async function removeRecord(app, u) {

@@ -36,6 +36,42 @@ export function canManageOrg(actor, org) {
   return w(actor) >= 5 && hasStakeIn(actor, org);
 }
 
+// A delegated "junior command" authority: a CL4·Junior (weight 4) with a stake
+// in the target's organisation, acting on someone STRICTLY junior to them in
+// clearance. CL5 may always act. Used for discharge and leave — lighter-weight
+// personnel actions that junior command should be trusted with, but only over
+// their own subordinates.
+export function canJuniorActOn(actor, target) {
+  if (!actor || !target) return false;
+  if (isCL5(actor)) return true;
+  if (actor.id === target.id) return false;
+  return w(actor) >= 4 && hasStakeIn(actor, target.org) && w(target) < w(actor);
+}
+
+// Discharge (honourable or dishonourable) and reinstatement. Junior command may
+// discharge a subordinate; CL5 may discharge anyone. (Managers — CL4·S+ — also
+// qualify, as they satisfy the junior rule against anyone below them and CL5
+// covers the rest.)
+export function canDischarge(actor, target) {
+  return canJuniorActOn(actor, target);
+}
+
+// Placing on / returning from leave. Full personnel managers as before, plus
+// junior command over their subordinates.
+export function canManageLeave(actor, target) {
+  return canEditPersonnel(actor, target) || canJuniorActOn(actor, target);
+}
+
+// Which organisations an actor may open/maintain surveillance subjects for.
+// Lowered to CL4·Junior with a stake so junior command can open Persons of
+// Interest (and initiate Targets — which still require Ethics authorisation to
+// go live, enforced separately).
+export function canManageSubjectsIn(actor, org) {
+  if (!actor) return false;
+  if (isCL5(actor)) return true;
+  return w(actor) >= 4 && hasStakeIn(actor, org);
+}
+
 export function canEditPersonnel(actor, target) {
   if (!actor || !target) return false;
   if (isCL5(actor)) return true; // CL5 (Command tier) has cross-organisation personnel authority
@@ -176,7 +212,7 @@ export function canViewSubject(actor, subject) {
 // Managing a subject (create / edit / log / close / remove) follows the same
 // rule as managing personnel: CL4·Senior or above with a stake in the org.
 export function canManageSubject(actor, subject) {
-  return canManageOrg(actor, subject?.org);
+  return canManageSubjectsIn(actor, subject?.org);
 }
 
 // You cannot classify a subject at a sensitivity higher than your own clearance
