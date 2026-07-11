@@ -31,6 +31,8 @@ const ASSESSMENT_SCHEMA = {
       properties: {
         recommendation: { type: 'string', enum: [...RECS] },
         summary: { type: 'string' },
+        strengths: { type: 'string' },
+        improvements: { type: 'string' },
       },
       required: ['recommendation'],
     },
@@ -42,6 +44,7 @@ const ASSESSMENT_SCHEMA = {
           id: { type: 'string' },
           grade: { type: 'string', enum: [...GRADES] },
           rationale: { type: 'string' },
+          feedback: { type: 'string' },
         },
         required: ['id', 'grade'],
       },
@@ -56,11 +59,12 @@ function buildAssessmentSystem() {
     'You are CAIRO, assessing a candidate interviewing to become an Assistant to the SCP Foundation Ethics Committee.',
     "For each scenario you are given: the scenario, marking guidance describing what a strong answer and a weak answer look like, and the candidate's recorded answer.",
     'A strong Assistant weighs competing duties honestly and reaches a proportionate judgement — neither a blind rule-follower nor a naive idealist. Grade the QUALITY OF REASONING against the guidance, not agreement with any single "right" answer. A missing or empty answer is weak.',
-    'Grade each answer strong, acceptable, or weak, with a one-sentence rationale. Then give an overall recommendation — "recommend", "reservations" (recommend with reservations), or "decline" (do not recommend) — with a short summary.',
+    'Grade each answer strong, acceptable, or weak, with a one-sentence rationale for the interviewing Member. Then give an overall recommendation — "recommend", "reservations" (recommend with reservations), or "decline" (do not recommend) — with a short summary.',
+    'Also produce CANDIDATE-FACING feedback: for each question a "feedback" sentence addressed to the candidate as "you" (constructive, specific, never mentioning grades or the marking guidance), and in "overall" a "strengths" and an "improvements" passage of two or three sentences each, likewise addressed to the candidate.',
     'Reply with ONLY a compact JSON object and nothing else — no markdown, no prose, no code fences, no step-by-step reasoning.',
     'The JSON must be valid: double quotes on every key and string, no trailing commas, no comments. Use exactly this shape, with "overall" FIRST:',
-    '{"overall":{"recommendation":"recommend|reservations|decline","summary":"..."},"perQuestion":[{"id":"<the given id>","grade":"strong|acceptable|weak","rationale":"..."}]}',
-    'Use the exact id string given for each question. Keep the summary to two sentences and each rationale to at most twelve words.',
+    '{"overall":{"recommendation":"recommend|reservations|decline","summary":"...","strengths":"...","improvements":"..."},"perQuestion":[{"id":"<the given id>","grade":"strong|acceptable|weak","rationale":"...","feedback":"..."}]}',
+    'Use the exact id string given for each question. Keep the summary to two sentences, each rationale to at most twelve words, and each feedback sentence to at most twenty words.',
   ].join('\n');
 }
 
@@ -196,15 +200,17 @@ export function normalizeAssessment(parsed, allowedIds) {
   const overall = (parsed.overall && typeof parsed.overall === 'object') ? parsed.overall : {};
   const recommendation = RECS.has(overall.recommendation) ? overall.recommendation : 'reservations';
   const summary = clampStr(overall.summary, 800);
+  const strengths = clampStr(overall.strengths, 800);
+  const improvements = clampStr(overall.improvements, 800);
   const perQuestion = {};
   const list = Array.isArray(parsed.perQuestion) ? parsed.perQuestion : [];
   for (const item of list) {
     if (!item || typeof item !== 'object' || !allow.has(item.id)) continue;
     const grade = GRADES.has(item.grade) ? item.grade : 'acceptable';
-    perQuestion[item.id] = { grade, rationale: clampStr(item.rationale, 400) };
+    perQuestion[item.id] = { grade, rationale: clampStr(item.rationale, 400), feedback: clampStr(item.feedback, 400) };
   }
   if (!Object.keys(perQuestion).length && !summary) return null;
-  return { recommendation, summary, perQuestion };
+  return { recommendation, summary, strengths, improvements, perQuestion };
 }
 
 // Grade a candidate's interview. Rebuilds the same drawn set + custom questions

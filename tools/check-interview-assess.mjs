@@ -31,11 +31,14 @@ assert.equal(extractJson('{bad json}'), null, 'unparseable -> null');
 assert.equal(extractJson(42), null, 'non-string -> null');
 
 const ok = normalizeAssessment(
-  { perQuestion: [{ id: 'q1', grade: 'strong', rationale: 'good reasoning' }], overall: { recommendation: 'recommend', summary: 'solid' } },
+  { perQuestion: [{ id: 'q1', grade: 'strong', rationale: 'good reasoning', feedback: 'Consider naming the trade-off explicitly.' }], overall: { recommendation: 'recommend', summary: 'solid', strengths: 'Weighs duties honestly.', improvements: 'Engage more with magnitudes.' } },
   ['q1'],
 );
 assert.equal(ok.recommendation, 'recommend');
 assert.equal(ok.perQuestion.q1.grade, 'strong');
+assert.equal(ok.perQuestion.q1.feedback, 'Consider naming the trade-off explicitly.', 'candidate feedback carried');
+assert.equal(ok.strengths, 'Weighs duties honestly.', 'overall strengths carried');
+assert.equal(ok.improvements, 'Engage more with magnitudes.', 'overall improvements carried');
 
 const clamped = normalizeAssessment(
   { perQuestion: [{ id: 'q1', grade: 'brilliant', rationale: 'x' }], overall: { recommendation: 'yes', summary: 's' } },

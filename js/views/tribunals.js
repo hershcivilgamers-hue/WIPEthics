@@ -23,7 +23,7 @@ import {
   isCL5, readIntoCompartment,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
-import { exportCase } from '../export.js';
+import { exportCase, exportSummons } from '../export.js';
 import {
   esc, fmtDate, fmtDateTime, clearanceBadge, orgTag, monogram,
   toast, openModal, confirmDialog,
@@ -291,12 +291,13 @@ export function renderCase(host, app, id) {
     return `<div class="link-row"><a class="ref-link" href="#/subject/${esc(s.id)}"><span class="mono">${esc(s.ref)}</span> ${esc(s.alias)}</a> ${orgTag(s.org)}</div>`;
   }).join('') || '<span class="empty-inline">No subjects cited.</span>';
 
-  // Summons.
+  // Summons \u2014 each entry carries its formal instrument, exportable on demand.
   const summonsItems = (c.summons || []).length ? c.summons.map((m) => `
     <div class="summons">
       <div class="summons__who">${summonsWho(m, { link: true })}</div>
       <div class="summons__reason">${esc(m.reason)}</div>
-      <div class="summons__meta">Issued ${fmtDate(m.ts)} \u00b7 <span class="mono">${esc(m.by)}</span></div>
+      <div class="summons__meta">Issued ${fmtDate(m.ts)} \u00b7 <span class="mono">${esc(m.by)}</span>
+        \u00b7 <button class="btn btn--xs" data-summons-doc="${esc(m.id)}">\u2399 Document</button></div>
     </div>`).join('') : '<div class="empty">No summons issued.</div>';
 
   // Proceedings docket.
@@ -412,6 +413,10 @@ export function renderCase(host, app, id) {
   };
   host.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => dispatch[b.dataset.act]()));
   host.querySelectorAll('[data-vote]').forEach((b) => b.addEventListener('click', () => castVote(app, c, b.dataset.vote)));
+  host.querySelectorAll('[data-summons-doc]').forEach((b) => b.addEventListener('click', () => {
+    const m = (c.summons || []).find((x) => x.id === b.dataset.summonsDoc);
+    if (m) exportSummons(app, c, m);
+  }));
 }
 
 // ===========================================================================
@@ -588,13 +593,18 @@ function openSummons(app, c) {
           if (!reason) { toast('A reason is required.', 'error'); return; }
           if (!targetId && !targetName && !targetDept) { toast('Name a person or department to summon.', 'error'); return; }
           const who = targetId ? personName(targetId) : (targetName || targetDept);
-          mutate(app, c.id, c.version, (rec) => {
+          const entry = { id: newId('sum'), ts: new Date().toISOString(), by: app.user.designation, targetId, targetName: targetId ? null : (targetName || null), targetDept: targetId ? null : (targetDept || null), reason };
+          const ok = mutate(app, c.id, c.version, (rec) => {
             rec.summons = rec.summons || [];
-            rec.summons.unshift({ id: newId('sum'), ts: new Date().toISOString(), by: app.user.designation, targetId, targetName: targetId ? null : (targetName || null), targetDept: targetId ? null : (targetDept || null), reason });
+            rec.summons.unshift(entry);
             addEntry(rec, 'filing', app.user.designation, `Summons issued to ${who}.`);
           }, { action: 'ISSUE_SUMMONS', detail: `Summons issued in ${c.ref}.` });
           x();
-          toast('Summons issued.', 'success');
+          if (ok) {
+            toast('Summons issued.', 'success');
+            // The instrument itself: open the formal Summons to Appear for service.
+            exportSummons(app, c, entry);
+          }
         } },
     ],
   });

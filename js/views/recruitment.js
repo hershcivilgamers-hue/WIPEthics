@@ -26,7 +26,7 @@ import {
 } from '../permissions.js';
 import { makeCredential } from '../crypto.js';
 import { interviewSetFor, INTERVIEW_BANK_DRAW, INTERVIEW_GRADE, INTERVIEW_RECOMMENDATION } from '../interview-bank.js';
-import { exportInterviewScript, exportInterviewInvite } from '../export.js';
+import { exportInterviewScript, exportInterviewInvite, exportFeedbackSheet } from '../export.js';
 import * as api from '../api.js';
 import { logAction } from '../audit.js';
 import {
@@ -338,11 +338,15 @@ export function renderRecruit(host, app, id) {
   // script \u2014 these carry no marking criteria.
   const showInvite = isEthics && canAct && stage === 'interview';
   const showAccept = isEthics && canAct && stage === 'archived' && r.archiveStatus === 'approved';
+  // The candidate feedback sheet exists once CAIRO has assessed \u2014 kept available
+  // after archiving so it can be issued alongside the outcome.
+  const showFeedback = isEthics && canAct && !!r.interviewAssessment;
 
   host.innerHTML = `
     <div class="file-actions">
       <button class="btn btn--ghost btn--sm" id="back">\u2190 ${esc(ORG_LABEL[r.org] || 'Recruitment')}</button>
       ${showInvite ? '<button class="btn btn--sm" data-act="export-invite">\u23ce Invitation to Interview</button>' : ''}
+      ${showFeedback ? '<button class="btn btn--sm" data-act="export-feedback">\u23ce Candidate Feedback Sheet</button>' : ''}
       ${showAccept ? '<button class="btn btn--sm" data-act="export-accept">\u23ce Appointment Notice</button>' : ''}
     </div>
 
@@ -418,6 +422,7 @@ export function renderRecruit(host, app, id) {
     'iv-assess': () => runAssessment(app, r),
     'export-invite': () => exportInterviewInvite(app, r, false),
     'export-accept': () => exportInterviewInvite(app, r, true),
+    'export-feedback': () => exportFeedbackSheet(app, r),
   };
   host.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => dispatch[b.dataset.act] && dispatch[b.dataset.act]()));
   host.querySelectorAll('[data-tag]').forEach((b) => b.addEventListener('click', () => setTag(app, r, b.dataset.tag)));

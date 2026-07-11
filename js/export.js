@@ -1087,6 +1087,131 @@ export function buildInterviewInviteHTML(recruit, actor, accepted = false) {
 }
 
 // ===========================================================================
+// ETHICS ASSISTANT \u2014 CANDIDATE FEEDBACK SHEET
+// The candidate-FACING development sheet built from CAIRO's assessment: each
+// scenario with the candidate's recorded answer and a constructive feedback
+// point, then overall strengths and points for improvement. Deliberately
+// carries NO grades, NO marking criteria and NO recommendation \u2014 those are the
+// Committee's channel (the interviewer's script); this sheet is for the
+// candidate's growth.
+// ===========================================================================
+export function buildFeedbackSheetHTML(recruit, actor) {
+  const bank = interviewSetFor(recruit).map((q) => ({ ...q, custom: false }));
+  const custom = (recruit.customQuestions || []).map((q) => ({
+    id: q.id, category: 'Committee-added', prompt: q.prompt, custom: true,
+  }));
+  const items = [...bank, ...custom];
+  const responses = recruit.interviewResponses || {};
+  const assessment = recruit.interviewAssessment || null;
+
+  const candTable = `<table class="memo-h"><tbody>
+    <tr><td class="ml">Candidate</td><td>${esc(recruit.name || '\u2014')}</td></tr>
+    <tr><td class="ml">Reference</td><td>${esc(recruit.ref || '\u2014')}</td></tr>
+    <tr><td class="ml">Date</td><td>${longDate(new Date().toISOString())}</td></tr>
+  </tbody></table>`;
+
+  const qBlocks = items.map((q, i) => {
+    const stored = responses[q.id];
+    const answer = stored && String(stored.text || '').trim();
+    const fb = assessment && assessment.perQuestion && assessment.perQuestion[q.id]
+      ? String(assessment.perQuestion[q.id].feedback || '').trim() : '';
+    return `
+    <section class="iv-q">
+      <div class="iv-qhead">
+        <span class="iv-num">${i + 1}</span>
+        <span class="iv-cat">${esc(q.category)}</span>
+      </div>
+      <div class="iv-prompt">${esc(q.prompt)}</div>
+      <div class="iv-k">Your answer, as recorded</div>
+      ${answer ? `<div class="iv-recorded">${esc(answer)}</div>` : '<p class="muted">No answer was recorded for this scenario.</p>'}
+      ${fb ? `<div class="iv-cairo"><strong>Feedback:</strong> ${esc(fb)}</div>` : ''}
+    </section>`;
+  }).join('');
+
+  const strengths = assessment && String(assessment.strengths || '').trim();
+  const improvements = assessment && String(assessment.improvements || '').trim();
+  const overallBlock = (strengths || improvements) ? `
+    ${strengths ? `<div class="jhead">Strengths</div>${paras(strengths)}` : ''}
+    ${improvements ? `<div class="jhead">Points for Improvement</div>${paras(improvements)}` : ''}`
+    : '<div class="jhead">Overall</div><p class="muted">Overall feedback is pending assessment.</p>';
+
+  const inner = `
+    ${letterhead('ethics-committee', 'Office of the Ethics Committee')}
+    <hr class="rule" />
+    <div class="memo-title">Interview Feedback \u2014 Ethics Assistant</div>
+    <hr class="rule" />
+    ${IV_STYLE}
+    ${candTable}
+    <hr class="rule" />
+    <div class="iv-intro"><p>Thank you for interviewing with the Ethics Committee. The notes below reflect on the
+    answers you gave \u2014 the scenarios have no single correct response, and this feedback concerns the quality of
+    reasoning shown, offered for your development whatever the outcome of your application.</p></div>
+    ${qBlocks}
+    ${overallBlock}
+    ${signBlock({ name: esc(actor?.designation || 'ETHICS COMMITTEE'), role: 'For and on behalf of the Ethics Committee', dated: `Issued ${longDate(new Date().toISOString())}` })}
+  `;
+
+  return frameDoc({
+    title: 'Interview Feedback',
+    classification: 'FOUNDATION GENERAL \u00b7 ETHICS COMMITTEE \u00b7 FOR THE NAMED CANDIDATE',
+    inner,
+    org: 'ethics-committee',
+    distribution: 'The named candidate.',
+    footerRef: recruit.ref || 'APPLICATION',
+    actor,
+  });
+}
+
+// ===========================================================================
+// ETHICS TRIBUNAL \u2014 SUMMONS TO APPEAR
+// The formal instrument behind a docket summons entry: who is summoned, in what
+// matter, on what grounds, over the issuing authority's signature.
+// ===========================================================================
+export function buildSummonsHTML(record, m, actor) {
+  const kindLower = (CASE_KIND[record.kind]?.label || record.kind).toLowerCase();
+  const addressee = m.targetId
+    ? personRef(m.targetId, m.targetName)
+    : esc([m.targetName || '', m.targetDept || ''].filter(Boolean).join(' \u2014 ') || 'the party named in the record');
+
+  const inner = `
+    ${letterhead('ethics-committee', 'Office of Tribunals')}
+    <hr class="rule" />
+    <div class="court">In the Ethics Committee of the SCP Foundation</div>
+    <div class="matter">In the matter of a ${esc(kindLower)} concerning ${esc(record.title)}</div>
+    <div class="caseno">Case No. ${esc(record.ref)}</div>
+    <hr class="rule--bold" />
+    <div class="doc-title">Summons to Appear</div>
+    <hr class="rule--bold" />
+    <table class="memo-h"><tbody>
+      <tr><td class="ml">To</td><td>${addressee}</td></tr>
+      <tr><td class="ml">Issued</td><td>${longDate(m.ts)}</td></tr>
+      <tr><td class="ml">Issuing officer</td><td>${esc(m.by || '\u2014')}</td></tr>
+    </tbody></table>
+    <div class="memo-body">
+      <p>You are hereby summoned to appear before the Ethics Committee of the SCP Foundation in the
+      above-entitled matter, for the following reason:</p>
+      ${paras(m.reason)}
+      <p>You are to present yourself before the Committee at the sitting notified to you by the Office of
+      Tribunals, and to bring with you any records or materials in your keeping that bear on the matter.
+      You may address the Committee and be heard.</p>
+      <p>Failure to appear without cause shown is itself a matter for the Committee and will be recorded
+      upon the case.</p>
+    </div>
+    ${signBlock({ name: esc(m.by || 'ETHICS COMMITTEE'), role: 'By order of the Ethics Committee, Office of Tribunals', dated: `Issued ${longDate(m.ts)}` })}
+  `;
+
+  return frameDoc({
+    title: 'Summons to Appear',
+    classification: banner(record.clearance, 'Ethics Committee'),
+    inner,
+    org: 'ethics-committee',
+    distribution: 'The summoned party; the case file; the Office of Tribunals.',
+    footerRef: `${record.ref}-SUM`,
+    actor,
+  });
+}
+
+// ===========================================================================
 // SIDE-EFFECTING EXPORT (new tab, or download if pop-ups blocked)
 // ===========================================================================
 function openDocument(html, downloadName) {
@@ -1134,6 +1259,14 @@ export function exportInterviewScript(app, recruit) {
 export function exportInterviewInvite(app, recruit, accepted = false) {
   logAction(app.user, 'EXPORT_DOCUMENT', `Generated ${accepted ? 'appointment notice' : 'interview invitation'} for ${recruit.ref || 'application'}.`);
   openDocument(buildInterviewInviteHTML(recruit, app.user, accepted), `${recruit.ref || 'application'}-${accepted ? 'appointment' : 'interview-invitation'}.html`);
+}
+export function exportFeedbackSheet(app, recruit) {
+  logAction(app.user, 'EXPORT_DOCUMENT', `Generated candidate feedback sheet for ${recruit.ref || 'application'}.`);
+  openDocument(buildFeedbackSheetHTML(recruit, app.user), `${recruit.ref || 'application'}-interview-feedback.html`);
+}
+export function exportSummons(app, record, m) {
+  logAction(app.user, 'EXPORT_SUMMONS', `Generated summons document in ${record.ref}.`);
+  openDocument(buildSummonsHTML(record, m, app.user), `${record.ref}-summons.html`);
 }
 export function exportSourceFile(app, src) {
   logAction(app.user, 'EXPORT_INTEL', `Generated source file for ${src.ref}.`);

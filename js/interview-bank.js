@@ -76,6 +76,13 @@ export const INTERVIEW_QUESTION_BANK = [
     valid: 'Distinguishes preventing reproduction from harming existing instances, weighs the containment burden honestly against the moral status of potential and actual instances, and scrutinises \u201cby any effective means\u201d for methods that would be indefensible. Seeks the least-harm option that still keeps containment viable.',
     weak: 'Grants blanket authority without examining the methods, or refuses any intervention on principle while ignoring a real and growing containment hazard. Collapses the question into pure security or pure sentiment.',
   },
+  {
+    id: 'q_identity_erasure',
+    category: 'Anomaly Ethics',
+    prompt: 'Containment of a sapient anomaly requires amnesticising it every few weeks, erasing the sense of self it rebuilds each cycle. The procedure is painless and it never complains \u2014 each new \u201cself\u201d knows nothing of the loss. A researcher argues no harm is done; an orderly refuses to administer another dose. Where does the harm lie, if anywhere, and what would you advise the Committee?',
+    valid: 'Engages seriously with whether identity erasure is a harm even absent suffering or memory of loss; weighs the containment necessity honestly rather than hiding behind \u201cit is painless\u201d; looks for less-destructive alternatives and proposes review rather than settling for an absolute.',
+    weak: 'Declares it harmless because nothing is felt or remembered, or condemns it outright with no regard for why the cycle exists. Treats the question as obvious in either direction.',
+  },
 
   // --- Use of Force / D-Class ---------------------------------------------
   {
@@ -91,6 +98,20 @@ export const INTERVIEW_QUESTION_BANK = [
     prompt: 'A D-class subject \u201cvolunteers\u201d for a hazardous test in exchange for improved conditions and a sentence reduction. A researcher cites this as informed consent. How much moral weight does that consent carry, and does it change what may be done?',
     valid: 'Recognises that consent obtained under confinement and coercive incentives is compromised and cannot by itself license otherwise-impermissible harm, while not treating the subject as incapable of any agency. Distinguishes a genuine choice from a coerced bargain and adjusts accordingly.',
     weak: 'Takes the \u201cvolunteering\u201d at face value as full consent that settles the matter, or dismisses the subject\u2019s expressed wishes entirely. Fails to see the coercion inherent in the setting \u2014 or uses that coercion to deny the subject any voice at all.',
+  },
+  {
+    id: 'q_breach_bystanders',
+    category: 'Use of Force / D-Class',
+    prompt: 'During a containment breach, the pursuing element can engage the entity with heavy weapons in a crowded transit hub \u2014 likely stopping it, at real risk to bystanders \u2014 or hold fire and track it toward open ground, accepting the harm it may do on the way. The task force lead radios for an immediate ruling. What do you say, and on what basis?',
+    valid: 'Reasons under time pressure with proportionality: weighs certain risk to identifiable bystanders against uncertain further harm; asks what the entity is actually doing (fleeing or attacking); gives a usable answer rather than deferring, while flagging the decision for review afterwards.',
+    weak: 'Orders the strike or the hold reflexively without weighing either population, or refuses to decide at all. Ignores that a non-answer is itself a decision with casualties.',
+  },
+  {
+    id: 'q_dclass_incentives',
+    category: 'Use of Force / D-Class',
+    prompt: 'A site proposes a \u201cvolunteer credit\u201d scheme: D-class who enlist for hazardous testing earn sentence reductions, better rations, and the right to recruit others into the programme for further credit. Uptake would be high and testing throughput would improve. The Committee is asked to approve it. What is your assessment?',
+    valid: 'Sees that layering incentives on a captive population manufactures consent rather than obtaining it, and that peer recruitment adds coercion by another name; weighs the genuine gains honestly; proposes bounds (no recruitment tiers, independent consent checks) if any scheme is to survive.',
+    weak: 'Approves it as a win-win without examining the coercive structure, or rejects all incentives without distinguishing them from the raw coercion that already exists. No engagement with the recruitment pyramid.',
   },
 
   // --- Authority & Dissent -------------------------------------------------
@@ -115,6 +136,13 @@ export const INTERVIEW_QUESTION_BANK = [
     valid: 'Recognises falsified safety records as a serious hazard that must be surfaced regardless of the project\u2019s value or personal exposure, chooses the proper reporting route, and preserves the evidence. Weighs the disruption honestly but does not let it override safety and honesty.',
     weak: 'Lets it slide to protect the project or themselves, handles it through rumour or private confrontation rather than proper channels, or treats the disruption as reason enough to stay silent.',
   },
+  {
+    id: 'q_peer_minutes',
+    category: 'Authority & Dissent',
+    prompt: 'A fellow Assistant — a friend who trained alongside you — has been quietly tightening the wording of Committee minutes so that a senior Member’s preferred outcome reads as better supported than the discussion warranted. Each edit is small; none is technically false. What do you do?',
+    valid: 'Recognises cumulative slanting of the record as corruption of the Committee’s memory even when each step is defensible; raises it first with the colleague, then through proper channels if it continues; refuses to let friendship price the record. Distinguishes tone-editing from substance-shading.',
+    weak: 'Dismisses it because no single edit is a lie, or leaps straight to formal accusation with no attempt to correct course. Lets loyalty decide, in either direction.',
+  },
 
   // --- Secrecy & Disclosure ------------------------------------------------
   {
@@ -138,6 +166,13 @@ export const INTERVIEW_QUESTION_BANK = [
     valid: 'Refuses to treat the Veil as self-justifying, insists on weighing the actual ongoing harm against the projected harm of disclosure with some rigour, seeks mitigations that reduce the public harm without breaching secrecy, and stays willing to revisit as the facts change. Treats it as a genuine cost-benefit judgement under uncertainty.',
     weak: 'Invokes secrecy as an automatic trump, or demands disclosure without seriously modelling the consequences. Ignores mitigations, or treats the panic projection as either certain or irrelevant.',
   },
+  {
+    id: 'q_family_warning',
+    category: 'Secrecy & Disclosure',
+    prompt: 'A researcher confides that their family lives three streets from a site whose containment margins have quietly narrowed. They intend to move their family “for unrelated reasons” — telling them nothing, but acting on classified knowledge. Do you report it, ignore it, or something else?',
+    valid: 'Sees both the human motive and the precedent: classified knowledge steering private action is a leak in slow motion, even when nothing is said aloud. Notices the real failure may be the narrowed margins, not the moving van, and proposes the proper channel — raise the containment concern formally so no one needs private knowledge to be safe.',
+    weak: 'Treats it as a firing offence outright, or waves it through as harmless. Never engages with the containment deficiency that motivated it.',
+  },
 
   // --- Containment vs Welfare ---------------------------------------------
   {
@@ -154,6 +189,20 @@ export const INTERVIEW_QUESTION_BANK = [
     valid: 'Weighs a real and continuing welfare gain against a real safety cost, asks for the magnitudes rather than arguing in the abstract, looks for arrangements that capture most of the welfare benefit while keeping staff acceptably safe, and is honest that some residual risk may be worth accepting \u2014 or may not. Avoids treating either value as absolute.',
     weak: 'Maximises welfare with no regard for staff exposure, or refuses any humane improvement citing safety without weighing degree. Will not engage with magnitudes or with compromise designs.',
   },
+  {
+    id: 'q_small_kindnesses',
+    category: 'Containment vs Welfare',
+    prompt: 'A cooperative sapient anomaly asks for books, music, and an hour of conversation each week. Behavioural staff confirm the routine measurably improves its stability; security notes each interaction is a small but real exposure, and the staff hours have other uses. You are asked whether the Foundation owes comfort to what it contains. What is your position?',
+    valid: 'Answers the actual question \u2014 whether welfare beyond bare maintenance is owed \u2014 and connects it to both ethics and containment interest (a stable anomaly is a safer one); weighs the exposure honestly and proposes proportionate controls rather than all-or-nothing.',
+    weak: 'Frames any comfort as sentimental waste, or grants everything requested without acknowledging exposure and precedent. Cannot say why the line sits where they put it.',
+  },
+  {
+    id: 'q_dying_anomaly',
+    category: 'Containment vs Welfare',
+    prompt: 'A long-contained sapient anomaly is deteriorating and will die within months. An intervention exists that would likely save it, but requires relaxing containment for the duration and committing scarce medical resources. It has never breached and has cooperated for years. The file lands with the Committee. How do you reason it through?',
+    valid: 'Treats years of cooperation and the Foundation\u2019s custodial role as morally relevant without being ruled by sentiment; interrogates the actual risk of the relaxed posture and the opportunity cost; is willing to reach either answer and to own what each one costs.',
+    weak: 'Lets it die because intervention is inconvenient, or demands rescue at any risk. Never engages with the specifics of the relaxation or the resources.',
+  },
 
   // --- Personal Conduct ----------------------------------------------------
   {
@@ -162,6 +211,27 @@ export const INTERVIEW_QUESTION_BANK = [
     prompt: 'A candidate you personally mentored and are close to is the subject of a decision the Committee has asked you to help assess. What do you do \u2014 and how do you conduct yourself if the Committee ultimately decides against your view?',
     valid: 'Discloses the relationship and recuses or limits their involvement rather than concealing the conflict; understands the Committee\u2019s authority and independence and, once a decision is made through proper process, commits to it and does not undermine it \u2014 while retaining the right to have recorded a dissent. Separates personal loyalty from institutional duty.',
     weak: 'Hides the connection or lets it steer the assessment; or, having been overruled, works around or quietly resents the decision. Cannot distinguish disagreeing-then-committing from disagreeing-then-sabotaging.',
+  },
+  {
+    id: 'q_gift_from_subject',
+    category: 'Personal Conduct',
+    prompt: 'After a review you conducted, a contained sapient anomaly offers you a gift \u2014 a small carved token, confirmed non-anomalous by testing. Refusing may damage the rapport that keeps it cooperative; accepting means an Assistant holds a personal token from an entity whose file they help decide. What do you do with the object, and with the relationship?',
+    valid: 'Sees the conflict-of-interest seed inside a harmless object; protects the rapport without privatising it \u2014 logs the gift, surfaces it to the Committee, treats it as the Foundation\u2019s rather than their own; understands that impartiality must be visible, not just felt.',
+    weak: 'Pockets it as trivial, or rebuffs the entity coldly with no thought for the containment value of the relationship. Either way, keeps the event to themselves.',
+  },
+  {
+    id: 'q_fatigue_disclosure',
+    category: 'Personal Conduct',
+    prompt: 'Midway through a heavy docket you notice your own reviews getting shorter and your patience with dissenting evidence thinner. Flagging your fatigue means matters you touched may be reopened and your reliability questioned; staying quiet means decisions of consequence carry your degraded judgement. What do you do?',
+    valid: 'Puts the integrity of the decisions above self-image: discloses, asks for redistribution or a pause, and supports reopening anything materially affected. Treats self-monitoring as part of the role rather than a weakness.',
+    weak: 'Pushes through in silence, or steps back without protecting the matters already affected. Frames it purely as a question of personal cost.',
+  },
+  {
+    id: 'q_canteen_talk',
+    category: 'Personal Conduct',
+    prompt: 'In the site canteen you overhear two researchers loudly working through details of a sealed Committee matter \u2014 one you are assigned to. Several unclassified staff are in earshot. Intervening marks you out and may sour working relationships you rely on; staying quiet lets the exposure continue. What do you do in the moment, and afterwards?',
+    valid: 'Acts proportionately in the moment \u2014 ends the conversation without theatre \u2014 then follows up through the proper channel so the breach is recorded and handled; accepts the social cost as part of holding the role. Separates the people from the practice.',
+    weak: 'Does nothing to avoid awkwardness, or stages a public confrontation that advertises the matter further. Treats reporting colleagues as either unthinkable or satisfying.',
   },
 ];
 
