@@ -65,7 +65,7 @@ const CLEARANCE_MARK = {
   'CL3':   { tier: 'LEVEL 3 \u00b7 SECRET',     caveat: 'RESTRICTED DISSEMINATION' },
   'CL4-J': { tier: 'LEVEL 4 \u00b7 TOP SECRET', caveat: 'FOUNDATION EYES ONLY' },
   'CL4-S': { tier: 'LEVEL 4 \u00b7 TOP SECRET', caveat: 'FOUNDATION EYES ONLY' },
-  'CL5':   { tier: 'LEVEL 5 \u00b7 THAUMIEL',   caveat: 'O5 COUNCIL AUTHORITY' },
+  'CL5':   { tier: 'LEVEL 5 \u00b7 THAUMIEL',   caveat: 'FOUNDATION COMMAND' },
 };
 const DOC_CLASS = {
   Personnel: 'PERSONNEL DOSSIER',
@@ -81,6 +81,15 @@ const banner = (code, category) => {
   const cls = DOC_CLASS[category] || String(category).toUpperCase();
   return `${m.tier} // ${cls} // ${m.caveat}`;
 };
+
+// SCP cover-sheet colour band by classification level: amber/yellow at Level 3,
+// red at Level 4 and above. Derived from the marking text so every builder gets
+// it automatically; commendations and unlevelled records stay unbanded.
+function classBand(classification) {
+  if (/\bLEVEL 3\b/.test(classification)) return 'classbar--yellow';
+  if (/\bLEVEL [45]\b/.test(classification)) return 'classbar--red';
+  return '';
+}
 
 function authorityBody(orgKey) {
   if (orgKey === 'ethics-committee') return 'Ethics Committee';
@@ -251,6 +260,8 @@ const CSS = `
   .classbar { text-align: center; font-family: Arial, Helvetica, sans-serif; font-weight: 700; letter-spacing: .14em; font-size: 9.5pt; color: #111; text-transform: uppercase; padding: 2px 0; }
   .classbar--top { margin-bottom: 14px; }
   .classbar--bottom { margin-top: 22px; }
+  .classbar--yellow { background: #e8b100; color: #201a00; border-top: 3px solid #201a00; border-bottom: 3px solid #201a00; padding: 5px 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .classbar--red { background: #8f1515; color: #fff; border-top: 3px solid #3a0808; border-bottom: 3px solid #3a0808; padding: 5px 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
   /* Document control block */
   .ctrl { border-collapse: collapse; margin: 0 0 16px auto; }
@@ -363,6 +374,7 @@ function frameDoc({ title, classification, inner, footerRef, actor, org = null, 
   const logo = org ? orgLogo(org) : null;
   const wm = logo ? `<div class="wm" aria-hidden="true"><img src="${logo}" alt="" /></div>` : '';
   const dist = distribution || defaultDistribution(org);
+  const band = classBand(classification);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -378,7 +390,7 @@ function frameDoc({ title, classification, inner, footerRef, actor, org = null, 
   </div>
   <div class="sheet"><div class="pad">
     ${wm}
-    <div class="classbar classbar--top">${esc(classification)}</div>
+    <div class="classbar classbar--top ${band}">${esc(classification)}</div>
     <table class="ctrl"><tbody>
       <tr><td class="cl">Control N\u00ba</td><td class="cv">${esc(controlNo)}</td></tr>
       <tr><td class="cl">Date of issue</td><td class="cv">${longDate(now)}</td></tr>
@@ -391,7 +403,7 @@ function frameDoc({ title, classification, inner, footerRef, actor, org = null, 
       <div><span class="hl">Handling:</span> This record contains information affecting the security of the Foundation. Store and transmit by approved channels only; reproduction requires the originator\u2019s written consent. Unauthorised disclosure is a matter for the Ethics Committee.</div>
     </div>
     <div class="foot"><div>${esc(controlNo)}</div><div class="foot__c">${esc(classification)}</div><div>Page 1 of 1</div></div>
-    <div class="classbar classbar--bottom">${esc(classification)}</div>
+    <div class="classbar classbar--bottom ${band}">${esc(classification)}</div>
   </div></div>
 </body>
 </html>`;
