@@ -22,6 +22,10 @@ assert.deepEqual(extractJson('{"a":[1,2,],}'), { a: [1, 2] }, 'trailing commas r
 assert.deepEqual(extractJson('<think>{"draft":1} weighing options…</think>{"a":1}'), { a: 1 }, 'think block stripped');
 assert.deepEqual(extractJson('Some {stray notes} first.\n{"a":1}'), { a: 1 }, 'prose object skipped, answer taken');
 assert.deepEqual(extractJson('{"a":"brace { inside string }"}'), { a: 'brace { inside string }' }, 'braces inside strings survive');
+// The live failure mode: the model ran out of tokens mid-JSON. With overall
+// first, salvage must recover the verdict even when perQuestion is cut off.
+const truncated = extractJson('{"overall":{"recommendation":"recommend","summary":"Sound reasoning."},"perQuestion":[{"id":"q_x","grade":"strong","rationale":"good"},{"id":"q_y","gra');
+assert.equal(truncated && truncated.overall && truncated.overall.recommendation, 'recommend', 'truncated JSON salvaged — verdict intact');
 assert.equal(extractJson('no json here'), null, 'no braces -> null');
 assert.equal(extractJson('{bad json}'), null, 'unparseable -> null');
 assert.equal(extractJson(42), null, 'non-string -> null');

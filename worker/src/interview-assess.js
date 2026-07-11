@@ -21,9 +21,19 @@ const clampStr = (s, n) => String(s == null ? '' : s).slice(0, n);
 // shape instead of merely being asked for it in prose. Kept deliberately simple
 // (the docs warn overly complex schemas fail).
 // https://developers.cloudflare.com/workers-ai/features/json-mode/
+// `overall` is deliberately FIRST: if the model runs out of output tokens
+// mid-reply, truncation then costs per-question rationales, not the verdict.
 const ASSESSMENT_SCHEMA = {
   type: 'object',
   properties: {
+    overall: {
+      type: 'object',
+      properties: {
+        recommendation: { type: 'string', enum: [...RECS] },
+        summary: { type: 'string' },
+      },
+      required: ['recommendation'],
+    },
     perQuestion: {
       type: 'array',
       items: {
@@ -36,16 +46,8 @@ const ASSESSMENT_SCHEMA = {
         required: ['id', 'grade'],
       },
     },
-    overall: {
-      type: 'object',
-      properties: {
-        recommendation: { type: 'string', enum: [...RECS] },
-        summary: { type: 'string' },
-      },
-      required: ['recommendation'],
-    },
   },
-  required: ['perQuestion', 'overall'],
+  required: ['overall', 'perQuestion'],
 };
 
 // The assessor persona. Asks for a strict JSON envelope so the reply is parseable.
@@ -55,10 +57,10 @@ function buildAssessmentSystem() {
     "For each scenario you are given: the scenario, marking guidance describing what a strong answer and a weak answer look like, and the candidate's recorded answer.",
     'A strong Assistant weighs competing duties honestly and reaches a proportionate judgement — neither a blind rule-follower nor a naive idealist. Grade the QUALITY OF REASONING against the guidance, not agreement with any single "right" answer. A missing or empty answer is weak.',
     'Grade each answer strong, acceptable, or weak, with a one-sentence rationale. Then give an overall recommendation — "recommend", "reservations" (recommend with reservations), or "decline" (do not recommend) — with a short summary.',
-    'Reply with ONLY a compact JSON object and nothing else — no markdown, no prose, no code fences.',
-    'The JSON must be valid: double quotes on every key and string, no trailing commas, no comments. Use exactly this shape:',
-    '{"perQuestion":[{"id":"<the given id>","grade":"strong|acceptable|weak","rationale":"..."}],"overall":{"recommendation":"recommend|reservations|decline","summary":"..."}}',
-    'Use the exact id string given for each question. Keep each rationale to one short sentence so the whole reply stays compact.',
+    'Reply with ONLY a compact JSON object and nothing else — no markdown, no prose, no code fences, no step-by-step reasoning.',
+    'The JSON must be valid: double quotes on every key and string, no trailing commas, no comments. Use exactly this shape, with "overall" FIRST:',
+    '{"overall":{"recommendation":"recommend|reservations|decline","summary":"..."},"perQuestion":[{"id":"<the given id>","grade":"strong|acceptable|weak","rationale":"..."}]}',
+    'Use the exact id string given for each question. Keep the summary to two sentences and each rationale to at most twelve words.',
   ].join('\n');
 }
 
@@ -85,10 +87,16 @@ function buildAssessmentUser(items, responses) {
 // its free tier is easily exhausted (HTTP 429 / quota). Returns { text, model }
 // so the stored provenance reflects the provider that actually answered.
 async function callModel(env, system, user) {
-  // 2048: the fallback (GLM) is a thinking model — reasoning shares the output
-  // budget, and a tight cap leaves content empty after the thinking spend. The
-  // responseFormat constrains Workers AI output to the verdict schema (JSON mode).
-  const opts = { maxTokens: 2048, temperature: 0.3, responseFormat: { type: 'json_schema', json_schema: ASSESSMENT_SCHEMA } };
+  // The fallback (GLM) is a thinking model: reasoning shares the output budget
+  // and was observed truncating the verdict mid-JSON. So: disable thinking via
+  // chat_template_kwargs (in the model schema), give generous headroom, and
+  // constrain the output to the verdict schema (JSON mode).
+  const opts = {
+    maxTokens: 4096,
+    temperature: 0.3,
+    responseFormat: { type: 'json_schema', json_schema: ASSESSMENT_SCHEMA },
+    chatTemplateKwargs: { enable_thinking: false },
+  };
   const hasGemini = !!(env && env.GEMINI_API_KEY);
   const hasAI = !!(env && env.AI);
   if (hasGemini) {
@@ -141,6 +149,40 @@ export function extractJson(text) {
   for (const c of candidates.reverse()) {
     const parsed = tryParse(c);
     if (parsed) return parsed;
+  }
+  // Last resort: the reply ran out of tokens mid-JSON (observed live: the object
+  // never closes). Salvage what completed by closing the open structures.
+  return repairTruncated(cleaned.slice(start), tryParse);
+}
+
+// Close a truncated JSON string: walk it tracking quote/escape state and the
+// open-container stack, close any dangling string, append the missing closers,
+// and parse. If the dangling fragment itself is unusable (e.g. a key with no
+// value), chop back to the previous element boundary and try again.
+function repairTruncated(s, tryParse) {
+  let cur = s;
+  for (let attempt = 0; attempt < 40 && cur; attempt += 1) {
+    let inStr = false; let escaped = false; const stack = [];
+    for (let i = 0; i < cur.length; i += 1) {
+      const ch = cur[i];
+      if (inStr) {
+        if (escaped) escaped = false;
+        else if (ch === '\\') escaped = true;
+        else if (ch === '"') inStr = false;
+        continue;
+      }
+      if (ch === '"') inStr = true;
+      else if (ch === '{' || ch === '[') stack.push(ch);
+      else if (ch === '}' || ch === ']') stack.pop();
+    }
+    let candidate = cur + (inStr ? '"' : '');
+    candidate = candidate.replace(/[,:\s]+$/, '');
+    const closers = stack.reverse().map((c) => (c === '{' ? '}' : ']')).join('');
+    const parsed = tryParse(candidate + closers);
+    if (parsed) return parsed;
+    const cut = Math.max(cur.lastIndexOf(','), cur.lastIndexOf('{'), cur.lastIndexOf('['));
+    if (cut <= 0) return null;
+    cur = cur.slice(0, cut);
   }
   return null;
 }

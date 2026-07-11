@@ -110,10 +110,15 @@ export async function callWorkersAI(env, persona, history, text, opts = {}) {
   try {
     out = await env.AI.run(model, {
       messages,
+      // Older models honour max_tokens; the current GLM schema deprecates it in
+      // favour of max_completion_tokens — send both so the cap actually applies.
       max_tokens: opts.maxTokens || MAX_OUTPUT_TOKENS,
+      max_completion_tokens: opts.maxTokens || MAX_OUTPUT_TOKENS,
       // JSON mode (https://developers.cloudflare.com/workers-ai/features/json-mode/):
       // callers that need structured output pass response_format through here.
       ...(opts.responseFormat ? { response_format: opts.responseFormat } : {}),
+      // GLM-family thinking toggle (chat_template_kwargs is in the model schema).
+      ...(opts.chatTemplateKwargs ? { chat_template_kwargs: opts.chatTemplateKwargs } : {}),
     });
   } catch (e) {
     throw new Error(`Workers AI (${model}) failed: ${(e && e.message) || e}`);
