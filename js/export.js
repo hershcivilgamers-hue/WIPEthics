@@ -58,7 +58,29 @@ function paras(text) {
 
 const REDACTED = '<span class="redacted">[ REDACTED ]</span>';
 const clrLabel = (code) => CLEARANCES[code]?.label || code;
-const banner = (code, category) => `${(clrLabel(code)).toUpperCase()} \u00b7 RESTRICTED \u00b7 ${category.toUpperCase()} \u00b7 EYES ONLY`;
+// SCP-style classification marking. Leads with the clearance level and its
+// classic secrecy tier (as real markings lead with the classification), then the
+// document class, then a dissemination caveat that escalates with the level.
+const CLEARANCE_MARK = {
+  'CL3':   { tier: 'LEVEL 3 \u00b7 SECRET',     caveat: 'RESTRICTED DISSEMINATION' },
+  'CL4-J': { tier: 'LEVEL 4 \u00b7 TOP SECRET', caveat: 'FOUNDATION EYES ONLY' },
+  'CL4-S': { tier: 'LEVEL 4 \u00b7 TOP SECRET', caveat: 'FOUNDATION EYES ONLY' },
+  'CL5':   { tier: 'LEVEL 5 \u00b7 THAUMIEL',   caveat: 'O5 COUNCIL AUTHORITY' },
+};
+const DOC_CLASS = {
+  Personnel: 'PERSONNEL DOSSIER',
+  'Ethics Committee': 'ETHICS COMMITTEE PROCEEDING',
+  Surveillance: 'ANOMALY SURVEILLANCE FILE',
+  Intelligence: 'INTELLIGENCE PRODUCT',
+  Operations: 'OPERATIONAL ORDER',
+  Directive: 'STANDING DIRECTIVE',
+  Document: 'OFFICIAL RECORD',
+};
+const banner = (code, category) => {
+  const m = CLEARANCE_MARK[code] || { tier: clrLabel(code).toUpperCase(), caveat: 'RESTRICTED' };
+  const cls = DOC_CLASS[category] || String(category).toUpperCase();
+  return `${m.tier} // ${cls} // ${m.caveat}`;
+};
 
 function authorityBody(orgKey) {
   if (orgKey === 'ethics-committee') return 'Ethics Committee';
@@ -623,7 +645,7 @@ export function buildSourceFileHTML(src, actor) {
 
   return frameDoc({
     title: 'Source File',
-    classification: `${banner(src.clearance, 'Intelligence')} \u2014 EYES ONLY`,
+    classification: `${banner(src.clearance, 'Intelligence')} // ORCON`,
     inner,
     org: 'omega-1',
     distribution: 'Regimental Intelligence Cell only. Source identity is not for further dissemination.',
@@ -1205,7 +1227,7 @@ export function buildCustomDocumentHTML(doc, actor) {
     ${renderDocBlocks(doc.blocks)}`;
   return frameDoc({
     title: doc.title || 'Document',
-    classification: banner(doc.classification, 'Document').replace(' \u00b7 EYES ONLY', ''),
+    classification: banner(doc.classification, 'Document'),
     inner,
     footerRef: doc.ref || 'DOC',
     actor,

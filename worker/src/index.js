@@ -391,6 +391,8 @@ export async function handle(request, repo, rawEnv) {
       const reply = await askCairo(env, actor, check.text, body.history);
       return json({ reply }, 200, env);
     } catch (e) {
+      // Log the true cause: visible via `wrangler tail`, hidden from the operator.
+      console.error('[terminal] provider error:', (e && e.message) || e);
       const msg = e && e.offline ? e.message : 'SIGNAL DEGRADED \u2014 the cognition core did not answer. Retry shortly.';
       return json({ error: msg }, e && e.offline ? 503 : 502, env);
     }

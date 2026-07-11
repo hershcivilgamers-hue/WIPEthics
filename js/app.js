@@ -97,7 +97,11 @@ function buildSidebar(user, activeName) {
 }
 
 function clearanceWord(user) {
-  return user.clearance || 'UNCLASSED';
+  const tier = {
+    'CL3': 'LEVEL 3 / SECRET', 'CL4-J': 'LEVEL 4 / TOP SECRET',
+    'CL4-S': 'LEVEL 4 / TOP SECRET', 'CL5': 'LEVEL 5 / THAUMIEL',
+  };
+  return tier[user.clearance] || user.clearance || 'UNCLASSED';
 }
 
 function renderShell(user, route) {

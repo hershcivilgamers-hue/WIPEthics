@@ -84,10 +84,14 @@ async function callGemini(env, persona, history, text) {
       generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS, temperature: 0.8 },
     }),
   });
-  if (!res.ok) throw new Error(`provider ${res.status}`);
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`Gemini HTTP ${res.status}: ${detail.slice(0, 400)}`);
+  }
   const data = await res.json();
-  const reply = data?.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('').trim();
-  if (!reply) throw new Error('empty completion');
+  const cand = data?.candidates?.[0];
+  const reply = cand?.content?.parts?.map((p) => p.text || '').join('').trim();
+  if (!reply) throw new Error(`Gemini returned no text (finishReason: ${cand?.finishReason || 'none'}; ${JSON.stringify(data).slice(0, 300)})`);
   return reply;
 }
 
@@ -98,9 +102,14 @@ async function callWorkersAI(env, persona, history, text) {
     ...history.map((h) => ({ role: h.role === 'model' ? 'assistant' : 'user', content: h.content })),
     { role: 'user', content: text },
   ];
-  const out = await env.AI.run(model, { messages, max_tokens: MAX_OUTPUT_TOKENS });
-  const reply = (out && (out.response || out.result || '')).toString().trim();
-  if (!reply) throw new Error('empty completion');
+  let out;
+  try {
+    out = await env.AI.run(model, { messages, max_tokens: MAX_OUTPUT_TOKENS });
+  } catch (e) {
+    throw new Error(`Workers AI (${model}) failed: ${(e && e.message) || e}`);
+  }
+  const reply = (out && (out.response || out.result || (typeof out === 'string' ? out : ''))).toString().trim();
+  if (!reply) throw new Error(`Workers AI (${model}) returned no text: ${JSON.stringify(out).slice(0, 300)}`);
   return reply;
 }
 
