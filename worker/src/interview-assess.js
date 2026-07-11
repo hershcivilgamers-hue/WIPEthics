@@ -47,20 +47,29 @@ function buildAssessmentUser(items, responses) {
   return `Assess the following ${items.length} interview answers. Use the exact id given for each question.\n\n${blocks.join('\n\n')}`;
 }
 
-// Which model the reply came from, for provenance on the stored verdict.
-export function modelLabel(env) {
-  if (env && env.GEMINI_API_KEY) return env.GEMINI_MODEL || 'gemini-2.0-flash';
-  if (env && env.AI) return env.WORKERS_AI_MODEL || '@cf/meta/llama-3.1-8b-instruct';
-  return 'none';
-}
-
-// Same provider selection as terminal.js askCairo, single-shot (no history). The
-// verdict is a larger structured reply than a chat turn, so give it room (a small
-// token cap truncates the JSON mid-object) and a low temperature for consistency.
+// Run the model, single-shot (no history). The verdict is a larger structured
+// reply than a chat turn, so give it room (a small token cap truncates the JSON
+// mid-object) and a low temperature for consistency. Prefers Gemini when a key is
+// set, but FALLS BACK to the zero-cost Workers AI binding when Gemini fails —
+// its free tier is easily exhausted (HTTP 429 / quota). Returns { text, model }
+// so the stored provenance reflects the provider that actually answered.
 async function callModel(env, system, user) {
   const opts = { maxTokens: 1024, temperature: 0.3 };
-  if (env && env.GEMINI_API_KEY) return callGemini(env, system, [], user, opts);
-  if (env && env.AI) return callWorkersAI(env, system, [], user, opts);
+  const hasGemini = !!(env && env.GEMINI_API_KEY);
+  const hasAI = !!(env && env.AI);
+  if (hasGemini) {
+    try {
+      const text = await callGemini(env, system, [], user, opts);
+      return { text, model: env.GEMINI_MODEL || 'gemini-2.0-flash' };
+    } catch (e) {
+      if (!hasAI) throw e; // nothing to fall back to
+      console.error('[assess] Gemini unavailable, falling back to Workers AI:', (e && e.message) || e);
+    }
+  }
+  if (hasAI) {
+    const text = await callWorkersAI(env, system, [], user, opts);
+    return { text, model: env.WORKERS_AI_MODEL || '@cf/meta/llama-3.1-8b-instruct' };
+  }
   const err = new Error('COGNITION CORE OFFLINE — no model provider is configured for this site.');
   err.offline = true;
   throw err;
@@ -109,8 +118,8 @@ export async function assessInterview(env, recruit) {
   }));
   const items = [...bank, ...custom];
   const allowedIds = items.map((q) => q.id);
-  const raw = await callModel(env, buildAssessmentSystem(), buildAssessmentUser(items, recruit.interviewResponses || {}));
-  const assessment = normalizeAssessment(extractJson(raw), allowedIds);
+  const { text, model } = await callModel(env, buildAssessmentSystem(), buildAssessmentUser(items, recruit.interviewResponses || {}));
+  const assessment = normalizeAssessment(extractJson(text), allowedIds);
   if (!assessment) throw new Error('CAIRO returned an assessment that could not be read. Retry.');
-  return { assessment, model: modelLabel(env) };
+  return { assessment, model };
 }
