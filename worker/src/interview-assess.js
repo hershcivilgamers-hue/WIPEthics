@@ -68,7 +68,7 @@ async function callModel(env, system, user) {
   }
   if (hasAI) {
     const text = await callWorkersAI(env, system, [], user, opts);
-    return { text, model: env.WORKERS_AI_MODEL || '@cf/meta/llama-3.1-8b-instruct' };
+    return { text, model: env.WORKERS_AI_MODEL || '@cf/zai-org/glm-4.7-flash' };
   }
   const err = new Error('COGNITION CORE OFFLINE — no model provider is configured for this site.');
   err.offline = true;

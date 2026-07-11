@@ -98,7 +98,9 @@ export async function callGemini(env, persona, history, text, opts = {}) {
 }
 
 export async function callWorkersAI(env, persona, history, text, opts = {}) {
-  const model = env.WORKERS_AI_MODEL || '@cf/meta/llama-3.1-8b-instruct';
+  // llama-3.1-8b-instruct was deprecated 2026-05-30; glm-4.7-flash is Cloudflare's
+  // recommended fast replacement. Override with the WORKERS_AI_MODEL var if needed.
+  const model = env.WORKERS_AI_MODEL || '@cf/zai-org/glm-4.7-flash';
   const messages = [
     { role: 'system', content: persona },
     ...history.map((h) => ({ role: h.role === 'model' ? 'assistant' : 'user', content: h.content })),
