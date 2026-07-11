@@ -13,6 +13,7 @@ import { runMigrations } from './migrations.js';
 import { currentUser, endSession, setServerUser } from './state.js';
 import { logAction } from './audit.js';
 import { NAV, parseHash, isRouteAllowed } from './router.js';
+import { THEMES, getTheme, setTheme } from './theme.js';
 import { getUser, getSubject, getCase, getRecruit, applyServerSnapshot } from './storage.js';
 import { esc, clearanceBadge, toast } from './ui.js';
 import * as api from './api.js';
@@ -22,6 +23,7 @@ import * as loginView from './views/login.js';
 import * as overviewView from './views/overview.js';
 import * as searchView from './views/search.js';
 import { maybeOfferTutorial, startTutorial } from './tutorial.js';
+import { buildNotifications } from './views/notifications.js';
 import * as personnelView from './views/personnel.js';
 import * as surveillanceView from './views/surveillance.js';
 import * as compartmentsView from './views/compartments.js';
@@ -36,6 +38,8 @@ import * as notificationsView from './views/notifications.js';
 import * as recruitmentView from './views/recruitment.js';
 import * as tribunalsView from './views/tribunals.js';
 import * as directivesView from './views/directives.js';
+import * as documentsView from './views/documents.js';
+import * as terminalView from './views/terminal.js';
 import * as activityView from './views/activity.js';
 import * as adminView from './views/admin.js';
 
@@ -112,6 +116,8 @@ function renderShell(user, route) {
     activeName = 'tribunals';
   } else if (route.name === 'directive') {
     activeName = 'directives';
+  } else if (h.startsWith('#/documents') || h.startsWith('#/document/')) {
+    activeName = 'documents';
   } else if (route.name === 'operation') {
     activeName = 'deployments';
   } else if (route.name === 'source') {
@@ -137,6 +143,9 @@ function renderShell(user, route) {
                 <span class="op-chip__name">${esc(user.codename)}</span>
                 ${clearanceBadge(user.clearance)}
               </div>
+              <select id="theme-select" class="theme-select" aria-label="Display theme" title="Display theme">
+                ${THEMES.map((t) => `<option value="${t.id}" ${t.id === getTheme() ? 'selected' : ''}>${t.label}</option>`).join('')}
+              </select>
               <button class="btn btn--ghost btn--sm" id="tour-btn" title="Re-run the system tour">Tour</button>
               <button class="btn btn--ghost btn--sm" id="change-pass">Change passphrase</button>
               <button class="btn btn--ghost btn--sm" id="logout">Sign out</button>
@@ -152,6 +161,8 @@ function renderShell(user, route) {
   if (changePass) changePass.addEventListener('click', () => personnelView.openChangePassphrase(app));
   const tourBtn = root.querySelector('#tour-btn');
   if (tourBtn) tourBtn.addEventListener('click', () => startTutorial(app));
+  const themeSel = root.querySelector('#theme-select');
+  if (themeSel) themeSel.addEventListener('change', (e) => setTheme(e.target.value));
 
   root.querySelector('#logout').addEventListener('click', () => {
     logAction(user, 'LOGOUT', `${user.designation} signed out.`);
@@ -207,6 +218,9 @@ function dispatch(route, user) {
     case 'tribunals':    tribunalsView.renderList(view, app); break;
     case 'case':         tribunalsView.renderCase(view, app, route.params.id); break;
     case 'directives':   directivesView.render(view, app); break;
+    case 'documents':    documentsView.render(view, app); break;
+    case 'document':     documentsView.renderOne(view, app, route.params.id); break;
+    case 'terminal':     terminalView.render(view, app); break;
     case 'directive':    directivesView.renderDirective(view, app, route.params.id); break;
     case 'activity':     activityView.render(view, app); break;
     case 'omega-1':      personnelView.renderList(view, app, 'omega-1'); break;
@@ -218,6 +232,24 @@ function dispatch(route, user) {
   }
 }
 
+
+// A small unread count on the "For Your Attention" nav item, refreshed on every
+// render. Purely derived — the same items the notifications page shows.
+function updateNavBadge(user) {
+  const link = document.querySelector('.sidebar a[href="#/notifications"]');
+  if (!link) return;
+  let n = 0;
+  try { n = buildNotifications(user).length; } catch (_) { n = 0; }
+  const existing = link.querySelector('.nav__badge');
+  if (existing) existing.remove();
+  if (n > 0) {
+    const b = document.createElement('span');
+    b.className = 'nav__badge';
+    b.textContent = n > 9 ? '9+' : String(n);
+    link.appendChild(b);
+  }
+}
+
 function renderApp() {
   const user = app.user;
   if (!user) {
@@ -225,6 +257,13 @@ function renderApp() {
     return;
   }
   renderShell(user, parseHash());
+  updateNavBadge(user);
+  // An administrator-reset passphrase must be replaced before anything else:
+  // keep presenting the change dialog until the operator sets their own.
+  if (user.mustChangePassphrase) {
+    if (!document.querySelector('.modal-backdrop')) personnelView.openChangePassphrase(app, { forced: true });
+    return;
+  }
   maybeOfferTutorial(app);
 }
 

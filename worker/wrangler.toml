@@ -30,3 +30,9 @@ SESSION_TTL_HOURS = "12"
 LOGIN_MAX_ATTEMPTS = "6"
 LOGIN_WINDOW_MIN = "15"
 LOGIN_LOCK_MIN = "15"
+
+# The Workers AI binding — the zero-key fallback for the CAIRO terminal. Free
+# daily allocation on every Cloudflare account. If you set a GEMINI_API_KEY
+# secret (see RUNBOOK), Gemini is used instead and this binding sits idle.
+[ai]
+binding = "AI"

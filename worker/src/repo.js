@@ -9,6 +9,7 @@
 
 const COLUMNS = {
   users:      ['id', 'username', 'org', 'deleted', 'version', 'updated_at', 'data'],
+  documents: ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
   directives: ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
   subjects:   ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
   cases:      ['id', 'deleted', 'version', 'updated_at', 'data'],

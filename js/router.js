@@ -34,6 +34,8 @@ export const NAV = [
       { name: 'operations',   hash: '#/operations',   label: 'Readiness',       feature: 'operations' },
       { name: 'trainings',    hash: '#/trainings',    label: 'Trainings',       feature: 'trainings' },
       { name: 'directives',   hash: '#/directives',   label: 'Standing Orders', feature: 'directives' },
+      { name: 'documents',    hash: '#/documents',    label: 'Documents', feature: 'documents' },
+      { name: 'terminal',     hash: '#/terminal',     label: 'CAIRO Terminal', feature: 'terminal' },
       { name: 'activity',     hash: '#/activity',     label: 'Activity Log',    feature: 'activityLog' },
       { name: 'blacklist',    hash: '#/blacklist',    label: 'Blacklist',       feature: 'blacklist' },
     ],
@@ -84,6 +86,8 @@ const GUARDS = {
 // Routes disabled by a CONFIG feature flag.
 function featureBlocked(name) {
   if (name === 'directives' || name === 'directive') return !CONFIG.features.directives;
+  if (name === 'documents' || name === 'document') return !CONFIG.features.documents;
+  if (name === 'terminal') return !CONFIG.features.terminal;
   if (name === 'activity') return !CONFIG.features.activityLog;
   if (name === 'surveillance' || name === 'subject') return !CONFIG.features.surveillance;
   if (name === 'tribunals' || name === 'case') return !CONFIG.features.tribunals;
@@ -99,7 +103,7 @@ function featureBlocked(name) {
   return false;
 }
 
-const TOP_LEVEL = ['overview', 'notifications', 'search', 'surveillance', 'compartments', 'operations', 'trainings', 'deployments', 'intel', 'dashboard', 'docket', 'tribunals', 'directives', 'activity', 'blacklist', 'recruit-omega', 'recruit-ethics', 'omega-1', 'ethics', 'command', 'admin'];
+const TOP_LEVEL = ['overview', 'notifications', 'search', 'surveillance', 'compartments', 'operations', 'trainings', 'deployments', 'intel', 'dashboard', 'docket', 'tribunals', 'directives', 'documents', 'terminal', 'activity', 'blacklist', 'recruit-omega', 'recruit-ethics', 'omega-1', 'ethics', 'command', 'admin'];
 
 // Parse the current location hash into a route { name, params }.
 export function parseHash() {
@@ -118,6 +122,12 @@ export function parseHash() {
   }
   if (parts[0] === 'directive' && parts[1]) {
     return { name: 'directive', params: { id: parts[1] } };
+  }
+  if (parts[0] === 'documents') {
+    return { name: 'documents', params: {} };
+  }
+  if (parts[0] === 'document' && parts[1]) {
+    return { name: 'document', params: { id: parts[1] } };
   }
   if (parts[0] === 'compartment' && parts[1]) {
     return { name: 'compartment', params: { id: parts[1] } };

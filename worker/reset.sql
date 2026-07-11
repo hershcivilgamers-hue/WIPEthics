@@ -11,6 +11,7 @@
 -- =============================================================================
 
 DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS documents;
 DROP TABLE IF EXISTS directives;
 DROP TABLE IF EXISTS subjects;
 DROP TABLE IF EXISTS cases;

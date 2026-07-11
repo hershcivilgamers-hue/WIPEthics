@@ -21,7 +21,7 @@ import {
   canDeletePersonnel, canPromote, canDemote, accessLevel, isCL5, canManageOrg, canManageTraining, canViewCase, canDischarge, canManageLeave,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
-import { exportPersonnel } from '../export.js';
+import { exportPersonnel, exportIdCard, exportMedalCertificate } from '../export.js';
 import {
   esc, fmtDate, fmtDateTime, clearanceBadge, statusBadge, accountBadge,
   orgTag, monogram, redacted, toast, openModal, confirmDialog,
@@ -110,7 +110,7 @@ export function renderList(host, app, org) {
     <tr data-id="${esc(u.id)}" tabindex="0">
       ${canManage ? `<td class="cell-check"><input type="checkbox" data-row-check="${esc(u.id)}" ${rosterSel.has(u.id) ? 'checked' : ''} /></td>` : ''}
       <td class="mono">${esc(u.designation)}</td>
-      <td class="cell-name">${esc(u.codename)}${tagChips(u, { compact: true })}</td>
+      <td class="cell-name">${esc(u.codename)}${u.accountStatus === 'suspended' ? ' <span class="badge badge--bad">Suspended</span>' : ''}${tagChips(u, { compact: true })}</td>
       <td>${esc(u.rank || '\u2014')}</td>
       <td>${clearanceBadge(u.clearance)}</td>
       <td>${statusBadge(u.status)}</td>
@@ -331,6 +331,19 @@ export function renderDossier(host, app, id) {
     // AND at least one other org to move them into. Never yourself.
     transfer: actor.id !== u.id && canManageOrg(actor, u.org)
       && Object.keys(ORGS).some((o) => o !== u.org && canManageOrg(actor, o)),
+    // Suspension: an administrative hold on the account's sign-in. Managers
+    // only, never yourself, and only for accounts that are active or held.
+    suspend: actor.id !== u.id && canEditPersonnel(actor, u)
+      && (u.accountStatus === 'active' || u.accountStatus === 'suspended'),
+    // Request leave on your own record: active account, not already on leave,
+    // and no request already pending.
+    requestLeave: actor.id === u.id && u.accountStatus === 'active' && !u.leave
+      && !(u.leaveRequest && u.leaveRequest.status === 'pending'),
+    requestAdvancement: actor.id === u.id && u.accountStatus === 'active'
+      && !!rankUp(u.org, u.rank)
+      && !(u.advancementRequest && u.advancementRequest.status === 'pending'),
+    requestTransfer: actor.id === u.id && u.accountStatus === 'active'
+      && !(u.transferRequest && u.transferRequest.status === 'pending'),
     leave: canManageLeave(actor, u),
     discharge: canDischarge(actor, u),
     del: canDeletePersonnel(actor, u),
@@ -360,7 +373,7 @@ export function renderDossier(host, app, id) {
   `;
 
   const serviceRecord = nameOnly ? '' : sectionService(u);
-  const awardsBlock = nameOnly ? '' : sectionAwards(u, acts.medal);
+  const awardsBlock = nameOnly ? '' : sectionAwards(u, acts.medal, full);
 
   // Cross-reference: matters before the Committee involving this operator —
   // derived at render, inherently clearance-safe (only cases already in the
@@ -377,7 +390,60 @@ export function renderDossier(host, app, id) {
       </section>`;
     }
   }
+  // Shared renderer for the self-service request cards (advancement, transfer).
+  const requestCard = (title, r, lines, ruleBtns) => `<section class="card ${r.status === 'pending' ? 'card--alert' : ''}">
+      <div class="card__title">${title} ${r.status === 'pending' ? '<span class="badge badge--warn">Pending</span>' : `<span class="badge badge--${r.status === 'declined' ? 'muted' : 'ok'}">${esc(r.status)}</span>`}</div>
+      <div class="card__body">
+        ${lines}
+        <div class="strike__appeal-head" style="margin-top:6px">${r.status === 'pending' ? `Requested ${fmtDate(r.at)} \u2014 awaiting review` : `${esc(r.status)} by <span class="mono">${esc(r.resolvedBy || '')}</span> \u00b7 ${fmtDate(r.resolvedAt)}`}</div>
+        ${r.resolution ? `<div class="strike__appeal-res">${esc(r.resolution)}</div>` : ''}
+        ${r.status === 'pending' && ruleBtns ? `<div class="strike__actions">${ruleBtns}</div>` : ''}
+      </div>
+    </section>`;
+
+  let advReqBlock = '';
+  if (full && u.advancementRequest) {
+    const r = u.advancementRequest;
+    const canRule = canPromote(actor, u);
+    advReqBlock = requestCard('Advancement Review Request', r,
+      `<div class="muted-text">\u201c${esc(r.note || '')}\u201d</div>
+       <div class="muted-text" style="margin-top:4px">Checklist items recorded: ${(u.promoChecks || []).length}</div>`,
+      canRule ? `<button class="btn btn--xs" data-decline-adv>Decline</button><button class="btn btn--xs" data-action-adv>Close as actioned</button><span class="muted-text">Promoting closes this automatically.</span>` : '');
+  }
+
+  let trReqBlock = '';
+  if (full && u.transferRequest) {
+    const r = u.transferRequest;
+    const canRule = canManageOrg(actor, u.org);
+    trReqBlock = requestCard('Transfer Request', r,
+      `<div>To ${orgTag(r.toOrg)} ${esc((ORGS[r.toOrg] || {}).name || r.toOrg)}</div>
+       <div class="muted-text">\u201c${esc(r.note || '')}\u201d</div>`,
+      canRule ? `${acts.transfer && canManageOrg(actor, r.toOrg) ? '<button class="btn btn--xs btn--primary" data-approve-transfer>Approve \u2014 open transfer</button>' : '<span class="muted-text">Approval needs authority over both organisations.</span>'}<button class="btn btn--xs" data-decline-transfer>Decline</button>` : '');
+  }
+
   const strikesBlock = sectionStrikes(u, full, actor, full && acts.strike);
+
+  // Leave request: visible on full-access files only (the reason is personal).
+  // The operator sees their own pending/resolved request; an authority gets
+  // Approve / Decline on a pending one.
+  let leaveReqBlock = '';
+  if (full && u.leaveRequest) {
+    const r = u.leaveRequest;
+    const canRule = canManageLeave(actor, u) && r.status === 'pending';
+    const head = r.status === 'pending'
+      ? `Requested ${fmtDate(r.at)} \u2014 awaiting review`
+      : `${r.status === 'approved' ? 'Approved' : 'Declined'} by <span class="mono">${esc(r.resolvedBy || '')}</span> \u00b7 ${fmtDate(r.resolvedAt)}`;
+    leaveReqBlock = `<section class="card ${r.status === 'pending' ? 'card--alert' : ''}">
+      <div class="card__title">Leave Request ${r.status === 'pending' ? '<span class="badge badge--warn">Pending</span>' : `<span class="badge badge--${r.status === 'approved' ? 'ok' : 'muted'}">${esc(r.status)}</span>`}</div>
+      <div class="card__body">
+        <div>${esc(r.type || 'LoA')} \u00b7 ${fmtDate(r.from)} \u2013 ${fmtDate(r.to)}</div>
+        <div class="muted-text">\u201c${esc(r.reason || '')}\u201d</div>
+        <div class="strike__appeal-head" style="margin-top:6px">${head}</div>
+        ${r.note ? `<div class="strike__appeal-res">Note: ${esc(r.note)}</div>` : ''}
+        ${canRule ? `<div class="strike__actions"><button class="btn btn--xs btn--primary" data-approve-leave>Approve</button><button class="btn btn--xs" data-decline-leave>Decline</button></div>` : ''}
+      </div>
+    </section>`;
+  }
   const leaveBlock = onLeave ? sectionLeave(u, full) : '';
   const dischargeBlock = (u.status === 'discharged' && u.discharge && full) ? `
     <section class="card card--warn">
@@ -392,6 +458,7 @@ export function renderDossier(host, app, id) {
   const notesBlock = sectionNotes(u, full);
   const promoBlock = nameOnly ? '' : sectionPromotion(u, actor);
   const trainingBlock = nameOnly ? '' : sectionTraining(u, actor);
+  const myServiceBlock = full ? sectionMyService(u, actor) : '';
 
   const redactBanner = nameOnly ? `
     <div class="redact-banner">
@@ -407,6 +474,7 @@ export function renderDossier(host, app, id) {
     <div class="file-actions">
       <button class="btn btn--ghost btn--sm" id="back">\u2190 ${esc(ORGS[u.org].short)} roster</button>
       <button class="btn btn--sm" id="export-personnel">\u2913 Export record</button>
+      ${full && u.accountStatus === 'active' ? '<button class="btn btn--sm" id="export-idcard">\u2913 ID card</button>' : ''}
     </div>
 
     <header class="dossier-head">
@@ -419,6 +487,7 @@ export function renderDossier(host, app, id) {
           ${clearanceBadge(u.clearance)}
           ${statusBadge(u.status)}
           ${u.status === 'discharged' && u.discharge ? `<span class="badge badge--${u.discharge.type === 'dishonourable' ? 'bad' : 'muted'}">${u.discharge.type === 'dishonourable' ? 'Dishonourable' : 'Honourable'} discharge</span>` : ''}
+          ${u.accountStatus === 'suspended' ? '<span class="badge badge--bad">Account suspended</span>' : ''}
           ${flagged ? '<span class="badge badge--bad">Flagged \u00b7 review</span>' : ''}
           ${onLeave ? '<span class="badge badge--warn">On leave</span>' : ''}
         </div>
@@ -438,6 +507,10 @@ export function renderDossier(host, app, id) {
       ${acts.tags ? '<button class="btn btn--sm" data-act="tags">Manage tags</button>' : ''}
       ${acts.medal ? '<button class="btn btn--sm" data-act="medal">Award medal</button>' : ''}
       ${acts.transfer ? '<button class="btn btn--sm" data-act="transfer">Transfer unit</button>' : ''}
+      ${acts.suspend ? `<button class="btn btn--sm ${u.accountStatus === 'suspended' ? '' : 'btn--danger'}" data-act="suspend">${u.accountStatus === 'suspended' ? 'Reinstate account' : 'Suspend account'}</button>` : ''}
+      ${acts.requestLeave ? '<button class="btn btn--sm" data-act="request-leave">Request leave</button>' : ''}
+      ${acts.requestAdvancement ? '<button class="btn btn--sm" data-act="request-advancement">Request advancement review</button>' : ''}
+      ${acts.requestTransfer ? '<button class="btn btn--sm" data-act="request-transfer">Request transfer</button>' : ''}
       ${acts.del ? '<button class="btn btn--sm btn--danger" data-act="delete">Remove</button>' : ''}
     </div>` : ''}
 
@@ -447,9 +520,13 @@ export function renderDossier(host, app, id) {
         <div class="card__body">${identityRows}</div>
       </section>
       <div class="dossier-col">
+        ${myServiceBlock}
         ${promoBlock}
         ${leaveBlock}
         ${dischargeBlock}
+        ${leaveReqBlock}
+        ${advReqBlock}
+        ${trReqBlock}
         ${strikesBlock}
         ${awardsBlock}
         ${mattersBlock}
@@ -462,12 +539,18 @@ export function renderDossier(host, app, id) {
 
   host.querySelector('#back').addEventListener('click', () => app.navigate(`#/${u.org === 'ethics-committee' ? 'ethics' : u.org}`));
   host.querySelector('#export-personnel').addEventListener('click', () => exportPersonnel(app, u));
+  const idBtn = host.querySelector('#export-idcard');
+  if (idBtn) idBtn.addEventListener('click', () => exportIdCard(app, u));
 
   const dispatch = {
     edit: () => openEdit(app, u),
     tags: () => openTags(app, u),
     medal: () => openAward(app, u),
     transfer: () => openTransfer(app, u),
+    suspend: () => toggleSuspension(app, u),
+    'request-leave': () => openRequestLeave(app, u),
+    'request-advancement': () => openRequestAdvancement(app, u),
+    'request-transfer': () => openRequestTransfer(app, u),
     clearance: () => openClearance(app, u),
     passphrase: () => openPassphrase(app, u),
     strike: () => openStrike(app, u),
@@ -484,7 +567,23 @@ export function renderDossier(host, app, id) {
   host.querySelectorAll('[data-lift-strike]').forEach((b) => b.addEventListener('click', () => liftStrike(app, u, b.dataset.liftStrike)));
   host.querySelectorAll('[data-appeal-strike]').forEach((b) => b.addEventListener('click', () => openAppealStrike(app, u, b.dataset.appealStrike)));
   host.querySelectorAll('[data-resolve-appeal]').forEach((b) => b.addEventListener('click', () => openResolveAppeal(app, u, b.dataset.resolveAppeal)));
+  const apL = host.querySelector('[data-approve-leave]');
+  if (apL) apL.addEventListener('click', () => resolveLeaveRequest(app, u, 'approved'));
+  const dcL = host.querySelector('[data-decline-leave]');
+  if (dcL) dcL.addEventListener('click', () => resolveLeaveRequest(app, u, 'declined'));
+  const dcA = host.querySelector('[data-decline-adv]');
+  if (dcA) dcA.addEventListener('click', () => resolveAdvancement(app, u, 'declined'));
+  const acA = host.querySelector('[data-action-adv]');
+  if (acA) acA.addEventListener('click', () => resolveAdvancement(app, u, 'actioned'));
+  const apT = host.querySelector('[data-approve-transfer]');
+  if (apT) apT.addEventListener('click', () => openTransfer(app, u, u.transferRequest && u.transferRequest.toOrg));
+  const dcT = host.querySelector('[data-decline-transfer]');
+  if (dcT) dcT.addEventListener('click', () => resolveTransferRequest(app, u, 'declined'));
   host.querySelectorAll('[data-remove-award]').forEach((b) => b.addEventListener('click', () => removeAward(app, u, b.dataset.removeAward)));
+  host.querySelectorAll('[data-cert-award]').forEach((b) => b.addEventListener('click', () => {
+    const a = (u.awards || []).find((x) => x.id === b.dataset.certAward);
+    if (a) exportMedalCertificate(app, u, a);
+  }));
   host.querySelectorAll('[data-req]').forEach((b) => b.addEventListener('change', () => toggleRequirement(app, u, b.dataset.req)));
 }
 
@@ -569,6 +668,9 @@ async function promote(app, u) {
     fresh.promoChecks = [];
     addEvent(fresh, 'promotion', `Promoted ${fromRank} \u2192 ${next}${newClr ? ` \u00b7 clearance ${CLEARANCES[newClr].label}` : ''}.`);
   }, { action: 'PROMOTE', detail: `${u.designation} promoted ${fromRank} \u2192 ${next}.` });
+  if (u.advancementRequest && u.advancementRequest.status === 'pending') {
+    resolveAdvancement(app, u, 'actioned', `Promoted to ${next}.`);
+  }
   if (done) toast(`Promoted to ${next}.`, 'success');
 }
 
@@ -623,14 +725,56 @@ function sectionService(u) {
     </section>`;
 }
 
-function sectionAwards(u, canManage) {
+function sectionAwards(u, canManage, full) {
   if (!(u.awards || []).length) return '';
   const items = u.awards.map((a) => `
     <div class="award">
-      <div class="award__title">${esc(a.title)}${canManage ? ` <button class="btn btn--xs" data-remove-award="${esc(a.id)}">Remove</button>` : ''}</div>
+      <div class="award__title">${esc(a.title)}${full ? ` <button class="btn btn--xs" data-cert-award="${esc(a.id)}">Certificate</button>` : ''}${canManage ? ` <button class="btn btn--xs" data-remove-award="${esc(a.id)}">Remove</button>` : ''}</div>
       <div class="award__meta">${fmtDate(a.date)}${a.note ? ` \u00b7 ${esc(a.note)}` : ''}${a.by ? ` \u00b7 ${esc(a.by)}` : ''}</div>
     </div>`).join('');
   return `<section class="card"><div class="card__title">Awards & Commendations</div><div class="card__body">${items}</div></section>`;
+}
+
+// Human-readable service length from a start date to now (years + months).
+function serviceDuration(fromISO) {
+  if (!fromISO) return '\u2014';
+  const from = new Date(fromISO).getTime();
+  if (Number.isNaN(from)) return '\u2014';
+  let months = Math.max(0, Math.floor((Date.now() - from) / (30.44 * 24 * 3600000)));
+  const years = Math.floor(months / 12); months %= 12;
+  if (!years && !months) return 'Under a month';
+  return [years ? `${years} yr${years === 1 ? '' : 's'}` : '', months ? `${months} mo` : ''].filter(Boolean).join(', ');
+}
+
+// A personal at-a-glance service summary (distinct from the Service Record
+// timeline below): tenure, rank longevity, decorations and standing, all derived
+// from the record. Shown to full-access viewers; headed "My Service" for the
+// operator viewing their own file.
+function sectionMyService(u, actor) {
+  const isSelf = actor && actor.id === u.id;
+  const lastPromo = (u.events || []).filter((e) => e.type === 'promotion')
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
+  const inRankSince = lastPromo ? lastPromo.date : u.createdAt;
+  const active = activeStrikeCount(u.strikes);
+  const standing = active === 0
+    ? '<span class="svc-stat__v svc-good">Good standing</span>'
+    : `<span class="svc-stat__v svc-flag">${active} active</span>`;
+  const stat = (label, valueHtml) => `<div class="svc-stat">${valueHtml}<div class="svc-stat__l">${label}</div></div>`;
+  return `
+    <section class="card card--service">
+      <div class="card__title">${isSelf ? 'My Service' : 'Service Summary'}</div>
+      <div class="card__body">
+        <div class="svc-grid">
+          ${stat('Unit', `<div class="svc-stat__v">${orgTag(u.org)} ${esc((ORGS[u.org] || {}).short || '')}</div>`)}
+          ${stat('Rank', `<div class="svc-stat__v">${esc(u.rank || '\u2014')}</div>`)}
+          ${stat('Clearance', `<div class="svc-stat__v">${clearanceBadge(u.clearance)}</div>`)}
+          ${stat('Time in service', `<div class="svc-stat__v">${esc(serviceDuration(u.createdAt))}</div>`)}
+          ${stat('Time in rank', `<div class="svc-stat__v">${esc(serviceDuration(inRankSince))}</div>`)}
+          ${stat('Decorations', `<div class="svc-stat__v">${(u.awards || []).length}</div>`)}
+          ${stat('Standing', standing)}
+        </div>
+      </div>
+    </section>`;
 }
 
 // Training currency: the operator's held courses with derived status, plus a
@@ -731,7 +875,7 @@ function sectionStrikes(u, full, actor, canManageStrikes) {
       let badge = '';
       if (s.appeal && s.appeal.status === 'overturned') badge = ' <span class="badge badge--ok">Overturned on appeal</span>';
       else if (s.lifted) badge = ' <span class="badge badge--muted">Lifted</span>';
-      else if (!active) badge = ' <span class="badge badge--muted">Expired</span>';
+      else if (!active) badge = ` <span class="badge badge--muted">Expired</span>${s.appeal && s.appeal.status === 'pending' ? ' <span class="badge badge--warn">Appeal pending</span>' : ''}`;
       else if (s.appeal && s.appeal.status === 'pending') badge = ' <span class="badge badge--warn">Appeal pending</span>';
       else if (s.appeal && s.appeal.status === 'upheld') badge = ' <span class="badge badge--bad">Appeal upheld</span>';
 
@@ -848,7 +992,7 @@ function openAward(app, u) {
     <div class="field"><label>Medal</label><select id="aw-medal">${opts}</select></div>
     <div class="field" id="aw-custom-wrap" hidden><label>Commendation title</label><input id="aw-custom" type="text" placeholder="e.g. Commendation for Valour" maxlength="80" /></div>
     <div class="field"><label>Citation <span class="muted-text">(optional)</span></label><textarea id="aw-note" rows="2" placeholder="Reason for the award\u2026"></textarea></div>`;
-  openModal({
+  const dlg = openModal({
     title: `Award medal \u2014 ${u.designation}`,
     wide: true,
     body,
@@ -878,7 +1022,6 @@ function openAward(app, u) {
     ],
   });
   // Toggle the custom-title field.
-  const dlg = document.querySelector('.modal-backdrop .modal');
   const selEl = dlg && dlg.querySelector('#aw-medal');
   if (selEl) selEl.addEventListener('change', () => {
     const wrap = dlg.querySelector('#aw-custom-wrap');
@@ -895,10 +1038,33 @@ function nextDesignationFor(org) {
   return `${prefix}-${(nums.length ? Math.max(...nums) : 0) + 1}`;
 }
 
+// Suspend or reinstate an account: sign-in is refused and live sessions are
+// dropped while suspended; the personnel record itself is untouched.
+async function toggleSuspension(app, u) {
+  const actor = app.user;
+  const suspending = u.accountStatus !== 'suspended';
+  const ok = await confirmDialog({
+    title: suspending ? 'Suspend account' : 'Reinstate account',
+    message: suspending
+      ? `Suspend ${u.designation} \u00b7 ${u.codename}? They will be signed out everywhere and unable to sign in until reinstated. Their record, rank and history are untouched.`
+      : `Reinstate ${u.designation} \u00b7 ${u.codename}? They will be able to sign in again immediately.`,
+    confirmLabel: suspending ? 'Suspend account' : 'Reinstate account',
+    danger: suspending,
+  });
+  if (!ok) return;
+  mutate(app, u.id, u.version, (rec) => {
+    rec.accountStatus = suspending ? 'suspended' : 'active';
+    addEvent(rec, 'security', suspending
+      ? `Account suspended by ${actor.designation}.`
+      : `Account reinstated by ${actor.designation}.`);
+  }, { action: suspending ? 'SUSPEND_ACCOUNT' : 'REINSTATE_ACCOUNT', detail: `${u.designation} ${suspending ? 'suspended' : 'reinstated'}.` });
+  toast(suspending ? 'Account suspended \u2014 all sessions ended.' : 'Account reinstated.', 'success');
+}
+
 // Transfer an operator to another organisation. Re-slots rank + clearance for the
 // new ladder, re-mints the designation, resets the promotion checklist, and
 // records the move. Disciplinary history, tags and awards carry over unchanged.
-function openTransfer(app, u) {
+function openTransfer(app, u, presetOrg) {
   const actor = app.user;
   const dests = Object.keys(ORGS).filter((o) => o !== u.org && canManageOrg(actor, o));
   if (!dests.length) { toast('There is no destination organisation you can manage.', 'error'); return; }
@@ -909,7 +1075,7 @@ function openTransfer(app, u) {
 
   const body = `
     <p class="modal__message">Transfer <strong>${esc(u.designation)} \u00b7 ${esc(u.codename)}</strong> from ${esc(ORGS[u.org].short)} to another organisation. A new designation is issued; strikes, tags and awards carry over; the promotion checklist resets.</p>
-    <div class="field"><label>Destination organisation</label><select id="tr-org">${dests.map((o) => `<option value="${o}">${esc(ORGS[o].name)}</option>`).join('')}</select></div>
+    <div class="field"><label>Destination organisation</label><select id="tr-org">${dests.map((o) => `<option value="${o}" ${o === presetOrg ? 'selected' : ''}>${esc(ORGS[o].name)}</option>`).join('')}</select></div>
     <div class="field"><label>New rank</label><select id="tr-rank">${rankOptionsFor(dests[0])}</select></div>
     <div class="field"><label>Clearance</label><input id="tr-clr" type="text" readonly /><div class="field__hint">Set automatically from the new rank.</div></div>
     <div class="ntk-banner" style="border-color:var(--warn)"><strong>Reminder:</strong> a transfer does not remove this operator from their current unit's Need-To-Know compartments. Review and read them out manually if that access should not follow them.</div>
@@ -942,6 +1108,9 @@ function openTransfer(app, u) {
             rec.promoChecks = [];
             addEvent(rec, 'appointment', `Transferred from ${ORGS[fromOrg].short} (${fromDesig}) to ${ORGS[org].short}; assigned ${rank}${clr ? `, ${CLEARANCES[clr].label}` : ''}.`);
           }, { action: 'TRANSFER_UNIT', detail: `${fromDesig} transferred to ${ORGS[org].short} as ${designation}.` });
+          if (u.transferRequest && u.transferRequest.status === 'pending') {
+            resolveTransferRequest(app, u, 'transferred', `Transferred to ${ORGS[org].short} as ${designation}.`);
+          }
           c();
           toast(`Transferred to ${ORGS[org].short} as ${designation}. Review compartment access.`, 'success', 5200);
           app.navigate(`#/personnel/${u.id}`);
@@ -1087,6 +1256,7 @@ function openPassphrase(app, u) {
             const api = await import('../api.js');
             if (api.serverMode()) {
               await api.resetPassphrase(u.id, pass);
+              toast('Their sessions were ended; they must set a new passphrase at next sign-in.', 'info', 5200);
               // Reconcile the version the server just bumped, so later edits don't conflict.
               try { applyServerSnapshot(await api.fetchSnapshot()); } catch (_e) { /* non-fatal */ }
             } else {
@@ -1116,9 +1286,11 @@ function openPassphrase(app, u) {
 // Self-service passphrase change for the signed-in operator, reachable from the
 // topbar by every role. Requires the current passphrase; the Worker verifies and
 // rehashes in server mode, we verify and rehash locally otherwise.
-export function openChangePassphrase(app) {
+export function openChangePassphrase(app, opts = {}) {
   const me = app.user;
+  const forced = !!opts.forced;
   const body = `
+    ${forced ? '<div class="ntk-banner" style="border-color:var(--warn)"><strong>Action required:</strong> an administrator has reset your passphrase. Set a new one of your own to continue \u2014 the temporary passphrase goes in \u201cCurrent passphrase\u201d.</div>' : ''}
     <p class="modal__message">Change the sign-in passphrase for your own account (<span class="mono">${esc(me.username || me.designation)}</span>).</p>
     <div class="field"><label>Current passphrase</label><input id="cp-cur" type="password" autocomplete="current-password" spellcheck="false" /></div>
     <div class="field"><label>New passphrase</label><input id="cp-new" type="password" autocomplete="new-password" placeholder="at least 6 characters" spellcheck="false" /></div>
@@ -1138,11 +1310,11 @@ export function openChangePassphrase(app) {
       window.location.reload();
     });
   };
-  openModal({
-    title: 'Change passphrase',
+  const dlg = openModal({
+    title: forced ? 'Set a new passphrase' : 'Change passphrase',
     body,
     actions: [
-      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      ...(forced ? [] : [{ label: 'Cancel', tone: 'ghost', onClick: (c) => c() }]),
       { label: 'Change passphrase', tone: 'primary', onClick: async (c, d) => {
           const cur = d.querySelector('#cp-cur').value;
           const next = d.querySelector('#cp-new').value;
@@ -1171,14 +1343,21 @@ export function openChangePassphrase(app) {
               upsertUser(fresh);
               logAction(me, 'CHANGE_PASSPHRASE', `${me.designation} changed their passphrase.`);
             }
+            // The server clears the forced-change requirement when the operator
+            // sets their own passphrase; mirror that locally at once.
+            if (app.user) app.user.mustChangePassphrase = false;
+            const mine = getUser(me.id);
+            if (mine && mine.mustChangePassphrase) { mine.mustChangePassphrase = false; }
             c();
             toast('Your passphrase has been changed.', 'success');
+            if (forced) app.refresh();
           } catch (e) {
             err.textContent = (e && e.message) || 'Could not change the passphrase.'; err.hidden = false;
           }
         } },
     ],
   });
+  bindSignOutAll(dlg);
 }
 
 function openClearance(app, u) {
@@ -1355,6 +1534,178 @@ function openNote(app, u) {
   });
 }
 
+// The operator asks their chain to review the promotion checklist.
+function openRequestAdvancement(app, u) {
+  openModal({
+    title: 'Request advancement review',
+    body: `
+      <p class="modal__message">Ask your chain of command to review you for advancement from <strong>${esc(u.rank || '')}</strong>. Your checklist currently records ${(u.promoChecks || []).length} completed item${(u.promoChecks || []).length === 1 ? '' : 's'}.</p>
+      <div class="field"><label>Your case</label><textarea id="ra-note" rows="3" placeholder="Why you believe you are ready\u2026"></textarea></div>
+      <div class="field__hint">Immutable once filed; the outcome lands in your notifications.</div>`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Submit request', tone: 'primary', onClick: (c, d) => {
+          const note = d.querySelector('#ra-note').value.trim();
+          if (!note) { toast('State your case.', 'error'); return; }
+          mutate(app, u.id, u.version, (rec) => {
+            rec.advancementRequest = { note, at: new Date().toISOString(), status: 'pending' };
+            addEvent(rec, 'appointment', 'Advancement review requested.');
+          }, { action: 'REQUEST_ADVANCEMENT', detail: `${u.designation} requested an advancement review.` });
+          c(); toast('Request submitted \u2014 awaiting review.', 'success');
+        } },
+    ],
+  });
+}
+
+function resolveAdvancement(app, u, ruling, autoNote) {
+  const actor = app.user;
+  const r = u.advancementRequest;
+  if (!r || r.status !== 'pending' || !canPromote(actor, u)) return;
+  const finish = (resolution) => {
+    const fresh = getUser(u.id);
+    if (!fresh || !fresh.advancementRequest || fresh.advancementRequest.status !== 'pending') return;
+    mutate(app, fresh.id, fresh.version, (rec) => {
+      rec.advancementRequest = { ...rec.advancementRequest, status: ruling, resolvedBy: actor.designation, resolvedAt: new Date().toISOString(), resolution: resolution || null };
+      addEvent(rec, 'appointment', `Advancement review ${ruling}.`);
+    }, { action: 'RESOLVE_ADVANCEMENT', detail: `Advancement review ${ruling} for ${u.designation}.` });
+  };
+  if (autoNote !== undefined) { finish(autoNote); return; }
+  openModal({
+    title: ruling === 'declined' ? 'Decline advancement request' : 'Close advancement request',
+    body: `<p class="modal__message">\u201c${esc(r.note)}\u201d \u2014 requested ${fmtDate(r.at)}.</p>
+      <div class="field"><label>Resolution <span class="muted-text">(optional)</span></label><textarea id="rv-adv" rows="2"></textarea></div>`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: ruling === 'declined' ? 'Decline' : 'Close as actioned', tone: ruling === 'declined' ? 'danger' : 'primary', onClick: (c, d) => {
+          finish(d.querySelector('#rv-adv').value.trim());
+          c(); toast(ruling === 'declined' ? 'Request declined.' : 'Request closed.', 'success');
+        } },
+    ],
+  });
+}
+
+// The operator asks to move units; approval runs the real transfer.
+function openRequestTransfer(app, u) {
+  const dests = Object.keys(ORGS).filter((o) => o !== u.org);
+  openModal({
+    title: 'Request transfer',
+    body: `
+      <div class="field"><label>Destination organisation</label><select id="rt-org">${dests.map((o) => `<option value="${o}">${esc(ORGS[o].name)}</option>`).join('')}</select></div>
+      <div class="field"><label>Reason</label><textarea id="rt-note" rows="3" placeholder="Why you are requesting the move\u2026"></textarea></div>
+      <div class="field__hint">A transfer needs approval by an authority over both organisations. Immutable once filed.</div>`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Submit request', tone: 'primary', onClick: (c, d) => {
+          const toOrg = d.querySelector('#rt-org').value;
+          const note = d.querySelector('#rt-note').value.trim();
+          if (!note) { toast('State your reason.', 'error'); return; }
+          mutate(app, u.id, u.version, (rec) => {
+            rec.transferRequest = { toOrg, note, at: new Date().toISOString(), status: 'pending' };
+            addEvent(rec, 'appointment', `Transfer to ${ORGS[toOrg].short} requested.`);
+          }, { action: 'REQUEST_TRANSFER', detail: `${u.designation} requested transfer to ${ORGS[toOrg].short}.` });
+          c(); toast('Request submitted \u2014 awaiting review.', 'success');
+        } },
+    ],
+  });
+}
+
+function resolveTransferRequest(app, u, ruling, autoNote) {
+  const actor = app.user;
+  const finish = (resolution) => {
+    const fresh = getUser(u.id);
+    if (!fresh || !fresh.transferRequest || fresh.transferRequest.status !== 'pending') return;
+    mutate(app, fresh.id, fresh.version, (rec) => {
+      rec.transferRequest = { ...rec.transferRequest, status: ruling, resolvedBy: actor.designation, resolvedAt: new Date().toISOString(), resolution: resolution || null };
+      addEvent(rec, 'appointment', `Transfer request ${ruling}.`);
+    }, { action: 'RESOLVE_TRANSFER_REQUEST', detail: `Transfer request ${ruling} for ${u.designation}.` });
+  };
+  if (autoNote !== undefined) { finish(autoNote); return; }
+  const r = u.transferRequest;
+  if (!r || r.status !== 'pending' || !canManageOrg(actor, u.org)) return;
+  openModal({
+    title: 'Decline transfer request',
+    body: `<p class="modal__message">To ${esc((ORGS[r.toOrg] || {}).name || r.toOrg)}: \u201c${esc(r.note)}\u201d</p>
+      <div class="field"><label>Resolution <span class="muted-text">(optional)</span></label><textarea id="rv-tr" rows="2"></textarea></div>`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Decline', tone: 'danger', onClick: (c, d) => { finish(d.querySelector('#rv-tr').value.trim()); c(); toast('Request declined.', 'success'); } },
+    ],
+  });
+}
+
+// The operator requests their own leave; an authority answers from the same
+// card or from Notifications. The request's substance is immutable once filed.
+function openRequestLeave(app, u) {
+  const today = new Date().toISOString().slice(0, 10);
+  openModal({
+    title: 'Request leave',
+    body: `
+      ${fieldSelect('rl-type', 'Leave type', ['LoA', 'RoA'], 'LoA')}
+      <div class="field"><label>From</label><input id="rl-from" type="date" value="${today}" /></div>
+      <div class="field"><label>Until</label><input id="rl-to" type="date" value="${today}" /></div>
+      <div class="field"><label>Reason</label><textarea id="rl-reason" rows="2" placeholder="Visible to full-access reviewers only\u2026"></textarea></div>
+      <div class="field__hint">Your request cannot be edited once filed \u2014 an authority will approve or decline it, and the outcome lands in your notifications.</div>`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Submit request', tone: 'primary', onClick: (c, d) => {
+          const type = d.querySelector('#rl-type').value;
+          const from = d.querySelector('#rl-from').value;
+          const to = d.querySelector('#rl-to').value;
+          const reason = d.querySelector('#rl-reason').value.trim();
+          if (!from || !to || to < from) { toast('Enter a valid date range.', 'error'); return; }
+          if (!reason) { toast('State the reason for your leave.', 'error'); return; }
+          mutate(app, u.id, u.version, (rec) => {
+            rec.leaveRequest = { type, from, to, reason, at: new Date().toISOString(), status: 'pending' };
+            addEvent(rec, 'leave', `Leave requested (${fmtDate(from)} \u2013 ${fmtDate(to)}).`);
+          }, { action: 'REQUEST_LEAVE', detail: `${u.designation} requested leave.` });
+          c();
+          toast('Leave request submitted \u2014 awaiting review.', 'success');
+        } },
+    ],
+  });
+}
+
+function resolveLeaveRequest(app, u, ruling) {
+  const actor = app.user;
+  const r = u.leaveRequest;
+  if (!r || r.status !== 'pending' || !canManageLeave(actor, u)) return;
+  const approving = ruling === 'approved';
+  openModal({
+    title: approving ? 'Approve leave request' : 'Decline leave request',
+    body: `
+      <p class="modal__message">${esc(u.designation)} \u00b7 ${esc(u.codename)} requests ${esc(r.type || 'LoA')} ${fmtDate(r.from)} \u2013 ${fmtDate(r.to)}: \u201c${esc(r.reason)}\u201d</p>
+      ${approving ? `
+      <div class="field"><label>From</label><input id="rv-from" type="date" value="${esc(r.from)}" /></div>
+      <div class="field"><label>Until</label><input id="rv-to" type="date" value="${esc(r.to)}" /></div>
+      <div class="field__hint">Adjust the dates if needed \u2014 the record keeps both what was asked and what was granted.</div>` : ''}
+      <div class="field"><label>Note <span class="muted-text">(optional)</span></label><textarea id="rv-note" rows="2"></textarea></div>`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: approving ? 'Approve \u2014 place on leave' : 'Decline request', tone: approving ? 'primary' : 'danger', onClick: (c, d) => {
+          const note = d.querySelector('#rv-note').value.trim();
+          let from = r.from; let to = r.to;
+          if (approving) {
+            from = d.querySelector('#rv-from').value || r.from;
+            to = d.querySelector('#rv-to').value || r.to;
+            if (to < from) { toast('Enter a valid date range.', 'error'); return; }
+          }
+          mutate(app, u.id, u.version, (rec) => {
+            rec.leaveRequest = { ...rec.leaveRequest, status: ruling, resolvedBy: actor.designation, resolvedAt: new Date().toISOString(), note: note || null };
+            if (approving) {
+              rec.leave = { type: r.type || 'LoA', from, to, reason: r.reason };
+              rec.status = 'loa';
+              addEvent(rec, 'leave', `Leave request approved; placed on ${r.type || 'LoA'} (${fmtDate(from)} \u2013 ${fmtDate(to)}).`);
+            } else {
+              addEvent(rec, 'leave', 'Leave request declined.');
+            }
+          }, { action: 'RESOLVE_LEAVE_REQUEST', detail: `Leave request ${ruling} for ${u.designation}.` });
+          c();
+          toast(approving ? 'Approved \u2014 operator placed on leave.' : 'Request declined.', 'success');
+        } },
+    ],
+  });
+}
+
 function openLeave(app, u) {
   const today = new Date().toISOString().slice(0, 10);
   const body = `
@@ -1373,11 +1724,17 @@ function openLeave(app, u) {
           const from = d.querySelector('#lv-from').value;
           const to = d.querySelector('#lv-to').value;
           const reason = d.querySelector('#lv-reason').value.trim();
+          const pendingReq = u.leaveRequest && u.leaveRequest.status === 'pending';
           mutate(app, u.id, u.version, (rec) => {
+            // Direct placement while a request is pending counts as approving it,
+            // so the request never lingers unresolved in anyone's notifications.
+            if (rec.leaveRequest && rec.leaveRequest.status === 'pending') {
+              rec.leaveRequest = { ...rec.leaveRequest, status: 'approved', resolvedBy: app.user.designation, resolvedAt: new Date().toISOString(), note: 'Approved by direct placement.' };
+            }
             rec.leave = { type, from, to, reason };
             rec.status = 'loa';
             addEvent(rec, 'leave', `Placed on ${type} (${fmtDate(from)} \u2013 ${fmtDate(to)}).`);
-          }, { action: 'SET_LEAVE', detail: `${u.designation} placed on leave.` });
+          }, { action: pendingReq ? 'RESOLVE_LEAVE_REQUEST' : 'SET_LEAVE', detail: `${u.designation} placed on leave.` });
           c();
           toast('Operator placed on leave.', 'success');
         } },

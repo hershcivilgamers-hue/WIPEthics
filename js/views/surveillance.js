@@ -674,7 +674,6 @@ async function closeSubject(app, s) {
     return;
   }
 
-  const canEthics = canManageTribunal(app.user);
   const body = `
     <p class="modal__message">Record the outcome of the watch on <strong>${esc(s.alias)}</strong> (${esc(s.ref)}).</p>
     <label class="radio-row"><input type="radio" name="poi-outcome" value="absolved" checked /> <span><strong>Absolved</strong> — no further action. The watch is closed.</span></label>

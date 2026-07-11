@@ -18,6 +18,7 @@ import {
   compartmentClears, readIntoCompartment, canManageCompartment,
   canViewActivity, canViewRecruitment, canViewOperation, isAssignedToOperation,
   canViewIntel, isAssignedToIntel, canViewTraining,
+  canViewDocument,
 } from '../../js/permissions.js';
 import { strikeVoided } from '../../js/constants.js';
 
@@ -48,6 +49,12 @@ export function redactUser(actor, user) {
   if (level === 'full') {
     return {
       ...base,
+      // Account-security metadata is for those who administer the account
+      // (and the operator themselves) — never for cross-org partial viewers.
+      mustChangePassphrase: !!user.mustChangePassphrase,
+      leaveRequest: user.leaveRequest ?? null,
+      advancementRequest: user.advancementRequest ?? null,
+      transferRequest: user.transferRequest ?? null,
       realName: user.realName ?? null,
       username: user.username,
       awards: user.awards ?? [],
@@ -93,6 +100,26 @@ export function redactUser(actor, user) {
 // BOTH the clearance floor and, if the directive is compartmented, Need-To-Know.
 // The caveat (codeword) is shown either way — like a handling marking on a cover
 // sheet — so a reader knows the body is withheld behind a compartment.
+// A custom document, redacted by clearance + org. Those who can't view it get a
+// sealed stub (existence only) so cross-org/over-clearance content never leaks.
+export function redactDocument(actor, d) {
+  if (canViewDocument(actor, d)) {
+    return {
+      id: d.id, ref: d.ref, org: d.org, classification: d.classification,
+      title: d.title, distribution: d.distribution ?? null, status: d.status,
+      blocks: d.blocks || [], createdBy: d.createdBy ?? null,
+      createdAt: d.createdAt, updatedAt: d.updatedAt, version: d.version,
+      deleted: !!d.deleted, deletedAt: d.deletedAt ?? null,
+    };
+  }
+  return {
+    id: d.id, org: d.org, classification: d.classification, status: d.status,
+    redacted: true, ref: null, title: null, distribution: null, blocks: [],
+    createdBy: null, createdAt: d.createdAt, updatedAt: d.updatedAt,
+    version: d.version, deleted: !!d.deleted, deletedAt: d.deletedAt ?? null,
+  };
+}
+
 export function redactDirective(actor, d, compMap) {
   const out = {
     id: d.id, ref: d.ref, org: d.org, clearance: d.clearance, title: d.title,
@@ -161,6 +188,7 @@ export function buildSnapshot(actor, db) {
 
   return {
     users: (db.users || []).filter((u) => !u.deleted).map((u) => redactUser(actor, u)),
+    documents: (db.documents || []).filter((d) => !d.deleted).map((d) => redactDocument(actor, d)),
     directives: (db.directives || []).filter((d) => !d.deleted).map((d) => redactDirective(actor, d, compMap)),
     subjects: (db.subjects || [])
       .filter((s) => !s.deleted && canViewSubject(actor, s) && compartmentClears(actor, s, compMap))

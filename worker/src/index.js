@@ -14,13 +14,14 @@
 
 import { makeCredential, verifyPassword } from '../../js/crypto.js';
 import { makeD1Repo } from './repo.js';
+import { askCairo, validateMessage, checkRate } from './terminal.js';
 import { authorizeWrite } from './gate.js';
-import { buildSnapshot, redactUser, redactDirective, redactCompartment } from './redact.js';
+import { buildSnapshot, redactUser, redactDirective, redactCompartment, redactDocument } from './redact.js';
 import { canReadDirective, compartmentClears, canManageOrg } from '../../js/permissions.js';
 import { CLEARANCES } from '../../js/constants.js';
 
-const WRITABLE = new Set(['users', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'blacklist', 'promo_reqs', 'settings']);
-const SNAPSHOT = ['users', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'blacklist', 'promo_reqs', 'settings', 'audit'];
+const WRITABLE = new Set(['users', 'documents', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'blacklist', 'promo_reqs', 'settings']);
+const SNAPSHOT = ['users', 'documents', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'blacklist', 'promo_reqs', 'settings', 'audit'];
 
 function uid() { return (globalThis.crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`); }
 function randomToken() {
@@ -72,6 +73,12 @@ async function authenticate(request, repo) {
   }
   const actor = await repo.getById('users', sess.user_id);
   if (!actor || actor.deleted) return { actor: null, token };
+  // A suspension takes effect immediately: existing sessions are refused and
+  // dropped, not merely new sign-ins (login already requires an active account).
+  if (actor.accountStatus === 'suspended') {
+    await repo.deleteSession(token);
+    return { actor: null, token };
+  }
   return { actor, token };
 }
 
@@ -214,6 +221,7 @@ async function getData(actor, repo, env) {
 
 function redactForActor(collection, actor, record, compMap) {
   if (collection === 'users') return redactUser(actor, record);
+  if (collection === 'documents') return redactDocument(actor, record);
   if (collection === 'directives') return redactDirective(actor, record, compMap);
   if (collection === 'compartments') return redactCompartment(actor, record);
   if ((collection === 'subjects' || collection === 'cases' || collection === 'operations' || collection === 'intel') && record && record.compartment) {
@@ -262,7 +270,7 @@ async function writeRecord(collection, id, actor, request, repo, env) {
   // and preserves any field the actor isn't cleared to see so a partial edit
   // can't blank it.
   if (collection === 'users') {
-    if (cur) { incoming.salt = cur.salt; incoming.passwordHash = cur.passwordHash; }
+    if (cur) { incoming.salt = cur.salt; incoming.passwordHash = cur.passwordHash; incoming.mustChangePassphrase = cur.mustChangePassphrase ?? false; }
     else if (!incoming.salt || !incoming.passwordHash) {
       const { salt, hash } = await makeCredential(randomToken());
       incoming.salt = salt; incoming.passwordHash = hash;
@@ -318,11 +326,15 @@ async function resetPassphrase(id, actor, request, repo, env) {
 
   const { salt, hash } = await makeCredential(passphrase);
   const now = new Date().toISOString();
-  const updated = { ...target, salt, passwordHash: hash, updatedAt: now, version: (target.version || 1) + 1 };
-  updated.events = [{ id: uid(), date: now, type: 'security', text: `Passphrase reset by ${actor.designation}.` }, ...(target.events || [])];
+  // The temporary passphrase is known to the administrator, so the operator is
+  // forced to replace it at their next sign-in — and every existing session for
+  // the account is ended, so a reset also evicts anyone holding a stolen token.
+  const updated = { ...target, salt, passwordHash: hash, mustChangePassphrase: true, updatedAt: now, version: (target.version || 1) + 1 };
+  updated.events = [{ id: uid(), date: now, type: 'security', text: `Passphrase reset by ${actor.designation}; change required at next sign-in.` }, ...(target.events || [])];
   const changed = await repo.update('users', updated, target.version || 1);
   if (changed === 0) return json({ error: 'This record was changed elsewhere. Reload and retry.' }, 409, env);
-  await repo.addAudit({ id: uid(), ts: now, actor: actor.designation, action: 'RESET_PASSPHRASE', detail: `Passphrase reset for ${target.designation}.` });
+  await repo.deleteUserSessions(target.id);
+  await repo.addAudit({ id: uid(), ts: now, actor: actor.designation, action: 'RESET_PASSPHRASE', detail: `Passphrase reset for ${target.designation}; sessions ended.` });
   return json({ ok: true, version: updated.version }, 200, env);
 }
 
@@ -338,7 +350,7 @@ async function changeMyPassphrase(actor, request, repo, env) {
   if (next.length < 6) return json({ error: 'A passphrase must be at least 6 characters.' }, 400, env);
   const { salt, hash } = await makeCredential(next);
   const now = new Date().toISOString();
-  const updated = { ...actor, salt, passwordHash: hash, updatedAt: now, version: (actor.version || 1) + 1 };
+  const updated = { ...actor, salt, passwordHash: hash, mustChangePassphrase: false, updatedAt: now, version: (actor.version || 1) + 1 };
   updated.events = [{ id: uid(), date: now, type: 'security', text: 'Passphrase changed by the operator.' }, ...(actor.events || [])];
   const changed = await repo.update('users', updated, actor.version || 1);
   if (changed === 0) return json({ error: 'This record was changed elsewhere. Reload and retry.' }, 409, env);
@@ -362,6 +374,27 @@ export async function handle(request, repo, rawEnv) {
   // Everything else requires a valid session.
   const { actor, token } = await authenticate(request, repo);
   if (!actor) return json({ error: 'Not authenticated.' }, 401, env);
+
+  // The CAIRO cognition terminal: in-universe AI chat for signed-in operators.
+  // Auth first, then a soft per-operator rate limit; the provider call itself
+  // lives in terminal.js. Failures return in-character text with real statuses.
+  if (parts.length === 2 && parts[1] === 'terminal' && request.method === 'POST') {
+    const { actor } = await authenticate(request, repo);
+    if (!actor) return json({ error: 'Not signed in.' }, 401, env);
+    let body = {};
+    try { body = await request.json(); } catch (_) { /* fall through to validation */ }
+    const check = validateMessage(body.message);
+    if (!check.ok) return json({ error: check.error }, 400, env);
+    const rate = checkRate(actor.id);
+    if (!rate.ok) return json({ error: rate.error }, 429, env);
+    try {
+      const reply = await askCairo(env, actor, check.text, body.history);
+      return json({ reply }, 200, env);
+    } catch (e) {
+      const msg = e && e.offline ? e.message : 'SIGNAL DEGRADED \u2014 the cognition core did not answer. Retry shortly.';
+      return json({ error: msg }, e && e.offline ? 503 : 502, env);
+    }
+  }
 
   if (parts[1] === 'logout' && request.method === 'POST') {
     if (token) await repo.deleteSession(token);

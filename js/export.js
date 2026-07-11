@@ -160,8 +160,6 @@ const ETHICS_MOTIF = `
       <path d="M 88,76 Q 98,58 90,40"/>
     </g>`;
 
-const OMEGA_SEAL = sealSvg({ id: 'o1', top: 'MOBILE TASK FORCE \u03a9-1', topSize: 7.4, banner: 'LAW\u2019S LEFT HAND', motif: OMEGA_MOTIF });
-const ETHICS_SEAL = sealSvg({ id: 'ec', top: 'ETHICS COMMITTEE', topSize: 8, banner: 'IN CONSCIENCE BOUND', motif: ETHICS_MOTIF });
 
 export function orgSeal(orgKey) {
   const logo = orgLogo(orgKey);
@@ -1034,4 +1032,189 @@ export function exportAfterAction(app, op) {
   const closed = op.status === 'concluded' || op.status === 'aborted';
   logAction(app.user, 'EXPORT_OPERATION', `Generated ${closed ? 'after-action report' : 'operation record'} for ${op.ref}.`);
   openDocument(buildAfterActionHTML(op, app.user), `${op.ref}-${closed ? 'after-action' : 'operation-record'}.html`);
+}
+
+// =============================================================================
+// FOUNDATION IDENTIFICATION CARD
+// Printable credential, CR80 card stock (85.6 \u00d7 54 mm), front and back. The
+// card carries the codename and designation only \u2014 legal identity never
+// appears on a carry document. Clearance is shown as a coloured band.
+// =============================================================================
+const CLEARANCE_BAND = {
+  'CL3': { color: '#4a5361', label: 'LEVEL 3 \u00b7 SECRET' },
+  'CL4-J': { color: '#8a6d1a', label: 'LEVEL 4 \u00b7 TOP SECRET (J)' },
+  'CL4-S': { color: '#7a4a12', label: 'LEVEL 4 \u00b7 TOP SECRET (S)' },
+  'CL5': { color: '#7a1010', label: 'LEVEL 5 \u00b7 THAUMIEL' },
+};
+
+export function buildIdCardHTML(user) {
+  const band = CLEARANCE_BAND[user.clearance] || { color: '#4a5361', label: user.clearance || 'UNGRADED' };
+  const code = user.org === 'omega-1' ? 'O1' : user.org === 'ethics-committee' ? 'EC' : 'CMD';
+  const controlNo = `CAIRO/${code}/ID-${user.designation}`;
+  const issued = longDate(new Date().toISOString());
+  const seal = orgSeal(user.org);
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>${esc(user.designation)} \u2014 Foundation Identification</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #6b6b6b; font-family: Arial, Helvetica, sans-serif; }
+  .controls { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; justify-content: center; padding: 10px; background: #2b2b2b; }
+  .controls button { font-size: 13px; padding: 7px 16px; border: 1px solid #555; background: #f4f4f2; cursor: pointer; border-radius: 3px; }
+  .wrap { display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 26px 0 40px; }
+  .side-label { color: #ccc; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+  .cardface {
+    width: 340px; height: 214px; background: #fff; border-radius: 10px; position: relative; overflow: hidden;
+    box-shadow: 0 3px 14px rgba(0,0,0,.45); color: #111;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .cf__wm { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: .06; }
+  .cf__wm img, .cf__wm svg { width: 150px; height: 150px; }
+  .cf__head { display: flex; align-items: center; gap: 8px; padding: 9px 12px 5px; position: relative; }
+  .cf__head img, .cf__head svg { width: 30px; height: 30px; }
+  .cf__org { font-size: 12px; font-weight: 800; letter-spacing: .22em; }
+  .cf__auth { font-size: 6.6px; letter-spacing: .14em; color: #444; margin-top: 1px; }
+  .cf__body { display: flex; gap: 10px; padding: 3px 12px 0; position: relative; }
+  .cf__photo { width: 78px; height: 96px; border: 1px dashed #999; display: flex; align-items: center; justify-content: center; font-size: 7px; color: #777; letter-spacing: .1em; text-align: center; flex: 0 0 auto; background: #f6f6f4; }
+  .cf__id { flex: 1; min-width: 0; }
+  .cf__desig { font-family: 'Courier New', monospace; font-weight: 700; font-size: 24px; letter-spacing: .04em; }
+  .cf__code { font-size: 13px; font-weight: 700; text-transform: uppercase; margin-top: 1px; }
+  .cf__rank { font-size: 9px; color: #333; margin-top: 3px; }
+  .cf__kv { font-size: 7.2px; color: #555; margin-top: 6px; line-height: 1.5; }
+  .cf__kv .mono { font-family: 'Courier New', monospace; color: #111; }
+  .cf__band { position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 12px; color: #fff; font-size: 8.5px; font-weight: 800; letter-spacing: .14em; display: flex; justify-content: space-between; }
+  /* back */
+  .cf__stripe { height: 34px; background: #161616; margin-top: 16px; }
+  .cf__terms { padding: 10px 14px 0; font-size: 7px; color: #333; line-height: 1.55; text-align: justify; position: relative; }
+  .cf__sig { margin: 10px 14px 0; border-bottom: 1px solid #111; height: 22px; position: relative; }
+  .cf__sigl { padding: 2px 14px; font-size: 6.4px; color: #555; letter-spacing: .1em; }
+  .cf__ctrl { position: absolute; bottom: 6px; right: 12px; font-family: 'Courier New', monospace; font-size: 7px; color: #444; }
+  @page { size: A4; margin: 14mm; }
+  @media print {
+    html, body { background: #fff; }
+    .controls { display: none; }
+    .wrap { gap: 10mm; padding: 0; }
+    .cardface { width: 85.6mm; height: 54mm; box-shadow: none; border: 1px solid #bbb; border-radius: 3mm; }
+    .side-label { color: #666; }
+  }
+</style>
+</head>
+<body>
+  <div class="controls"><button onclick="window.print()">Print / Save as PDF</button><button onclick="window.close()">Close</button></div>
+  <div class="wrap">
+    <div class="side-label">Front</div>
+    <div class="cardface">
+      <div class="cf__wm">${seal}</div>
+      <div class="cf__head">${seal}<div><div class="cf__org">SCP FOUNDATION</div><div class="cf__auth">${authorityLine(user.org)}</div></div></div>
+      <div class="cf__body">
+        <div class="cf__photo">AFFIX<br/>PHOTOGRAPH<br/>(35\u00d745)</div>
+        <div class="cf__id">
+          <div class="cf__desig">${esc(user.designation)}</div>
+          <div class="cf__code">\u201c${esc(user.codename || '')}\u201d</div>
+          <div class="cf__rank">${esc(user.rank || '')}</div>
+          <div class="cf__kv">ISSUED <span class="mono">${esc(issued)}</span><br/>CONTROL <span class="mono">${esc(controlNo)}</span></div>
+        </div>
+      </div>
+      <div class="cf__band" style="background:${band.color}"><span>${esc(band.label)}</span><span>SECURE \u00b7 CONTAIN \u00b7 PROTECT</span></div>
+    </div>
+    <div class="side-label">Back</div>
+    <div class="cardface">
+      <div class="cf__stripe"></div>
+      <div class="cf__terms">This credential is the property of the SCP Foundation and must be surrendered on demand to any officer of Site Command or the Ethics Committee. It confers access strictly to the level marked and does not exempt the bearer from need-to-know controls. Loss or theft must be reported to the issuing office immediately. Unauthorised use, alteration or reproduction is a matter for the Ethics Committee.</div>
+      <div class="cf__sig"></div>
+      <div class="cf__sigl">BEARER\u2019S SIGNATURE</div>
+      <div class="cf__ctrl">${esc(controlNo)}</div>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+export function exportIdCard(app, user) {
+  openDocument(buildIdCardHTML(user), `${user.designation}-id-card.html`);
+  logAction(app.user, 'EXPORT_DOCUMENT', `Identification card issued for ${user.designation}.`);
+}
+
+// =============================================================================
+// AWARD CITATION — a formal certificate for a conferred decoration, in the
+// shared records framework. Unclassified by design: citations are presented.
+// =============================================================================
+export function buildMedalCertificateHTML(user, award, actor) {
+  const inner = `
+    ${letterhead(user.org, 'Office of Honours and Awards')}
+    <hr class="rule--bold" /><hr class="rule" />
+    <div class="doc-title">Award of the ${esc(award.title)}</div>
+    <div class="judgment">
+      <p style="text-align:center;margin-top:14px">By direction of ${esc(authorityBody(user.org))}${award.by ? `, upon the recommendation of <span class="mono">${esc(award.by)}</span>` : ''}, the decoration styled</p>
+      <div class="court" style="margin:10px 0">${esc(award.title)}</div>
+      <p style="text-align:center">is conferred upon</p>
+      <div class="parties"><div class="party" style="justify-content:center;gap:10px"><span class="pname mono">${esc(user.designation)}</span><span class="pname">\u201c${esc(user.codename || '')}\u201d</span></div></div>
+      <div class="jhead" style="text-align:center">Citation</div>
+      <p class="attest" style="margin:0 auto 14px;text-align:center;max-width:520px">${esc(award.note || 'For service in keeping with the highest traditions of the Foundation.')}</p>
+    </div>
+    ${signBlock({ name: esc(award.by || 'COMMAND'), role: `For ${authorityBody(user.org)}`, dated: `Conferred ${longDate(award.date)}` })}`;
+  return frameDoc({
+    title: `Award of the ${award.title}`,
+    classification: 'FOUNDATION GENERAL \u00b7 COMMENDATORY \u00b7 FOR PRESENTATION',
+    inner,
+    footerRef: `CIT-${(user.designation || '').replace(/\s+/g, '')}-${(award.id || '').slice(-4).toUpperCase()}`,
+    actor,
+    org: user.org,
+    distribution: 'The recipient; the recipient\u2019s chain of command; Office of Personnel.',
+  });
+}
+
+export function exportMedalCertificate(app, user, award) {
+  openDocument(buildMedalCertificateHTML(user, award, app.user), `${user.designation}-citation.html`);
+  logAction(app.user, 'EXPORT_DOCUMENT', `Award citation issued for ${user.designation} (${award.title}).`);
+}
+
+// =============================================================================
+// CUSTOM DOCUMENTS — renders a user-composed block document through the shared
+// records framework. Each block maps to house-style furniture; nothing here can
+// render outside the established look.
+// =============================================================================
+function renderDocBlocks(blocks) {
+  return (blocks || []).map((b) => {
+    if (b.type === 'heading') return `<div class="jhead">${esc(b.text || '')}</div>`;
+    if (b.type === 'paragraph') return `<p>${esc(b.text || '').replace(/\n/g, '<br/>')}</p>`;
+    if (b.type === 'clauses') {
+      const items = (b.items || []).filter((x) => String(x).trim());
+      return items.length ? `<div class="judgment">${items.map((x) => `<div class="para">${esc(x)}</div>`).join('')}</div>` : '';
+    }
+    if (b.type === 'fields') {
+      const rows = (b.rows || []).filter((r) => (r.k || r.v));
+      return rows.length ? `<table class="memo-h"><tbody>${rows.map((r) => `<tr><td class="ml">${esc(r.k || '')}</td><td>${esc(r.v || '')}</td></tr>`).join('')}</tbody></table>` : '';
+    }
+    if (b.type === 'signature') {
+      return signBlock({ name: esc(b.name || ''), role: b.role || '', dated: b.dated || '' });
+    }
+    return '';
+  }).join('\n');
+}
+
+export function buildCustomDocumentHTML(doc, actor) {
+  const office = doc.office || 'Office of Record';
+  const inner = `
+    ${letterhead(doc.org, office)}
+    <hr class="rule--bold" /><hr class="rule" />
+    <div class="doc-title">${esc(doc.title || 'Untitled Document')}</div>
+    ${doc.status === 'draft' ? '<div class="notice notice--soft">DRAFT \u2014 NOT YET ISSUED</div>' : ''}
+    ${renderDocBlocks(doc.blocks)}`;
+  return frameDoc({
+    title: doc.title || 'Document',
+    classification: banner(doc.classification, 'Document').replace(' \u00b7 EYES ONLY', ''),
+    inner,
+    footerRef: doc.ref || 'DOC',
+    actor,
+    org: doc.org,
+    distribution: doc.distribution || null,
+  });
+}
+
+export function exportCustomDocument(app, doc) {
+  openDocument(buildCustomDocumentHTML(doc, app.user), `${(doc.ref || 'document')}.html`);
+  logAction(app.user, 'EXPORT_DOCUMENT', `Exported ${doc.ref || 'a custom document'}.`);
 }

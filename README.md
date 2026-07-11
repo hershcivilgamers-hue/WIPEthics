@@ -240,7 +240,9 @@ curl.exe -i https://cairo-aic-api.hershcivilgamers.workers.dev/api/data
 ```
 
 Then open the site, hard-refresh (**Ctrl+F5**), and sign in with the operator ID
-and passphrase from step 1. Change the passphrase from the top bar, then build
+and passphrase from step 1. You will be **required to set a new passphrase**
+before anything else (the bootstrap one passed through your shell, so the system
+retires it immediately). Then build
 your roster — approve people under **Administration → Registrations**, or create
 files directly. Once you're in, delete `worker\bootstrap.sql` (it's your
 credential). No site push or `wrangler deploy` is needed for a data reset — the

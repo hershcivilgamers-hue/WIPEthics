@@ -62,3 +62,85 @@
   /* --- Elevation --- */
   --shadow: 0 12px 40px rgba(0, 0, 0, .45);
 }
+
+/* ===========================================================================
+   THEMES — per-device display preference (js/theme.js sets [data-theme]).
+   Each theme overrides the token variables above. Graphite is the :root default.
+   All are dark-family so legibility holds everywhere; the CRT pair add a phosphor
+   glow, Nightwatch is a colder command-room blue.
+   =========================================================================== */
+
+/* --- Amber CRT: warm phosphor on near-black ------------------------------- */
+[data-theme="amber"] {
+  --bg:          #0a0700;
+  --surface:     #120d02;
+  --surface-2:   #1a1304;
+  --surface-3:   #241a06;
+  --line:        #3d2e0c;
+  --line-strong: #5c4712;
+  --text:   #ffce6a;
+  --text-2: #c89a41;
+  --text-3: #8c6e2d;
+  --amber:     #ffce6a;
+  --amber-2:   #ffe6a0;
+  --amber-dim: #7a5f24;
+  --command: #ffce6a;
+}
+[data-theme="amber"] body { text-shadow: 0 0 1px rgba(255, 206, 106, 0.25); }
+[data-theme="amber"] .page-title,
+[data-theme="amber"] .card__title,
+[data-theme="amber"] .mono { text-shadow: 0 0 6px rgba(255, 206, 106, 0.35); }
+
+/* --- Green CRT: classic green phosphor ------------------------------------ */
+[data-theme="green"] {
+  --bg:          #010a03;
+  --surface:     #04120a;
+  --surface-2:   #06180d;
+  --surface-3:   #0a2213;
+  --line:        #0f3a20;
+  --line-strong: #17572f;
+  --text:   #8ff0a6;
+  --text-2: #5bc079;
+  --text-3: #3c8a54;
+  --amber:     #8ff0a6;
+  --amber-2:   #b9ffce;
+  --amber-dim: #2f6f45;
+  --command: #8ff0a6;
+  --ok: #6fe08a;
+}
+[data-theme="green"] body { text-shadow: 0 0 1px rgba(143, 240, 166, 0.22); }
+[data-theme="green"] .page-title,
+[data-theme="green"] .card__title,
+[data-theme="green"] .mono { text-shadow: 0 0 6px rgba(143, 240, 166, 0.32); }
+
+/* --- Nightwatch: colder blue-tinted command room -------------------------- */
+[data-theme="nightwatch"] {
+  --bg:          #080b12;
+  --surface:     #0d1220;
+  --surface-2:   #111829;
+  --surface-3:   #172035;
+  --line:        #21304d;
+  --line-strong: #2f4468;
+  --text:   #d8e4f5;
+  --text-2: #8ea3c4;
+  --text-3: #5d7099;
+  --amber:     #6ea8fe;
+  --amber-2:   #9cc4ff;
+  --amber-dim: #35507e;
+  --command: #6ea8fe;
+}
+
+/* Theme picker in the topbar. */
+.theme-select {
+  background: var(--surface-2); color: var(--text-2); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 12px; cursor: pointer;
+}
+.theme-select:hover { color: var(--text); border-color: var(--line-strong); }
+
+/* My Service summary card. */
+.svc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--s3); }
+.svc-stat { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
+.svc-stat__v { font-size: 15px; font-weight: 650; color: var(--text); }
+.svc-stat__l { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); margin-top: 3px; }
+.svc-good { color: var(--ok); }
+.svc-flag { color: var(--bad, #cf4436); }

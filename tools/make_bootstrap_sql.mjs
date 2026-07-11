@@ -47,7 +47,10 @@ const user = {
   accountStatus: 'active',
   requestedOrg: null,
   awards: [], strikes: [], promoChecks: [], leave: null, notes: [], events: [],
-  trainings: [],
+  trainings: [], tags: [],
+  // The passphrase was typed into a shell and sits in this file until deleted —
+  // so the system forces you to set a fresh one at first sign-in.
+  mustChangePassphrase: true,
   createdAt: now, updatedAt: now, version: 1, deleted: false, deletedAt: null,
 };
 

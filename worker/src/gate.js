@@ -17,6 +17,7 @@ import {
   canEditPersonnel, canSetClearance, canSetRank, canIssueStrike, canDeletePersonnel,
   canApproveRegistrations, canPromote, canDemote, canManagePromoReqs, canManageSettings,
   canManageDirectives, canReadDirective, canManageSubject, canManageTribunal, canRuleTribunal,
+  canComposeDocument, canViewDocument,
   compartmentClears, canManageCompartment, canReadOperatorInto,
   canManageOrg, canParticipateRecruitment, canLogToOperation, canLogIntel, canManageTraining, isCL5,
   canDischarge, canManageLeave,
@@ -34,7 +35,7 @@ const j = (v) => JSON.stringify(v ?? null);
 // versa (redaction artifacts), must NOT register as a change — otherwise an
 // ordinary promotion looks like it also rewrote other fields and gets refused.
 const SERVER_OWNED = new Set([
-  'salt', 'passwordHash', 'accessLevel', 'bodyWithheld',
+  'salt', 'passwordHash', 'mustChangePassphrase', 'accessLevel', 'bodyWithheld',
   'compartmentName', 'compartmented', 'membersCount', 'access',
 ]);
 
@@ -80,6 +81,24 @@ function authorizeUser(actor, cur, next) {
   if (cur.accountStatus === 'pending' && next.accountStatus === 'active') {
     if (!canApproveRegistrations(actor)) return deny('Only CL5 may approve registrations.');
     return ok('APPROVE_REGISTRATION', `Approved ${next.codename || next.designation}.`);
+  }
+
+  // Account suspension: an administrative hold on sign-in that leaves the
+  // record itself untouched. Only active \u21c4 suspended is lawful here —
+  // pending accounts go through approval, and departures go through the
+  // recycle bin. Never your own account, and never bundled with other edits.
+  if (j(next.accountStatus) !== j(cur.accountStatus)) {
+    const susp = (cur.accountStatus === 'active' && next.accountStatus === 'suspended')
+      || (cur.accountStatus === 'suspended' && next.accountStatus === 'active');
+    if (!susp) return deny('That account-status change is not permitted.');
+    if (!canEditPersonnel(actor, cur)) return deny('You cannot administer this account.');
+    if (actor.id === cur.id) return deny('You cannot suspend or reinstate your own account.');
+    if (changedOutside(cur, next, ['accountStatus', 'events', 'version', 'updatedAt'])) {
+      return deny('An account-status change cannot be combined with other edits.');
+    }
+    return next.accountStatus === 'suspended'
+      ? ok('SUSPEND_ACCOUNT', `${cur.designation} suspended.`)
+      : ok('REINSTATE_ACCOUNT', `${cur.designation} reinstated.`);
   }
 
   // Unit transfer: moving an operator to another organisation. This necessarily
@@ -270,6 +289,113 @@ function authorizeUser(actor, cur, next) {
     return ok('REINSTATE', `${cur.designation} reinstated to duty.`);
   }
 
+  // Advancement review requests: the operator asks their chain to look at the
+  // promotion checklist. Filing is self-only and immutable; the resolution is
+  // signed. Promoting the operator closes a pending request automatically (the
+  // client files that closure as its own write straight after the promotion).
+  if (j(next.advancementRequest ?? null) !== j(cur.advancementRequest ?? null)) {
+    const a = cur.advancementRequest ?? null; const b = next.advancementRequest ?? null;
+    if ((!a || a.status !== 'pending') && b && b.status === 'pending') {
+      if (actor.id !== cur.id) return deny('Only the operator concerned may request their own advancement review.');
+      if (cur.accountStatus !== 'active') return deny('Only an active account may request review.');
+      if (!rankUp(cur.org, cur.rank)) return deny('You already hold the top rank of your organisation.');
+      if (!String(b.note || '').trim()) return deny('A review request must state its case.');
+      if (b.resolvedBy || b.resolvedAt || b.resolution) return deny('A request cannot arrive pre-resolved.');
+      if (changedOutside(cur, next, ['advancementRequest', 'events', 'version', 'updatedAt'])) {
+        return deny('A review request cannot be combined with other edits.');
+      }
+      return ok('REQUEST_ADVANCEMENT', `${cur.designation} requested an advancement review.`);
+    }
+    if (a && a.status === 'pending' && b) {
+      if (!canPromote(actor, cur)) return deny('You cannot rule on this operator\u2019s advancement.');
+      if (b.note !== a.note || j(b.at) !== j(a.at)) return deny('The substance of a request cannot be rewritten.');
+      if (b.status !== 'actioned' && b.status !== 'declined') return deny('A review is resolved as actioned or declined.');
+      if (!b.resolvedBy) return deny('A resolution must be signed.');
+      if (changedOutside(cur, next, ['advancementRequest', 'events', 'version', 'updatedAt'])) {
+        return deny('A resolution cannot be combined with other edits.');
+      }
+      return ok('RESOLVE_ADVANCEMENT', `Advancement review ${b.status} for ${cur.designation}.`);
+    }
+    return deny('Advancement requests may only be filed once, and then resolved.');
+  }
+
+  // Transfer requests: the operator asks to move units. Approving means running
+  // the actual transfer (its own strictly-gated write, requiring authority over
+  // both organisations); the request then closes as \u201ctransferred\u201d in a
+  // follow-up write. Declining needs authority over the operator's CURRENT org.
+  if (j(next.transferRequest ?? null) !== j(cur.transferRequest ?? null)) {
+    const a = cur.transferRequest ?? null; const b = next.transferRequest ?? null;
+    if ((!a || a.status !== 'pending') && b && b.status === 'pending') {
+      if (actor.id !== cur.id) return deny('Only the operator concerned may request their own transfer.');
+      if (cur.accountStatus !== 'active') return deny('Only an active account may request a transfer.');
+      if (!RANKS[b.toOrg] || b.toOrg === cur.org) return deny('Name a valid destination organisation other than your own.');
+      if (!String(b.note || '').trim()) return deny('A transfer request must state its reason.');
+      if (b.resolvedBy || b.resolvedAt || b.resolution) return deny('A request cannot arrive pre-resolved.');
+      if (changedOutside(cur, next, ['transferRequest', 'events', 'version', 'updatedAt'])) {
+        return deny('A transfer request cannot be combined with other edits.');
+      }
+      return ok('REQUEST_TRANSFER', `${cur.designation} requested transfer to ${b.toOrg}.`);
+    }
+    if (a && a.status === 'pending' && b) {
+      if (!canManageOrg(actor, cur.org)) return deny('You cannot rule on transfers for this organisation.');
+      if (b.toOrg !== a.toOrg || b.note !== a.note || j(b.at) !== j(a.at)) return deny('The substance of a request cannot be rewritten.');
+      if (b.status !== 'transferred' && b.status !== 'declined') return deny('A request is resolved as transferred or declined.');
+      if (!b.resolvedBy) return deny('A resolution must be signed.');
+      if (changedOutside(cur, next, ['transferRequest', 'events', 'version', 'updatedAt'])) {
+        return deny('A resolution cannot be combined with other edits.');
+      }
+      return ok('RESOLVE_TRANSFER_REQUEST', `Transfer request ${b.status} for ${cur.designation}.`);
+    }
+    return deny('Transfer requests may only be filed once, and then resolved.');
+  }
+
+  // Leave requests: the operator asks; an authority answers. A request lives in
+  // a single slot on the record (one at a time), its substance is immutable once
+  // filed, and every resolution is signed. Approval applies the leave in the
+  // same write — the authority may adjust the dates, and the record shows both
+  // what was asked and what was granted. This branch must run before the plain
+  // leave branch below, because an approval changes both fields at once.
+  if (j(next.leaveRequest ?? null) !== j(cur.leaveRequest ?? null)) {
+    const a = cur.leaveRequest ?? null; const b = next.leaveRequest ?? null;
+
+    // (a) FILE — the operator, on their own active record, when no request is
+    // already pending and they are not currently on leave.
+    if ((!a || a.status !== 'pending') && b && b.status === 'pending') {
+      if (actor.id !== cur.id) return deny('Only the operator concerned may request their own leave.');
+      if (cur.accountStatus !== 'active') return deny('Only an active account may request leave.');
+      if (cur.leave) return deny('Return from your current leave before requesting another.');
+      if (!b.from || !b.to || String(b.to) < String(b.from)) return deny('A leave request needs a valid date range.');
+      if (!String(b.reason || '').trim()) return deny('A leave request must state its reason.');
+      if (b.resolvedBy || b.resolvedAt || b.note) return deny('A request cannot arrive pre-resolved.');
+      if (changedOutside(cur, next, ['leaveRequest', 'events', 'version', 'updatedAt'])) {
+        return deny('A leave request cannot be combined with other edits.');
+      }
+      return ok('REQUEST_LEAVE', `${cur.designation} requested leave ${b.from} \u2013 ${b.to}.`);
+    }
+
+    // (b) RESOLVE — an authority approves (leave applied in the same write) or
+    // declines. The request's substance is immutable; the resolution is signed.
+    if (a && a.status === 'pending' && b) {
+      if (!canManageLeave(actor, cur)) return deny('You cannot manage leave for this operator.');
+      if (b.from !== a.from || b.to !== a.to || b.reason !== a.reason || j(b.at) !== j(a.at) || (b.type ?? null) !== (a.type ?? null)) {
+        return deny('The substance of a leave request cannot be rewritten.');
+      }
+      if (b.status !== 'approved' && b.status !== 'declined') return deny('A request is resolved as approved or declined.');
+      if (!b.resolvedBy) return deny('A resolution must be signed.');
+      if (changedOutside(cur, next, ['leaveRequest', 'leave', 'status', 'events', 'version', 'updatedAt'])) {
+        return deny('A resolution cannot be combined with other edits.');
+      }
+      if (b.status === 'approved') {
+        if (!next.leave || next.status !== 'loa') return deny('An approved request must place the operator on leave.');
+      } else if (j(next.leave ?? null) !== j(cur.leave ?? null) || next.status !== cur.status) {
+        return deny('Declining a request must leave the record unchanged.');
+      }
+      return ok('RESOLVE_LEAVE_REQUEST', `Leave request ${b.status} for ${cur.designation}.`);
+    }
+
+    return deny('Leave requests may only be filed once, and then resolved.');
+  }
+
   // Placing on / returning from leave. Junior command over a subordinate, or a
   // full manager. Only leave, the active<->on-leave status flip and events.
   if (j(next.leave ?? null) !== j(cur.leave ?? null)) {
@@ -285,6 +411,33 @@ function authorizeUser(actor, cur, next) {
 
   if (!canEditPersonnel(actor, cur)) return deny('You cannot edit this record.');
   return ok('EDIT_PERSONNEL', `Updated ${cur.designation}.`);
+}
+
+function authorizeDocument(actor, cur, next) {
+  const org = (next || cur).org;
+  const ref = (next || cur).ref || 'document';
+  if (!canComposeDocument(actor, org)) return deny('You cannot compose documents for that organisation.');
+  // The classification can never exceed the composer's own clearance.
+  const cls = (next || cur).classification;
+  if (cls && clearanceWeight(cls) > clearanceWeight(actor.clearance)) {
+    return deny('You cannot classify a document above your own clearance.');
+  }
+  if (!cur) return ok('CREATE_DOCUMENT', `Drafted ${ref}.`);
+  // Withdrawal / restoration of a document.
+  if (!!next.deleted !== !!cur.deleted) {
+    return next.deleted ? ok('REMOVE_DOCUMENT', `Withdrew ${ref}.`) : ok('RESTORE_DOCUMENT', `Restored ${ref}.`);
+  }
+  // An issued document is a record: its content freezes. The only further change
+  // is issuing a draft, or withdrawing it (handled above). Supersede, never
+  // rewrite.
+  if (cur.status === 'issued') {
+    if (j({ ...next, updatedAt: 0, version: 0 }) !== j({ ...cur, updatedAt: 0, version: 0 })) {
+      return deny('An issued document is a record and cannot be edited. Supersede it with a new one.');
+    }
+    return ok('EDIT_DOCUMENT', `Touched ${ref}.`);
+  }
+  if (cur.status === 'draft' && next.status === 'issued') return ok('ISSUE_DOCUMENT', `Issued ${ref}.`);
+  return ok('EDIT_DOCUMENT', `Updated draft ${ref}.`);
 }
 
 function authorizeDirective(actor, cur, next, ctx) {
@@ -616,6 +769,7 @@ function authorizeBlacklist(actor, cur, next) {
 
 const AUTHORIZERS = {
   users: authorizeUser,
+  documents: authorizeDocument,
   directives: authorizeDirective,
   subjects: authorizeSubject,
   cases: authorizeCase,

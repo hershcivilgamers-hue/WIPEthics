@@ -164,6 +164,26 @@ export function canReadDirective(actor, directive) {
   return w(actor) >= clearanceWeight(directive.clearance);
 }
 
+// --- Custom documents --------------------------------------------------------
+// Any operator may compose a document for their own organisation; managers (and
+// CL5, who manage every org) may compose for any org they hold. The stamped
+// classification can never exceed the composer's own clearance.
+export function canComposeDocument(actor, org) {
+  if (!actor) return false;
+  return canManageOrg(actor, org) || actor.org === org;
+}
+// A document is visible to those cleared to its classification who sit in its
+// issuing org (or manage it). Drafts are visible only to the author and to
+// managers of the issuing org — an unpublished document is not yet a record.
+export function canViewDocument(actor, doc) {
+  if (!actor || !doc) return false;
+  if (w(actor) < clearanceWeight(doc.classification)) return false;
+  const inScope = actor.org === doc.org || canManageOrg(actor, doc.org);
+  if (!inScope) return false;
+  if (doc.status === 'draft') return doc.createdBy === actor.id || canManageOrg(actor, doc.org);
+  return true;
+}
+
 export function canAccessAdmin(actor) {
   return isCL5(actor);
 }

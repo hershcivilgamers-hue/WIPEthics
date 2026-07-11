@@ -21,7 +21,7 @@ import {
 import {
   isAssignedToOperation, isAssignedToIntel, canViewOperation, canViewIntel,
   canReadDirective, canManageOrg, canParticipateRecruitment, canRuleTribunal,
-  canManageDirectives, isCL5, canIssueStrike } from '../permissions.js';
+  canManageDirectives, isCL5, canIssueStrike, canManageLeave, canPromote } from '../permissions.js';
 import { esc, relTime } from '../ui.js';
 
 const SEVEN_DAYS = 7 * 24 * 3600000;
@@ -91,9 +91,57 @@ export function buildNotifications(actor, now = Date.now()) {
   // 8a. A pending appeal against one of YOUR OWN strikes — reassure the operator it's lodged.
   const me = users().find((u) => u.id === actor.id);
   if (me) {
-    for (const st of (me.strikes || [])) {
-      if (st.appeal && st.appeal.status === 'pending') { add('info', '\u2696', 'Your strike appeal is lodged and awaiting a ruling.', `#/personnel/${actor.id}`, new Date(st.appeal.at).getTime()); break; }
-      if (st.appeal && st.appeal.status === 'overturned') { add('ok', '\u2696', 'A strike against you was overturned on appeal.', `#/personnel/${actor.id}`, st.appeal.resolvedAt ? new Date(st.appeal.resolvedAt).getTime() : null); break; }
+    const mine = me.strikes || [];
+    const pend = mine.find((st) => st.appeal && st.appeal.status === 'pending');
+    if (pend) add('info', '\u2696', 'Your strike appeal is lodged and awaiting a ruling.', `#/personnel/${actor.id}`, new Date(pend.appeal.at).getTime());
+    else {
+      // A recent win is worth surfacing; an old one shouldn't linger forever.
+      const won = mine.find((st) => st.appeal && st.appeal.status === 'overturned'
+        && st.appeal.resolvedAt && (now - new Date(st.appeal.resolvedAt).getTime()) < 14 * 24 * 3600000);
+      if (won) add('ok', '\u2696', 'A strike against you was overturned on appeal.', `#/personnel/${actor.id}`, new Date(won.appeal.resolvedAt).getTime());
+    }
+  }
+
+  // 10a. Your own leave request: pending, or recently resolved.
+  if (me && me.leaveRequest) {
+    const r = me.leaveRequest;
+    if (r.status === 'pending') add('info', '\u2708', `Your leave request (${r.from} \u2013 ${r.to}) is awaiting review.`, `#/personnel/${actor.id}`, r.at ? new Date(r.at).getTime() : null);
+    else if (r.resolvedAt && (now - new Date(r.resolvedAt).getTime()) < 14 * 24 * 3600000) {
+      add(r.status === 'approved' ? 'ok' : 'warn', '\u2708', `Your leave request was ${r.status}.`, `#/personnel/${actor.id}`, new Date(r.resolvedAt).getTime());
+    }
+  }
+
+  // 11a. Your own advancement / transfer requests: pending or recently resolved.
+  if (me) {
+    for (const [key, icon, label] of [['advancementRequest', '\u2b06', 'advancement review'], ['transferRequest', '\u21c4', 'transfer request']]) {
+      const r = me[key];
+      if (!r) continue;
+      if (r.status === 'pending') add('info', icon, `Your ${label} is awaiting review.`, `#/personnel/${actor.id}`, r.at ? new Date(r.at).getTime() : null);
+      else if (r.resolvedAt && (now - new Date(r.resolvedAt).getTime()) < 14 * 24 * 3600000) {
+        add(r.status === 'declined' ? 'warn' : 'ok', icon, `Your ${label} was ${r.status}.`, `#/personnel/${actor.id}`, new Date(r.resolvedAt).getTime());
+      }
+    }
+  }
+
+  // 11b. Requests awaiting an authority.
+  for (const u of users()) {
+    if (u.deleted || u.id === actor.id) continue;
+    const ar = u.advancementRequest;
+    if (ar && ar.status === 'pending' && canPromote(actor, u)) {
+      add('warn', '\u2b06', `Advancement review requested \u2014 ${u.designation}.`, `#/personnel/${u.id}`, ar.at ? new Date(ar.at).getTime() : null);
+    }
+    const tr = u.transferRequest;
+    if (tr && tr.status === 'pending' && canManageOrg(actor, u.org)) {
+      add('warn', '\u21c4', `Transfer request awaiting review \u2014 ${u.designation}.`, `#/personnel/${u.id}`, tr.at ? new Date(tr.at).getTime() : null);
+    }
+  }
+
+  // 10b. Leave requests awaiting an authority.
+  for (const u of users()) {
+    if (u.deleted || u.id === actor.id) continue;
+    const r = u.leaveRequest;
+    if (r && r.status === 'pending' && canManageLeave(actor, u)) {
+      add('warn', '\u2708', `Leave request awaiting review \u2014 ${u.designation} (${r.from} \u2013 ${r.to}).`, `#/personnel/${u.id}`, r.at ? new Date(r.at).getTime() : null);
     }
   }
 

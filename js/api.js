@@ -72,6 +72,10 @@ export async function fetchSnapshot() {
 export async function register(payload) {
   return request('POST', '/api/register', payload);
 }
+// The CAIRO terminal: send one message plus recent history, get one reply.
+export async function terminal(message, history) {
+  return request('POST', '/api/terminal', { message, history });
+}
 export async function resetPassphrase(userId, passphrase) {
   return request('POST', `/api/users/${encodeURIComponent(userId)}/passphrase`, { passphrase });
 }

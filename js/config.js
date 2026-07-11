@@ -33,6 +33,8 @@ export const CONFIG = {
   // Feature switches — flip to false to hide a module without deleting code.
   features: {
     directives: true,
+    documents: true,
+    terminal: true,
     surveillance: true,
     tribunals: true,
     activityLog: true,

@@ -27,6 +27,7 @@ function emptyDb() {
     meta: { version: CONFIG.version, seededAt: null },
     users: [],
     directives: [],
+    documents: [],
     subjects: [],
     cases: [],
     compartments: [],
@@ -104,6 +105,7 @@ export function applyServerSnapshot(snap) {
     ...base,
     users: snap.users || [],
     directives: snap.directives || [],
+    documents: snap.documents || [],
     subjects: snap.subjects || [],
     cases: snap.cases || [],
     compartments: snap.compartments || [],
@@ -200,6 +202,7 @@ export function clearDb() {
 // --- Collection accessors ---------------------------------------------------
 export const users = () => loadDb().users;
 export const directives = () => loadDb().directives;
+export const documents = () => loadDb().documents;
 export const subjects = () => loadDb().subjects;
 export const cases = () => loadDb().cases;
 export const compartments = () => loadDb().compartments;
@@ -236,6 +239,16 @@ export function upsertDirective(directive) {
   else list.push(directive);
   afterWrite('directives', directive);
   return directive;
+}
+
+export function getDocument(id) {
+  return documents().find((d) => d.id === id) || null;
+}
+export function upsertDocument(doc) {
+  const list = documents();
+  const i = list.findIndex((d) => d.id === doc.id);
+  if (i >= 0) list[i] = doc; else list.push(doc);
+  afterWrite('documents', doc);
 }
 
 export function getSubject(id) {

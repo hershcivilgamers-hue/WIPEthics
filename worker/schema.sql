@@ -22,6 +22,15 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_users_org ON users (org);
 CREATE INDEX IF NOT EXISTS idx_users_deleted ON users (deleted);
 
+CREATE TABLE IF NOT EXISTS documents (
+  id          TEXT PRIMARY KEY,
+  org         TEXT,
+  deleted     INTEGER NOT NULL DEFAULT 0,
+  version     INTEGER NOT NULL DEFAULT 1,
+  updated_at  TEXT,
+  data        TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS directives (
   id          TEXT PRIMARY KEY,
   org         TEXT,
