@@ -388,8 +388,10 @@ async function assessInterviewEndpoint(id, actor, repo, env) {
     result = await assessInterview(env, r);
   } catch (e) {
     console.error('[assess] provider error:', (e && e.message) || e);
-    const msg = e && e.offline ? e.message : 'ASSESSMENT UNAVAILABLE — the cognition core did not answer. Retry shortly.';
-    return json({ error: msg }, e && e.offline ? 503 : 502, env);
+    if (e && e.offline) return json({ error: e.message }, 503, env);
+    // Surface the real cause (truncated). This is an operator tool — a generic
+    // message just hides whether the provider failed or its output was unparseable.
+    return json({ error: `Assessment failed: ${String((e && e.message) || 'the cognition core did not answer').slice(0, 300)}` }, 502, env);
   }
 
   const now = new Date().toISOString();

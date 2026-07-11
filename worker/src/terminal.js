@@ -70,7 +70,7 @@ export function checkRate(userId, now = Date.now(), map = buckets) {
 // --- Providers ---------------------------------------------------------------
 // Exported so the interview-assessment endpoint reuses the exact same provider
 // selection (Gemini when GEMINI_API_KEY is set, else Workers AI via env.AI).
-export async function callGemini(env, persona, history, text) {
+export async function callGemini(env, persona, history, text, opts = {}) {
   const model = env.GEMINI_MODEL || 'gemini-2.0-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`;
   const contents = [
@@ -83,7 +83,7 @@ export async function callGemini(env, persona, history, text) {
     body: JSON.stringify({
       system_instruction: { parts: [{ text: persona }] },
       contents,
-      generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS, temperature: 0.8 },
+      generationConfig: { maxOutputTokens: opts.maxTokens || MAX_OUTPUT_TOKENS, temperature: opts.temperature ?? 0.8 },
     }),
   });
   if (!res.ok) {
@@ -97,7 +97,7 @@ export async function callGemini(env, persona, history, text) {
   return reply;
 }
 
-export async function callWorkersAI(env, persona, history, text) {
+export async function callWorkersAI(env, persona, history, text, opts = {}) {
   const model = env.WORKERS_AI_MODEL || '@cf/meta/llama-3.1-8b-instruct';
   const messages = [
     { role: 'system', content: persona },
@@ -106,7 +106,7 @@ export async function callWorkersAI(env, persona, history, text) {
   ];
   let out;
   try {
-    out = await env.AI.run(model, { messages, max_tokens: MAX_OUTPUT_TOKENS });
+    out = await env.AI.run(model, { messages, max_tokens: opts.maxTokens || MAX_OUTPUT_TOKENS });
   } catch (e) {
     throw new Error(`Workers AI (${model}) failed: ${(e && e.message) || e}`);
   }

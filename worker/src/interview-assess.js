@@ -24,9 +24,10 @@ function buildAssessmentSystem() {
     "For each scenario you are given: the scenario, marking guidance describing what a strong answer and a weak answer look like, and the candidate's recorded answer.",
     'A strong Assistant weighs competing duties honestly and reaches a proportionate judgement — neither a blind rule-follower nor a naive idealist. Grade the QUALITY OF REASONING against the guidance, not agreement with any single "right" answer. A missing or empty answer is weak.',
     'Grade each answer strong, acceptable, or weak, with a one-sentence rationale. Then give an overall recommendation — "recommend", "reservations" (recommend with reservations), or "decline" (do not recommend) — with a short summary.',
-    'Reply with ONLY a compact JSON object and nothing else (no markdown, no prose, no code fences), in exactly this shape:',
+    'Reply with ONLY a compact JSON object and nothing else — no markdown, no prose, no code fences.',
+    'The JSON must be valid: double quotes on every key and string, no trailing commas, no comments. Use exactly this shape:',
     '{"perQuestion":[{"id":"<the given id>","grade":"strong|acceptable|weak","rationale":"..."}],"overall":{"recommendation":"recommend|reservations|decline","summary":"..."}}',
-    'Use the exact id string given for each question. Keep each rationale to one sentence.',
+    'Use the exact id string given for each question. Keep each rationale to one short sentence so the whole reply stays compact.',
   ].join('\n');
 }
 
@@ -53,10 +54,13 @@ export function modelLabel(env) {
   return 'none';
 }
 
-// Same provider selection as terminal.js askCairo, single-shot (no history).
+// Same provider selection as terminal.js askCairo, single-shot (no history). The
+// verdict is a larger structured reply than a chat turn, so give it room (a small
+// token cap truncates the JSON mid-object) and a low temperature for consistency.
 async function callModel(env, system, user) {
-  if (env && env.GEMINI_API_KEY) return callGemini(env, system, [], user);
-  if (env && env.AI) return callWorkersAI(env, system, [], user);
+  const opts = { maxTokens: 1024, temperature: 0.3 };
+  if (env && env.GEMINI_API_KEY) return callGemini(env, system, [], user, opts);
+  if (env && env.AI) return callWorkersAI(env, system, [], user, opts);
   const err = new Error('COGNITION CORE OFFLINE — no model provider is configured for this site.');
   err.offline = true;
   throw err;
@@ -69,7 +73,10 @@ export function extractJson(text) {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
   if (start < 0 || end <= start) return null;
-  try { return JSON.parse(text.slice(start, end + 1)); } catch (_) { return null; }
+  const slice = text.slice(start, end + 1);
+  try { return JSON.parse(slice); } catch (_) { /* fall through to a light repair */ }
+  // Common small-model slip: trailing commas before } or ]. Strip and retry once.
+  try { return JSON.parse(slice.replace(/,\s*([}\]])/g, '$1')); } catch (_) { return null; }
 }
 
 // Coerce a parsed reply into a safe assessment. Unknown grades -> 'acceptable',

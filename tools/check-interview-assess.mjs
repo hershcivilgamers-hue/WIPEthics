@@ -18,6 +18,7 @@ import { authorizeWrite } from '../worker/src/gate.js';
 // --- 1. Defensive parsing ---------------------------------------------------
 assert.deepEqual(extractJson('Here is the result: {"a":1} — done'), { a: 1 }, 'extract from prose');
 assert.deepEqual(extractJson('```json\n{"a":1}\n```'), { a: 1 }, 'extract from code fence');
+assert.deepEqual(extractJson('{"a":[1,2,],}'), { a: [1, 2] }, 'trailing commas repaired');
 assert.equal(extractJson('no json here'), null, 'no braces -> null');
 assert.equal(extractJson('{bad json}'), null, 'unparseable -> null');
 assert.equal(extractJson(42), null, 'non-string -> null');
