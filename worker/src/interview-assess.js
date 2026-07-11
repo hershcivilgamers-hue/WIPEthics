@@ -54,7 +54,9 @@ function buildAssessmentUser(items, responses) {
 // its free tier is easily exhausted (HTTP 429 / quota). Returns { text, model }
 // so the stored provenance reflects the provider that actually answered.
 async function callModel(env, system, user) {
-  const opts = { maxTokens: 1024, temperature: 0.3 };
+  // 2048: the fallback (GLM) is a thinking model — reasoning shares the output
+  // budget, and a tight cap leaves content empty after the thinking spend.
+  const opts = { maxTokens: 2048, temperature: 0.3 };
   const hasGemini = !!(env && env.GEMINI_API_KEY);
   const hasAI = !!(env && env.AI);
   if (hasGemini) {

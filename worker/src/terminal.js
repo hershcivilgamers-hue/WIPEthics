@@ -112,7 +112,15 @@ export async function callWorkersAI(env, persona, history, text, opts = {}) {
   } catch (e) {
     throw new Error(`Workers AI (${model}) failed: ${(e && e.message) || e}`);
   }
-  const reply = (out && (out.response || out.result || (typeof out === 'string' ? out : ''))).toString().trim();
+  // Newer catalog models (e.g. GLM) reply in the OpenAI chat.completion envelope;
+  // older ones use { response }. Thinking models may leave content null and put
+  // text in reasoning_content — take whichever field actually carries text.
+  const msg = out && out.choices && out.choices[0] && out.choices[0].message;
+  const reply = String(
+    (out && (out.response ?? out.result))
+    ?? (msg && (msg.content ?? msg.reasoning_content))
+    ?? (typeof out === 'string' ? out : ''),
+  ).trim();
   if (!reply) throw new Error(`Workers AI (${model}) returned no text: ${JSON.stringify(out).slice(0, 300)}`);
   return reply;
 }
