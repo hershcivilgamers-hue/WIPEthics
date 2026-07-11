@@ -26,7 +26,7 @@ import {
 } from '../permissions.js';
 import { makeCredential } from '../crypto.js';
 import { interviewSetFor, INTERVIEW_BANK_DRAW } from '../interview-bank.js';
-import { exportInterviewScript } from '../export.js';
+import { exportInterviewScript, exportInterviewInvite } from '../export.js';
 import { logAction } from '../audit.js';
 import {
   esc, fmtDate, fmtDateTime, relTime, orgTag, monogram,
@@ -287,9 +287,17 @@ export function renderRecruit(host, app, id) {
   const linkedFile = r.personnelFileId ? getUser(r.personnelFileId) : null;
   const avatarTone = isEthics ? 'ethics' : 'omega';
 
+  // Candidate-facing Ethics correspondence: an invitation once at interview, and
+  // an appointment notice once accepted (passed interview). Not the interviewer's
+  // script \u2014 these carry no marking criteria.
+  const showInvite = isEthics && canAct && stage === 'interview';
+  const showAccept = isEthics && canAct && stage === 'archived' && r.archiveStatus === 'approved';
+
   host.innerHTML = `
     <div class="file-actions">
       <button class="btn btn--ghost btn--sm" id="back">\u2190 ${esc(ORG_LABEL[r.org] || 'Recruitment')}</button>
+      ${showInvite ? '<button class="btn btn--sm" data-act="export-invite">\u23ce Invitation to Interview</button>' : ''}
+      ${showAccept ? '<button class="btn btn--sm" data-act="export-accept">\u23ce Appointment Notice</button>' : ''}
     </div>
 
     <header class="dossier-head">
@@ -360,6 +368,8 @@ export function renderRecruit(host, app, id) {
     deny: () => deny(app, r),
     'iv-export': () => exportInterviewScript(app, r),
     'iv-reroll': () => rerollInterview(app, r),
+    'export-invite': () => exportInterviewInvite(app, r, false),
+    'export-accept': () => exportInterviewInvite(app, r, true),
   };
   host.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => dispatch[b.dataset.act] && dispatch[b.dataset.act]()));
   host.querySelectorAll('[data-tag]').forEach((b) => b.addEventListener('click', () => setTag(app, r, b.dataset.tag)));

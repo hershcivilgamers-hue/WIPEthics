@@ -475,10 +475,18 @@ function authorizeSubject(actor, cur, next, ctx) {
   // before the owning-org management gate.
   const authChanged = j(next && next.authorization) !== j(cur && cur.authorization);
   if (authChanged) {
-    if (!canManageTribunal(actor)) return deny('Only an Ethics Committee member may authorise or refuse a Target.');
     const block = compartmentWriteBlock(actor, cur, next, ctx);
     if (block) return block;
     const st = next.authorization && next.authorization.status;
+    // Filing a REQUEST (status 'pending') is a surveillance manager's action —
+    // this is how a non-Ethics operator (e.g. an Assistant, or a task-force
+    // manager) asks the Committee to authorise a Target. DECIDING it —
+    // authorising or refusing — is reserved to an Ethics Committee member.
+    if (st === 'pending') {
+      if (!canManageSubject(actor, next || cur)) return deny('You cannot manage this surveillance subject.');
+      return ok('REQUEST_TARGET', `Target authorisation requested for ${ref}.`);
+    }
+    if (!canManageTribunal(actor)) return deny('Only an Ethics Committee member may authorise or refuse a Target.');
     if (st === 'authorised') return ok('AUTHORISE_TARGET', `Target ${ref} authorised for termination.`);
     if (st === 'refused') return ok('REFUSE_TARGET', `Target authorisation refused for ${ref}.`);
     return ok('EDIT_SUBJECT', `Updated ${ref}.`);

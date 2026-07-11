@@ -1014,6 +1014,58 @@ export function buildInterviewScriptHTML(recruit, actor) {
 }
 
 // ===========================================================================
+// ETHICS ASSISTANT \u2014 CANDIDATE CORRESPONDENCE (invitation / appointment)
+// The candidate-FACING counterpart to the interviewer's script. It carries NO
+// marking criteria and no assessment guidance \u2014 only the formal notice. Two
+// variants share the chrome: an invitation to interview (issued when an
+// application is advanced to interview) and a notice of appointment (issued once
+// the candidate has passed and been accepted).
+// ===========================================================================
+export function buildInterviewInviteHTML(recruit, actor, accepted = false) {
+  const title = accepted ? 'Notice of Appointment' : 'Invitation to Interview';
+  const today = longDate(new Date().toISOString());
+
+  const candTable = `<table class="memo-h"><tbody>
+    <tr><td class="ml">Candidate</td><td>${esc(recruit.name || '\u2014')}</td></tr>
+    ${recruit.steamId ? `<tr><td class="ml">SteamID</td><td>${esc(recruit.steamId)}</td></tr>` : ''}
+    <tr><td class="ml">Reference</td><td>${esc(recruit.ref || '\u2014')}</td></tr>
+    <tr><td class="ml">Date</td><td>${today}</td></tr>
+  </tbody></table>`;
+
+  const body = accepted
+    ? `<p>Following your interview before the Ethics Committee, I am pleased to inform you that your application (reference ${esc(recruit.ref || '\u2014')}) has been <strong>accepted</strong>. You are appointed as an <strong>Assistant to the Ethics Committee</strong>.</p>
+       <p>Your appointment takes effect on issue of your personnel file and sign-in credentials, which the Committee will arrange with you separately. As an Assistant you support the work of the Committee and are held to its standards of conduct, confidentiality and activity; you are expected to weigh competing duties honestly and to raise any concern through the Committee\u2019s proper channels.</p>
+       <p>On behalf of the Committee, welcome.</p>`
+    : `<p>Your application for appointment as an <strong>Assistant to the Ethics Committee</strong> (reference ${esc(recruit.ref || '\u2014')}) has been reviewed, and the Committee invites you to attend an <strong>interview</strong>.</p>
+       <p>The interview is a structured discussion of ethical and situational judgement relevant to the work of the Committee. There are no trick questions and no single correct answers \u2014 you will be asked to reason through a number of scenarios and to explain the judgements you reach. Rehearsing set answers is neither expected nor useful; come prepared to think aloud and to be questioned on your reasoning.</p>
+       <p>A member of the Committee will confirm the time and place with you directly. Please make yourself available, and bring any questions you may have about the role.</p>`;
+
+  const inner = `
+    ${letterhead('ethics-committee', 'Office of the Ethics Committee')}
+    <hr class="rule" />
+    <div class="doc-title">${esc(title)}</div>
+    <hr class="rule" />
+    ${candTable}
+    <hr class="rule" />
+    <div class="memo-body">
+      <p>To ${esc(recruit.name || 'the candidate')},</p>
+      ${body}
+    </div>
+    ${signBlock({ name: esc(actor?.designation || 'ETHICS COMMITTEE'), role: 'For and on behalf of the Ethics Committee', dated: `Issued ${today}` })}
+  `;
+
+  return frameDoc({
+    title,
+    classification: 'FOUNDATION GENERAL \u00b7 ETHICS COMMITTEE \u00b7 FOR THE NAMED CANDIDATE',
+    inner,
+    org: 'ethics-committee',
+    distribution: 'The named candidate.',
+    footerRef: recruit.ref || 'APPLICATION',
+    actor,
+  });
+}
+
+// ===========================================================================
 // SIDE-EFFECTING EXPORT (new tab, or download if pop-ups blocked)
 // ===========================================================================
 function openDocument(html, downloadName) {
@@ -1057,6 +1109,10 @@ export function exportDirective(app, directive) {
 export function exportInterviewScript(app, recruit) {
   logAction(app.user, 'EXPORT_INTERVIEW', `Generated interview script for ${recruit.ref || 'application'}.`);
   openDocument(buildInterviewScriptHTML(recruit, app.user), `${recruit.ref || 'application'}-interview-script.html`);
+}
+export function exportInterviewInvite(app, recruit, accepted = false) {
+  logAction(app.user, 'EXPORT_DOCUMENT', `Generated ${accepted ? 'appointment notice' : 'interview invitation'} for ${recruit.ref || 'application'}.`);
+  openDocument(buildInterviewInviteHTML(recruit, app.user, accepted), `${recruit.ref || 'application'}-${accepted ? 'appointment' : 'interview-invitation'}.html`);
 }
 export function exportSourceFile(app, src) {
   logAction(app.user, 'EXPORT_INTEL', `Generated source file for ${src.ref}.`);

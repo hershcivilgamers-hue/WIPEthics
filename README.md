@@ -346,8 +346,14 @@ Sealed records still appear in the registry as a row so you know something exist
 but reveal nothing — no reference, alias, organisation or threat. The demo seeds
 subjects across every tier so this is visible: sign in as `bailiff` (CL3) and try
 to open the Command-sealed target, then as `director` (CL5) and open the same one.
-Managing a subject follows the same rule as managing personnel (CL4·Senior with a
-stake), and you can never classify a subject at a sensitivity above your own.
+Opening and managing a subject is open to **CL4·Junior with a stake** — so an
+Ethics Committee Assistant, or a task-force lieutenant, can run a Person of
+Interest — and you can never classify a subject at a sensitivity above your own.
+A **Target** is treated differently, because it is a termination authorisation:
+any subject manager may *request* one (or convert a Person of Interest into one),
+but it stays **pending and inert until an Ethics Committee member authorises it**.
+Only an Ethics member can authorise or refuse, and a refusal reverts the record to
+a Person of Interest. This is enforced server-side, not merely in the UI.
 
 **Case Docket (tribunals)** is the Ethics Committee's register of proceedings —
 containment reviews, inquiries and full tribunals. Like surveillance, each case
@@ -454,8 +460,12 @@ and export the whole thing as a formal **interviewer's script** — candidate
 details, each scenario with its assessment guidance and a ruled space to mark
 Strong / Acceptable / Weak, then an overall recommendation block. The script is
 stamped *interviewer's copy* and carries the marking criteria, so it is never
-shown to the candidate. Passing opens the Assistant's personnel file; failing
-requires a written reason.
+shown to the candidate. The Committee can also issue the candidate-facing
+correspondence straight from the application — an **invitation to interview** once
+an application is advanced, and a **notice of appointment** once the candidate
+passes — each a clean formal letter that, unlike the interviewer's script, carries
+no marking criteria and is meant for the candidate. Passing opens the Assistant's
+personnel file; failing requires a written reason.
 
 **Search** (the box in the top bar, or *Search* in the sidebar) runs one query
 across personnel, surveillance subjects, tribunal cases and directives — and it

@@ -15,7 +15,7 @@ import {
 } from '../constants.js';
 import { subjects, getSubject, upsertSubject, compartments, getCompartment, newId, upsertCase, cases } from '../storage.js';
 import {
-  canViewSubject, canManageSubject, canClassifySubjectAt, canManageOrg, canManageSubjectsIn,
+  canViewSubject, canManageSubject, canClassifySubjectAt, canManageSubjectsIn,
   isCL5, readIntoCompartment, canManageTribunal, canViewCase,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
@@ -519,7 +519,7 @@ function openCreate(app) {
           err.hidden = true;
 
           if (!alias) { err.textContent = 'An alias or designation is required.'; err.hidden = false; return; }
-          if (!canManageOrg(actor, org)) { err.textContent = 'You cannot create records for that organisation.'; err.hidden = false; return; }
+          if (!canManageSubjectsIn(actor, org)) { err.textContent = 'You cannot create records for that organisation.'; err.hidden = false; return; }
           if (!canClassifySubjectAt(actor, clr)) { err.textContent = 'Sensitivity cannot exceed your own clearance.'; err.hidden = false; return; }
           if (subjects().some((x) => !x.deleted && x.ref.toLowerCase() === ref.toLowerCase())) { err.textContent = 'That reference is already in use.'; err.hidden = false; return; }
 
@@ -705,7 +705,6 @@ async function closeSubject(app, s) {
 
           if (outcome === 'summoned') {
             // Close the watch and open a linked Ethics case naming the subject.
-            const n = subjects().filter((x) => (x.ref || '').startsWith('EC-CASE-')).length; // cheap unique-ish
             const caseRef = `EC-CASE-${String(Date.now()).slice(-4)}`;
             const now = new Date().toISOString();
             upsertCase({
