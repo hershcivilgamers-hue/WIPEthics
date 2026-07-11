@@ -1,0 +1,10 @@
+# Wrangler local state/cache — never commit.
+.wrangler/
+worker/.wrangler/
+
+# Node
+node_modules/
+
+# OS cruft
+.DS_Store
+Thumbs.db

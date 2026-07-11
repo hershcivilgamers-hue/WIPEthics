@@ -37,6 +37,9 @@ const j = (v) => JSON.stringify(v ?? null);
 const SERVER_OWNED = new Set([
   'salt', 'passwordHash', 'mustChangePassphrase', 'accessLevel', 'bodyWithheld',
   'compartmentName', 'compartmented', 'membersCount', 'access',
+  // CAIRO's interview verdict is authored only by the dedicated /assess endpoint,
+  // never through the ordinary sync path — so a client can't forge a verdict.
+  'interviewAssessment',
 ]);
 
 function changedOutside(cur, next, allowed) {
@@ -689,10 +692,28 @@ function authorizeRecruit(actor, cur, next, ctx) {
       }
       return deny('That is not a valid stage transition.');
     }
-    // Once in interview, only CL5 may add notes or otherwise change the record.
-    if (cur.stage === 'interview' && !isCL5(actor)) return deny('Only CL5 may add to an application in the interview stage.');
-    // Interview assessment edits (CL5, interview stage) — refine the audit label.
+    // Interview stage — field-aware authority. Seating interviewers and changing
+    // the question set stay CL5-only; an operator CL5 has ASSIGNED to the
+    // interview (or CL5) may record the candidate's responses. Each of these is
+    // an atomic write (nothing else changes alongside it).
     if (cur.stage === 'interview') {
+      if (j(cur.interviewers || []) !== j(next.interviewers || [])) {
+        if (!isCL5(actor)) return deny('Only CL5 may assign interviewers.');
+        if (changedOutside(cur, next, ['interviewers', 'version', 'updatedAt'])) {
+          return deny('An interviewer change cannot be combined with other edits.');
+        }
+        return ok('SET_INTERVIEWERS', `Interviewers seated on ${ref}.`);
+      }
+      if (j(cur.interviewResponses || {}) !== j(next.interviewResponses || {})) {
+        const assigned = Array.isArray(cur.interviewers) && cur.interviewers.includes(actor.id);
+        if (!isCL5(actor) && !assigned) return deny('Only CL5 or an assigned interviewer may record responses.');
+        if (changedOutside(cur, next, ['interviewResponses', 'version', 'updatedAt'])) {
+          return deny('A response edit cannot be combined with other edits.');
+        }
+        return ok('EDIT_INTERVIEW_RESPONSE', `Interview response recorded for ${ref}.`);
+      }
+      // Anything else at interview stage — re-roll, custom questions, notes — is CL5 only.
+      if (!isCL5(actor)) return deny('Only CL5 may add to an application in the interview stage.');
       if (j(cur.interviewSeed) !== j(next.interviewSeed)) return ok('EDIT_RECRUIT', `Interview question set re-rolled for ${ref}.`);
       if (j(cur.customQuestions || []) !== j(next.customQuestions || [])) {
         const grew = (next.customQuestions || []).length > (cur.customQuestions || []).length;

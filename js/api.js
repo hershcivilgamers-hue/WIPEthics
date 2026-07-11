@@ -79,6 +79,12 @@ export async function terminal(message, history) {
 export async function resetPassphrase(userId, passphrase) {
   return request('POST', `/api/users/${encodeURIComponent(userId)}/passphrase`, { passphrase });
 }
+// Ask the Worker to run CAIRO's advisory assessment of a candidate's recorded
+// interview answers. The model runs server-side; the verdict is written to the
+// record (server-owned), so on success the caller reloads the snapshot.
+export async function assessInterview(recruitId) {
+  return request('POST', `/api/recruits/${encodeURIComponent(recruitId)}/assess`);
+}
 export async function changeMyPassphrase(currentPassphrase, newPassphrase) {
   return request('POST', '/api/me/passphrase', { currentPassphrase, newPassphrase });
 }

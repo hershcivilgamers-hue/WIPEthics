@@ -460,7 +460,15 @@ and export the whole thing as a formal **interviewer's script** — candidate
 details, each scenario with its assessment guidance and a ruled space to mark
 Strong / Acceptable / Weak, then an overall recommendation block. The script is
 stamped *interviewer's copy* and carries the marking criteria, so it is never
-shown to the candidate. The Committee can also issue the candidate-facing
+shown to the candidate. A CL5 **seats interviewers** on a specific interview (the
+way a tribunal panel is seated); those assigned members — and CL5 — then **record
+the candidate's answers** against each scenario. On request, **CAIRO** grades each
+answer Strong / Acceptable / Weak with a one-line rationale and offers an overall
+*Recommend / with reservations / Do not recommend* verdict — run server-side (the
+same model that powers the CAIRO terminal), written to the record, and shown as
+guidance only. It is explicitly **advisory**: the pass/fail decision stays with
+CL5, who is free to disagree. The recorded answers and CAIRO's grades also flow
+into the exported interviewer's script. The Committee can also issue the candidate-facing
 correspondence straight from the application — an **invitation to interview** once
 an application is advanced, and a **notice of appointment** once the candidate
 passes — each a clean formal letter that, unlike the interviewer's script, carries

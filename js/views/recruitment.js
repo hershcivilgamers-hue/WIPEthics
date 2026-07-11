@@ -19,14 +19,15 @@ import {
   ORGS, RANKS, clearanceForRank,
 } from '../constants.js';
 import {
-  recruits, getRecruit, upsertRecruit, getUser, users, upsertUser, newId,
+  recruits, getRecruit, upsertRecruit, getUser, users, upsertUser, newId, applyServerSnapshot,
 } from '../storage.js';
 import {
   canParticipateRecruitment, canManageOrg, canInductRecruit, isCL5,
 } from '../permissions.js';
 import { makeCredential } from '../crypto.js';
-import { interviewSetFor, INTERVIEW_BANK_DRAW } from '../interview-bank.js';
+import { interviewSetFor, INTERVIEW_BANK_DRAW, INTERVIEW_GRADE, INTERVIEW_RECOMMENDATION } from '../interview-bank.js';
 import { exportInterviewScript, exportInterviewInvite } from '../export.js';
+import * as api from '../api.js';
 import { logAction } from '../audit.js';
 import {
   esc, fmtDate, fmtDateTime, relTime, orgTag, monogram,
@@ -241,36 +242,81 @@ export function renderRecruit(host, app, id) {
       </div>
     </section>` : '';
 
-  // --- Interview assessment panel (Ethics interview stage, CL5 only) ---
-  const trunc = (s) => { const x = String(s || ''); return x.length > 118 ? x.slice(0, 117) + '\u2026' : x; };
-  const interviewPanel = (isEthics && stage === 'interview' && cl5) ? (() => {
-    const drawn = interviewSetFor(r);
-    const custom = r.customQuestions || [];
-    const drawnList = drawn.map((q, i) => `
-      <div class="iv-pick">
-        <span class="iv-pick__n">${i + 1}</span>
-        <span class="iv-pick__cat">${esc(q.category)}</span>
-        <span class="iv-pick__p">${esc(trunc(q.prompt))}</span>
-      </div>`).join('');
-    const customList = custom.length ? custom.map((q) => `
-      <div class="iv-pick iv-pick--custom">
-        <span class="iv-pick__cat">Added</span>
-        <span class="iv-pick__p">${esc(trunc(q.prompt))}</span>
-        <button class="btn btn--xs btn--danger" data-iv-remove="${esc(q.id)}">Remove</button>
-      </div>`).join('') : '<div class="empty">No Committee-added questions.</div>';
+  // --- Interview panel (Ethics interview stage) ---
+  // Visible to every viewer of the candidate; CL5 assigns interviewers and manages
+  // the question set, assigned interviewers (and CL5) record responses, CAIRO
+  // offers an advisory grade, and CL5 still enters the pass/fail.
+  const assigned = (r.interviewers || []).includes(actor.id);
+  const interviewPanel = (isEthics && stage === 'interview') ? (() => {
+    const canRespond = cl5 || assigned;
+    const items = [
+      ...interviewSetFor(r),
+      ...(r.customQuestions || []).map((q) => ({ ...q, category: 'Committee-added', custom: true })),
+    ];
+    const responses = r.interviewResponses || {};
+    const assessment = r.interviewAssessment || null;
+
+    const roster = (r.interviewers || []).map((uid) => {
+      const u = getUser(uid);
+      return u ? `<span class="mono">${esc(u.designation)}</span> ${esc(u.codename || '')}` : `<span class="mono">${esc(uid)}</span>`;
+    });
+    const rosterLine = roster.length ? roster.join(' \u00b7 ') : '<span class="muted-text">No interviewers assigned yet.</span>';
+
+    const recBlock = assessment ? (() => {
+      const m = INTERVIEW_RECOMMENDATION[assessment.recommendation] || { label: assessment.recommendation, tone: 'muted' };
+      return `<div class="iv-rec-banner">
+        <div class="iv-rec-banner__head"><span class="badge badge--${m.tone}">CAIRO: ${esc(m.label)}</span>
+          <span class="muted-text">advisory \u2014 the interviewing Member decides</span></div>
+        ${assessment.summary ? `<p class="iv-rec-banner__sum">${esc(assessment.summary)}</p>` : ''}
+        <div class="iv-rec-banner__meta">Assessed ${assessment.model ? `by ${esc(assessment.model)} ` : ''}${assessment.at ? `\u00b7 ${fmtDateTime(assessment.at)} ` : ''}${assessment.by ? `\u00b7 requested by ${esc(assessment.by)}` : ''}</div>
+      </div>`;
+    })() : '';
+
+    const qBlocks = items.map((q, i) => {
+      const stored = responses[q.id];
+      const answer = stored ? stored.text : '';
+      const g = assessment && assessment.perQuestion ? assessment.perQuestion[q.id] : null;
+      const gm = g ? (INTERVIEW_GRADE[g.grade] || { label: g.grade, tone: 'muted' }) : null;
+      const gradeBadge = gm ? `<span class="badge badge--${gm.tone}">${esc(gm.label)}</span>` : '';
+      const rationale = (g && g.rationale) ? `<div class="iv-q2__rationale">${esc(g.rationale)}</div>` : '';
+      const criteria = canRespond ? `<div class="iv-guide2">
+          <div><span class="iv-guide2__k">Strong</span> ${esc(q.valid || '\u2014')}</div>
+          <div><span class="iv-guide2__k iv-guide2__k--weak">Weak</span> ${esc(q.weak || '\u2014')}</div>
+        </div>` : '';
+      const respField = canRespond
+        ? `<textarea class="iv-resp" data-iv-resp="${esc(q.id)}" rows="3" placeholder="Record the candidate\u2019s answer / your notes\u2026">${esc(answer)}</textarea>`
+        : `<div class="iv-resp-ro">${answer ? esc(answer) : '<span class="muted-text">No answer recorded.</span>'}</div>`;
+      return `<div class="iv-q2 ${q.custom ? 'iv-q2--custom' : ''}">
+        <div class="iv-q2__head">
+          <span class="iv-q2__n">${i + 1}</span>
+          <span class="iv-pick__cat">${esc(q.category)}</span>
+          ${gradeBadge}
+          ${q.custom && cl5 ? `<button class="btn btn--xs btn--danger" data-iv-remove="${esc(q.id)}" style="margin-left:auto">Remove</button>` : ''}
+        </div>
+        <div class="iv-q2__prompt">${esc(q.prompt)}</div>
+        ${criteria}
+        ${respField}
+        ${rationale}
+      </div>`;
+    }).join('');
+
     return `
       <section class="card">
         <div class="card__title">Interview Assessment</div>
         <div class="card__body">
-          <p class="muted-text">A set of ${INTERVIEW_BANK_DRAW} scenarios is drawn for this candidate and stays fixed until re-rolled. The exported script carries the marking criteria \u2014 it is the interviewer\u2019s copy and must not be shown to the candidate.</p>
+          <p class="muted-text">${INTERVIEW_BANK_DRAW} scenarios are drawn for this candidate and stay fixed until re-rolled. CL5 assigns interviewers, who record the candidate\u2019s answers; CAIRO offers an advisory grade, and CL5 enters the pass/fail. Interviewer\u2019s copy \u2014 do not show it to the candidate.</p>
+          <div class="kv"><span class="kv__k">Interviewers</span><span class="kv__v">${rosterLine}</span></div>
+          ${recBlock}
           <div class="iv-actions">
-            <button class="btn btn--sm btn--primary" data-act="iv-export">\u23ce Export Interviewer\u2019s Script</button>
-            <button class="btn btn--sm" data-act="iv-reroll">\u27f3 Re-roll Question Set</button>
+            ${canRespond ? '<button class="btn btn--sm btn--primary" data-act="iv-assess">\u25c8 Ask CAIRO to assess</button>' : ''}
+            ${canRespond ? '<button class="btn btn--sm" data-act="iv-export">\u23ce Export Interviewer\u2019s Script</button>' : ''}
+            ${cl5 ? '<button class="btn btn--sm" data-act="iv-assign">Assign interviewers</button>' : ''}
+            ${cl5 ? '<button class="btn btn--sm" data-act="iv-reroll">\u27f3 Re-roll Question Set</button>' : ''}
           </div>
-          <div class="iv-picklist">${drawnList}</div>
-          <div class="iv-sub">Committee-added questions</div>
-          <div class="iv-picklist">${customList}</div>
-          <button class="btn btn--sm" id="iv-add-toggle">+ Add a question to this interview</button>
+          ${!canRespond ? '<p class="field__hint">You are not assigned to this interview \u2014 responses are read-only.</p>' : ''}
+          <div class="iv-qs">${qBlocks}</div>
+          ${canRespond ? '<div class="iv-actions"><button class="btn btn--sm btn--primary" id="iv-save-responses">Save responses</button></div>' : ''}
+          ${cl5 ? `<button class="btn btn--sm" id="iv-add-toggle" style="margin-top:8px">+ Add a question to this interview</button>
           <div class="iv-form" id="iv-form" style="display:none;">
             <textarea id="iv-q-prompt" rows="3" placeholder="Scenario / question the candidate will be asked\u2026"></textarea>
             <input id="iv-q-valid" type="text" placeholder="What a valid response demonstrates (optional)" />
@@ -279,7 +325,7 @@ export function renderRecruit(host, app, id) {
               <button class="btn btn--sm btn--primary" id="iv-add-submit">Add question</button>
               <button class="btn btn--sm btn--ghost" id="iv-add-cancel">Cancel</button>
             </div>
-          </div>
+          </div>` : ''}
         </div>
       </section>`;
   })() : '';
@@ -368,6 +414,8 @@ export function renderRecruit(host, app, id) {
     deny: () => deny(app, r),
     'iv-export': () => exportInterviewScript(app, r),
     'iv-reroll': () => rerollInterview(app, r),
+    'iv-assign': () => openInterviewers(app, r),
+    'iv-assess': () => runAssessment(app, r),
     'export-invite': () => exportInterviewInvite(app, r, false),
     'export-accept': () => exportInterviewInvite(app, r, true),
   };
@@ -387,7 +435,9 @@ export function renderRecruit(host, app, id) {
     host.querySelector('#rc-text').addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
   }
 
-  // Interview: remove a Committee-added question, and the add-question form.
+  // Interview: save responses, remove a Committee-added question, add-question form.
+  const saveRespBtn = host.querySelector('#iv-save-responses');
+  if (saveRespBtn) saveRespBtn.addEventListener('click', () => saveResponses(app, r, host));
   host.querySelectorAll('[data-iv-remove]').forEach((b) =>
     b.addEventListener('click', () => removeCustomQuestion(app, r, b.dataset.ivRemove)));
   const ivToggle = host.querySelector('#iv-add-toggle');
@@ -557,6 +607,73 @@ function removeCustomQuestion(app, r, id) {
     rec.customQuestions = (rec.customQuestions || []).filter((q) => q.id !== id);
   }, { action: 'EDIT_RECRUIT', detail: `Interview question removed from ${r.ref}.` });
   toast('Question removed.', 'success');
+}
+
+// --- Interviewer assignment, response capture, CAIRO assessment (Ethics interview)
+// CL5 seats the interviewers; they (and CL5) record the candidate's answers; CAIRO
+// grades them (advisory); CL5 keeps the pass/fail. The Worker re-authorises each
+// of these — assignment is CL5-only, responses need CL5 or an assigned interviewer,
+// and the verdict is server-authored (see worker/src/interview-assess.js).
+function openInterviewers(app, r) {
+  const actor = app.user;
+  if (!isCL5(actor)) { toast('Only CL5 may assign interviewers.', 'error'); return; }
+  const people = users().filter((u) => !u.deleted && u.accountStatus === 'active'
+    && (u.org === 'ethics-committee' || u.org === 'command'));
+  const seated = new Set(r.interviewers || []);
+  const list = people.length ? people.map((u) => `
+    <label class="check">
+      <input type="checkbox" value="${esc(u.id)}" ${seated.has(u.id) ? 'checked' : ''} />
+      <span><span class="mono">${esc(u.designation)}</span> ${esc(u.codename || '')} ${orgTag(u.org)}</span>
+    </label>`).join('') : '<div class="empty">No eligible members.</div>';
+  openModal({
+    title: `Assign interviewers — ${r.ref}`,
+    body: `<p class="modal__message">Seat the Committee members who will conduct this interview. Assigned members (and CL5) may record the candidate’s responses and request CAIRO’s assessment.</p><div class="check-list">${list}</div>`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Save', tone: 'primary', onClick: (c, d) => {
+          const ids = [...d.querySelectorAll('.check input:checked')].map((i) => i.value);
+          mutate(app, r.id, r.version, (rec) => { rec.interviewers = ids; },
+            { action: 'SET_INTERVIEWERS', detail: `Interviewers seated on ${r.ref}.` });
+          c(); toast('Interviewers updated.', 'success');
+        } },
+    ],
+  });
+}
+
+// Save every on-screen response in a single atomic write. Replaces the map with
+// what is shown (all currently-drawn + custom questions), so responses orphaned by
+// a re-roll drop out; existing {by,at} is preserved where the text is unchanged.
+function saveResponses(app, r, host) {
+  const actor = app.user;
+  const now = new Date().toISOString();
+  const prev = r.interviewResponses || {};
+  const next = {};
+  host.querySelectorAll('[data-iv-resp]').forEach((ta) => {
+    const id = ta.dataset.ivResp;
+    const text = ta.value.trim();
+    if (!text) return; // an emptied field clears that response
+    const before = prev[id];
+    next[id] = (before && before.text === text) ? before : { text, by: actor.designation, at: now };
+  });
+  mutate(app, r.id, r.version, (rec) => { rec.interviewResponses = next; },
+    { action: 'EDIT_INTERVIEW_RESPONSE', detail: `Interview responses saved for ${r.ref}.` });
+  toast('Responses saved.', 'success');
+}
+
+// Ask the Worker to run CAIRO's assessment of the SAVED responses. The model runs
+// server-side and writes the verdict to the record; we reload the snapshot to show
+// it. (Unsaved textarea edits are not assessed — save first.)
+async function runAssessment(app, r) {
+  if (!api.serverMode()) { toast('CAIRO assessment needs the server backend.', 'error'); return; }
+  toast('CAIRO is assessing the interview…', 'info');
+  try {
+    await api.assessInterview(r.id);
+    applyServerSnapshot(await api.fetchSnapshot());
+    app.refresh();
+    toast('CAIRO assessment recorded.', 'success');
+  } catch (e) {
+    toast((e && e.message) || 'Assessment could not be completed.', 'error', 5000);
+  }
 }
 
 // Open a roster personnel file for an approved candidate. `forceRank` (e.g.

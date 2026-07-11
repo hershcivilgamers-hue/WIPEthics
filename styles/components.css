@@ -444,6 +444,25 @@
 .iv-form textarea { resize: vertical; }
 .iv-form__row { display: flex; gap: var(--s2); }
 
+/* Interview response capture + CAIRO advisory grading. */
+.iv-rec-banner { margin: var(--s3) 0; padding: var(--s3); border: 1px solid var(--line-strong); border-left: 3px solid var(--amber); border-radius: var(--radius); background: var(--surface-2); }
+.iv-rec-banner__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.iv-rec-banner__sum { margin: var(--s2) 0 4px; font-size: 13px; color: var(--text); line-height: 1.5; }
+.iv-rec-banner__meta { font-size: 11px; color: var(--text-3); }
+.iv-qs { display: flex; flex-direction: column; gap: var(--s3); margin: var(--s3) 0; }
+.iv-q2 { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--s3); background: var(--surface-2); }
+.iv-q2--custom { border-left: 2px solid var(--cl5); }
+.iv-q2__head { display: flex; align-items: center; gap: var(--s2); margin-bottom: 4px; }
+.iv-q2__n { font-family: var(--mono); color: var(--text-3); }
+.iv-q2__prompt { font-size: 13px; color: var(--text); line-height: 1.5; margin-bottom: var(--s2); }
+.iv-q2__rationale { margin-top: 6px; font-size: 12px; color: var(--text-2); font-style: italic; }
+.iv-guide2 { font-size: 11.5px; color: var(--text-2); background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 8px; margin-bottom: var(--s2); line-height: 1.5; }
+.iv-guide2__k { font-weight: 700; color: var(--ok); margin-right: 4px; }
+.iv-guide2__k--weak { color: var(--bad); }
+.iv-resp { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line-strong); border-radius: var(--radius); padding: var(--s2); font: inherit; font-size: 13px; resize: vertical; box-sizing: border-box; }
+.iv-resp:focus { outline: none; border-color: var(--amber-dim); }
+.iv-resp-ro { white-space: pre-wrap; font-size: 13px; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--s2); }
+
 /* --- Directive acknowledgements -------------------------------------------- */
 .ack-note { margin: var(--s3) 0; font-size: 13px; color: var(--text-3); }
 .ack-row { display: flex; gap: var(--s3); align-items: baseline; padding: var(--s1) 0; border-bottom: 1px solid var(--line); }

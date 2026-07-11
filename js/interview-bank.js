@@ -23,6 +23,22 @@
 // How many bank scenarios are drawn for each interview.
 export const INTERVIEW_BANK_DRAW = 5;
 
+// --- Assessment vocabulary (shared client + server) -------------------------
+// CAIRO's advisory grading of a candidate's recorded answers. Kept here (a pure,
+// dependency-free module imported by both the recruitment view and the Worker's
+// assessment endpoint) so the labels/tones and the enum keys never drift.
+export const INTERVIEW_GRADE = {
+  strong:     { code: 'strong',     label: 'Strong',     tone: 'ok'   },
+  acceptable: { code: 'acceptable', label: 'Acceptable', tone: 'warn' },
+  weak:       { code: 'weak',       label: 'Weak',       tone: 'bad'  },
+};
+export const INTERVIEW_GRADE_ORDER = ['strong', 'acceptable', 'weak'];
+export const INTERVIEW_RECOMMENDATION = {
+  recommend:    { code: 'recommend',    label: 'Recommend',                   tone: 'ok'   },
+  reservations: { code: 'reservations', label: 'Recommend with reservations', tone: 'warn' },
+  decline:      { code: 'decline',      label: 'Do not recommend',            tone: 'bad'  },
+};
+
 // Themes the bank is authored across (for display / grouping).
 export const INTERVIEW_CATEGORIES = [
   'Anomaly Ethics',

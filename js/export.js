@@ -28,7 +28,7 @@ import {
   CASE_VOTE, tallyCaseVotes, caseTakesVote,
 } from './constants.js';
 import { esc, toast } from './ui.js';
-import { interviewSetFor } from './interview-bank.js';
+import { interviewSetFor, INTERVIEW_GRADE, INTERVIEW_RECOMMENDATION } from './interview-bank.js';
 
 // --- Helpers ----------------------------------------------------------------
 function longDate(iso) {
@@ -925,6 +925,9 @@ const IV_STYLE = `<style>
   .iv-guide__k { flex: 0 0 128px; font-weight: bold; }
   .iv-guide__row--weak .iv-guide__k { color: #7a1010; }
   .iv-k { font-variant: small-caps; letter-spacing: .04em; color: #555; font-size: 10pt; }
+  .iv-recorded { background: #eef2ec; border: 1px solid #cdd8c8; padding: 6px 9px; font-size: 10.5pt; margin: 4px 0 6px; white-space: pre-wrap; }
+  .iv-cairo { font-size: 10pt; color: #333; margin: 6px 0; }
+  .iv-cairo--overall { margin: 8px 0; font-size: 11pt; }
   .iv-line { border-bottom: 1px solid #9a9284; height: 22px; }
   .iv-marks { margin-top: 8px; font-size: 11pt; font-family: 'Courier New', monospace; }
   .iv-marks span { margin-right: 18px; }
@@ -944,6 +947,8 @@ export function buildInterviewScriptHTML(recruit, actor) {
     valid: q.valid || '', weak: q.weak || '', custom: true,
   }));
   const items = [...bank, ...custom];
+  const responses = recruit.interviewResponses || {};
+  const assessment = recruit.interviewAssessment || null;
 
   const rankSought = recruit.rank ? esc(recruit.rank) : '\u2014';
   const candTable = `<table class="memo-h"><tbody>
@@ -955,7 +960,15 @@ export function buildInterviewScriptHTML(recruit, actor) {
     <tr><td class="ml">Date</td><td>${longDate(new Date().toISOString())}</td></tr>
   </tbody></table>`;
 
-  const questionsHtml = items.map((q, i) => `
+  const questionsHtml = items.map((q, i) => {
+    const stored = responses[q.id];
+    const answer = stored && String(stored.text || '').trim();
+    const g = assessment && assessment.perQuestion ? assessment.perQuestion[q.id] : null;
+    const recorded = answer ? `<div class="iv-recorded">${esc(answer)}</div>` : '';
+    const cairo = g
+      ? `<div class="iv-cairo"><strong>CAIRO:</strong> ${esc((INTERVIEW_GRADE[g.grade] || {}).label || g.grade)}${g.rationale ? ` \u2014 ${esc(g.rationale)}` : ''}</div>`
+      : '';
+    return `
     <section class="iv-q">
       <div class="iv-qhead">
         <span class="iv-num">${i + 1}</span>
@@ -968,12 +981,20 @@ export function buildInterviewScriptHTML(recruit, actor) {
         <div class="iv-guide__row iv-guide__row--weak"><span class="iv-guide__k">A weak response</span><span>${esc(q.weak) || '\u2014'}</span></div>
       </div>
       <div class="iv-k">Candidate response</div>
-      ${ruledLines(3)}
+      ${recorded}
+      ${ruledLines(answer ? 1 : 3)}
+      ${cairo}
       <div class="iv-marks"><span>Assessment:</span><span>${CHECK} Strong</span><span>${CHECK} Acceptable</span><span>${CHECK} Weak</span></div>
-    </section>`).join('');
+    </section>`;
+  }).join('');
+
+  const cairoOverall = assessment
+    ? `<div class="iv-cairo iv-cairo--overall"><strong>CAIRO recommendation:</strong> ${esc((INTERVIEW_RECOMMENDATION[assessment.recommendation] || {}).label || assessment.recommendation)}${assessment.summary ? ` \u2014 ${esc(assessment.summary)}` : ''} <em>(advisory \u2014 the Member decides)</em></div>`
+    : '';
 
   const recBlock = `<section class="iv-rec">
     <div class="iv-rec__title">Overall Recommendation</div>
+    ${cairoOverall}
     <div class="iv-rec__opts"><span>${CHECK} Recommend</span><span>${CHECK} Recommend with reservations</span><span>${CHECK} Do not recommend</span></div>
     <div class="iv-k">Summary of the Member's assessment</div>
     ${ruledLines(4)}

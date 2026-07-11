@@ -16,8 +16,9 @@ import { makeCredential, verifyPassword } from '../../js/crypto.js';
 import { makeD1Repo } from './repo.js';
 import { askCairo, validateMessage, checkRate } from './terminal.js';
 import { authorizeWrite } from './gate.js';
+import { assessInterview } from './interview-assess.js';
 import { buildSnapshot, redactUser, redactDirective, redactCompartment, redactDocument } from './redact.js';
-import { canReadDirective, compartmentClears, canManageOrg } from '../../js/permissions.js';
+import { canReadDirective, compartmentClears, canManageOrg, isCL5, canParticipateRecruitment } from '../../js/permissions.js';
 import { CLEARANCES } from '../../js/constants.js';
 
 const WRITABLE = new Set(['users', 'documents', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'blacklist', 'promo_reqs', 'settings']);
@@ -281,6 +282,9 @@ async function writeRecord(collection, id, actor, request, repo, env) {
       && !(canReadDirective(actor, cur) && compartmentClears(actor, cur, compMap))) {
     incoming.body = cur.body; // editor manages metadata but cannot read/replace the body
   }
+  // CAIRO's interview verdict is authored only by the dedicated /assess endpoint.
+  // Freeze it from `cur` so an ordinary sync write can neither forge nor blank it.
+  if (collection === 'recruits' && cur) incoming.interviewAssessment = cur.interviewAssessment ?? null;
   incoming.updatedAt = new Date().toISOString();
 
   if (cur) {
@@ -358,6 +362,49 @@ async function changeMyPassphrase(actor, request, repo, env) {
   return json({ ok: true, version: updated.version }, 200, env);
 }
 
+// CAIRO interview assessment. The model runs server-side (keys never reach the
+// client); the verdict is written straight onto the recruit as the server-owned
+// `interviewAssessment` field. Triggerable by CL5 or an operator CL5 has assigned
+// to the interview — advisory only; the pass/fail decision stays with CL5.
+async function assessInterviewEndpoint(id, actor, repo, env) {
+  const r = await repo.getById('recruits', id);
+  if (!r || r.deleted) return json({ error: 'No such candidate.' }, 404, env);
+  if (r.org !== 'ethics-committee' || r.stage !== 'interview') {
+    return json({ error: 'Assessment is only available for an Ethics application at the interview stage.' }, 409, env);
+  }
+  const assigned = Array.isArray(r.interviewers) && r.interviewers.includes(actor.id);
+  if (!isCL5(actor) && !(assigned && canParticipateRecruitment(actor, 'ethics-committee'))) {
+    return json({ error: 'Only CL5 or an assigned interviewer may request an assessment.' }, 403, env);
+  }
+  const responses = r.interviewResponses || {};
+  const anyAnswer = Object.values(responses).some((x) => x && String(x.text || '').trim());
+  if (!anyAnswer) return json({ error: 'No responses have been recorded to assess yet.' }, 400, env);
+
+  const rate = checkRate(actor.id);
+  if (!rate.ok) return json({ error: rate.error }, 429, env);
+
+  let result;
+  try {
+    result = await assessInterview(env, r);
+  } catch (e) {
+    console.error('[assess] provider error:', (e && e.message) || e);
+    const msg = e && e.offline ? e.message : 'ASSESSMENT UNAVAILABLE — the cognition core did not answer. Retry shortly.';
+    return json({ error: msg }, e && e.offline ? 503 : 502, env);
+  }
+
+  const now = new Date().toISOString();
+  const updated = {
+    ...r,
+    interviewAssessment: { ...result.assessment, model: result.model, at: now, by: actor.designation },
+    updatedAt: now,
+    version: (r.version || 1) + 1,
+  };
+  const changed = await repo.update('recruits', updated, r.version || 1);
+  if (changed === 0) return json({ error: 'This candidate was changed elsewhere. Reload and retry.' }, 409, env);
+  await repo.addAudit({ id: uid(), ts: now, actor: actor.designation, action: 'ASSESS_INTERVIEW', detail: `CAIRO assessment recorded for ${r.ref}.` });
+  return json({ ok: true, assessment: updated.interviewAssessment, version: updated.version }, 200, env);
+}
+
 // --- router -----------------------------------------------------------------
 export async function handle(request, repo, rawEnv) {
   const env = withResolvedOrigin(rawEnv, request);
@@ -424,6 +471,12 @@ export async function handle(request, repo, rawEnv) {
   // Credential reset: POST /api/users/:id/passphrase (server hashes; never synced).
   if (parts.length === 4 && parts[1] === 'users' && parts[3] === 'passphrase' && request.method === 'POST') {
     return resetPassphrase(parts[2], actor, request, repo, env);
+  }
+
+  // CAIRO interview assessment: POST /api/recruits/:id/assess. The model runs
+  // server-side; the verdict is written straight to the record (server-owned).
+  if (parts.length === 4 && parts[1] === 'recruits' && parts[3] === 'assess' && request.method === 'POST') {
+    return assessInterviewEndpoint(parts[2], actor, repo, env);
   }
 
   return json({ error: 'Not found.' }, 404, env);

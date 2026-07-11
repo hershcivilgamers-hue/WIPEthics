@@ -68,7 +68,9 @@ export function checkRate(userId, now = Date.now(), map = buckets) {
 }
 
 // --- Providers ---------------------------------------------------------------
-async function callGemini(env, persona, history, text) {
+// Exported so the interview-assessment endpoint reuses the exact same provider
+// selection (Gemini when GEMINI_API_KEY is set, else Workers AI via env.AI).
+export async function callGemini(env, persona, history, text) {
   const model = env.GEMINI_MODEL || 'gemini-2.0-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`;
   const contents = [
@@ -95,7 +97,7 @@ async function callGemini(env, persona, history, text) {
   return reply;
 }
 
-async function callWorkersAI(env, persona, history, text) {
+export async function callWorkersAI(env, persona, history, text) {
   const model = env.WORKERS_AI_MODEL || '@cf/meta/llama-3.1-8b-instruct';
   const messages = [
     { role: 'system', content: persona },
