@@ -110,7 +110,11 @@ export function render(host, app) {
         app.refresh();
       } catch (e) {
         submit.disabled = false;
+        // Surface the true cause in the console — a client-side error here would
+        // otherwise masquerade as a network failure and be hard to diagnose.
+        console.error('[login]', e);
         if (e && e.status === 401) showError('Authentication failed. Check your credentials.');
+        else if (e && typeof e.status === 'number') showError('The server reported an error. Please try again.');
         else showError('Could not reach the server. Please try again.');
       }
       return;

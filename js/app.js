@@ -116,7 +116,7 @@ function renderShell(user, route) {
     activeName = 'tribunals';
   } else if (route.name === 'directive') {
     activeName = 'directives';
-  } else if (h.startsWith('#/documents') || h.startsWith('#/document/')) {
+  } else if (route.name === 'document') {
     activeName = 'documents';
   } else if (route.name === 'operation') {
     activeName = 'deployments';
@@ -284,8 +284,10 @@ async function boot() {
         const snap = await api.fetchSnapshot();
         applyServerSnapshot(snap);
         setServerUser(me);
-      } catch (_) {
+      } catch (e) {
         // Expired/invalid token, or the server is unreachable — fall to sign-in.
+        // Log the cause: a code error here would otherwise look like a lost session.
+        console.error('[boot] session restore failed', e);
         api.setToken(null);
         setServerUser(null);
       }
