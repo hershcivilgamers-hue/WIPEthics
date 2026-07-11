@@ -17,6 +17,37 @@ const GRADES = new Set(Object.keys(INTERVIEW_GRADE));            // strong | acc
 const RECS = new Set(Object.keys(INTERVIEW_RECOMMENDATION));     // recommend | reservations | decline
 const clampStr = (s, n) => String(s == null ? '' : s).slice(0, n);
 
+// Workers AI JSON mode schema for the verdict — the model is constrained to this
+// shape instead of merely being asked for it in prose. Kept deliberately simple
+// (the docs warn overly complex schemas fail).
+// https://developers.cloudflare.com/workers-ai/features/json-mode/
+const ASSESSMENT_SCHEMA = {
+  type: 'object',
+  properties: {
+    perQuestion: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          grade: { type: 'string', enum: [...GRADES] },
+          rationale: { type: 'string' },
+        },
+        required: ['id', 'grade'],
+      },
+    },
+    overall: {
+      type: 'object',
+      properties: {
+        recommendation: { type: 'string', enum: [...RECS] },
+        summary: { type: 'string' },
+      },
+      required: ['recommendation'],
+    },
+  },
+  required: ['perQuestion', 'overall'],
+};
+
 // The assessor persona. Asks for a strict JSON envelope so the reply is parseable.
 function buildAssessmentSystem() {
   return [
@@ -55,8 +86,9 @@ function buildAssessmentUser(items, responses) {
 // so the stored provenance reflects the provider that actually answered.
 async function callModel(env, system, user) {
   // 2048: the fallback (GLM) is a thinking model — reasoning shares the output
-  // budget, and a tight cap leaves content empty after the thinking spend.
-  const opts = { maxTokens: 2048, temperature: 0.3 };
+  // budget, and a tight cap leaves content empty after the thinking spend. The
+  // responseFormat constrains Workers AI output to the verdict schema (JSON mode).
+  const opts = { maxTokens: 2048, temperature: 0.3, responseFormat: { type: 'json_schema', json_schema: ASSESSMENT_SCHEMA } };
   const hasGemini = !!(env && env.GEMINI_API_KEY);
   const hasAI = !!(env && env.AI);
   if (hasGemini) {
@@ -81,13 +113,36 @@ async function callModel(env, system, user) {
 // Returns null on any failure — never throws.
 export function extractJson(text) {
   if (typeof text !== 'string') return null;
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
+  // Thinking models may wrap deliberation in <think>…</think> before the answer;
+  // its prose (often containing braces) must not join the extraction span.
+  const cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  const tryParse = (s) => {
+    try { return JSON.parse(s); } catch (_) { /* retry with trailing commas stripped */ }
+    try { return JSON.parse(s.replace(/,\s*([}\]])/g, '$1')); } catch (_) { return null; }
+  };
+  // First the simple span (first { to last }) — correct when the reply is one
+  // object, even with braces inside its strings.
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
   if (start < 0 || end <= start) return null;
-  const slice = text.slice(start, end + 1);
-  try { return JSON.parse(slice); } catch (_) { /* fall through to a light repair */ }
-  // Common small-model slip: trailing commas before } or ]. Strip and retry once.
-  try { return JSON.parse(slice.replace(/,\s*([}\]])/g, '$1')); } catch (_) { return null; }
+  const whole = tryParse(cleaned.slice(start, end + 1));
+  if (whole) return whole;
+  // Otherwise collect each balanced top-level {...} and try them last-first —
+  // the answer follows any leftover prose. ponytail: brace-depth scan ignores
+  // braces inside strings; acceptable because the whole-span attempt above
+  // already handled the pure-JSON case.
+  const candidates = [];
+  let depth = 0; let at = -1;
+  for (let i = 0; i < cleaned.length; i += 1) {
+    const ch = cleaned[i];
+    if (ch === '{') { if (depth === 0) at = i; depth += 1; }
+    else if (ch === '}') { if (depth > 0) { depth -= 1; if (depth === 0) candidates.push(cleaned.slice(at, i + 1)); } }
+  }
+  for (const c of candidates.reverse()) {
+    const parsed = tryParse(c);
+    if (parsed) return parsed;
+  }
+  return null;
 }
 
 // Coerce a parsed reply into a safe assessment. Unknown grades -> 'acceptable',
@@ -122,6 +177,10 @@ export async function assessInterview(env, recruit) {
   const allowedIds = items.map((q) => q.id);
   const { text, model } = await callModel(env, buildAssessmentSystem(), buildAssessmentUser(items, recruit.interviewResponses || {}));
   const assessment = normalizeAssessment(extractJson(text), allowedIds);
-  if (!assessment) throw new Error('CAIRO returned an assessment that could not be read. Retry.');
+  if (!assessment) {
+    // Visible in `wrangler tail` — shows exactly what the model said when parsing fails.
+    console.error(`[assess] unparseable reply from ${model}:`, String(text).slice(0, 800));
+    throw new Error('CAIRO returned an assessment that could not be read. Retry.');
+  }
   return { assessment, model };
 }

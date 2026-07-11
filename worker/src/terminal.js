@@ -108,19 +108,25 @@ export async function callWorkersAI(env, persona, history, text, opts = {}) {
   ];
   let out;
   try {
-    out = await env.AI.run(model, { messages, max_tokens: opts.maxTokens || MAX_OUTPUT_TOKENS });
+    out = await env.AI.run(model, {
+      messages,
+      max_tokens: opts.maxTokens || MAX_OUTPUT_TOKENS,
+      // JSON mode (https://developers.cloudflare.com/workers-ai/features/json-mode/):
+      // callers that need structured output pass response_format through here.
+      ...(opts.responseFormat ? { response_format: opts.responseFormat } : {}),
+    });
   } catch (e) {
     throw new Error(`Workers AI (${model}) failed: ${(e && e.message) || e}`);
   }
   // Newer catalog models (e.g. GLM) reply in the OpenAI chat.completion envelope;
   // older ones use { response }. Thinking models may leave content null and put
-  // text in reasoning_content — take whichever field actually carries text.
+  // text in reasoning_content, and JSON mode may return response as an OBJECT —
+  // take whichever field carries the answer, stringifying objects.
   const msg = out && out.choices && out.choices[0] && out.choices[0].message;
-  const reply = String(
-    (out && (out.response ?? out.result))
+  const raw = (out && (out.response ?? out.result))
     ?? (msg && (msg.content ?? msg.reasoning_content))
-    ?? (typeof out === 'string' ? out : ''),
-  ).trim();
+    ?? (typeof out === 'string' ? out : '');
+  const reply = (raw && typeof raw === 'object' ? JSON.stringify(raw) : String(raw ?? '')).trim();
   if (!reply) throw new Error(`Workers AI (${model}) returned no text: ${JSON.stringify(out).slice(0, 300)}`);
   return reply;
 }
