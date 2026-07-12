@@ -394,26 +394,34 @@ const CSS = `
     .pad { padding: 0; }
     .para, .log tr, .sign, .field { page-break-inside: avoid; }
     .jhead, .memo-title, .doc-title { page-break-after: avoid; }
-    /* Densify the candidate letters so invitation/appointment land on one page.
-       Scoped to letter furniture, so records/scripts keep their spacing. */
-    .memo-body { font-size: 11pt; line-height: 1.4; }
-    .memo-body p { margin-bottom: 7px; }
-    .lh + hr.rule { margin: 3px 0 9px; }
-    .doc-title { padding: 5px 0; }
-    .letter-date { margin: 2px 0 12px; }
-    .letter-addr { margin: 0 0 12px; }
-    .letter-salut { margin: 0 0 8px; }
-    .letter-vale { margin: 14px 0 2px; }
-    .determination { margin: 13px auto; padding: 8px 0; font-size: 11.5pt; }
-    .judgment .para { margin-bottom: 5px; }
-    .sign { margin-top: 4px; }
-    .sign__line { height: 22px; }
-    .creed { margin: 14px auto 2px; padding: 7px 0; }
-    .handling { margin-top: 14px; }
+    /* Candidate letters onto one A4: densified type/spacing and the records-only
+       boilerplate (handling paragraph, control-number meta row) dropped. Scoped to
+       .pad--letter, measured to ~25px headroom on the longest (the invitation);
+       records and the interviewer's script are untouched. */
+    .pad--letter .handling, .pad--letter .foot--meta { display: none; }
+    .pad--letter .memo-body { font-size: 10pt; line-height: 1.3; }
+    .pad--letter .memo-body p { margin-bottom: 4px; }
+    .pad--letter .lh { padding-bottom: 6px; }
+    .pad--letter .lh + hr.rule { margin: 2px 0 6px; }
+    .pad--letter .doc-title { padding: 3px 0; font-size: 13pt; }
+    .pad--letter .doc-sub { margin-top: 1px; }
+    .pad--letter .letter-date { margin: 2px 0 7px; }
+    .pad--letter .letter-addr { margin: 0 0 7px; line-height: 1.35; }
+    .pad--letter .letter-salut { margin: 0 0 4px; }
+    .pad--letter .letter-vale { margin: 9px 0 2px; }
+    .pad--letter .determination { margin: 8px auto; padding: 5px 0; font-size: 11pt; }
+    .pad--letter .judgment { margin-top: 4px; }
+    .pad--letter .judgment .para { margin-bottom: 2px; }
+    .pad--letter .fb-q { padding: 7px 0; }
+    .pad--letter .sign { margin-top: 1px; }
+    .pad--letter .sign__line { height: 15px; }
+    .pad--letter .sig-e { font-size: 7pt; }
+    .pad--letter .creed { margin: 9px auto 4px; padding: 4px 0; font-size: 9pt; }
+    .pad--letter .foot { margin-top: 5px; }
   }
 `;
 
-function frameDoc({ title, classification, inner, footerRef, actor, org = null, distribution = null }) {
+function frameDoc({ title, classification, inner, footerRef, actor, org = null, distribution = null, letter = false }) {
   const now = new Date().toISOString();
   const code = org === 'omega-1' ? 'O1' : org === 'ethics-committee' ? 'EC' : org === 'command' ? 'CMD' : 'GEN';
   const controlNo = `CAIRO/${code}/${footerRef}`;
@@ -434,7 +442,7 @@ function frameDoc({ title, classification, inner, footerRef, actor, org = null, 
     <button onclick="window.print()">Print / Save as PDF</button>
     <button class="ghost" onclick="window.close()">Close</button>
   </div>
-  <div class="sheet"><div class="pad">
+  <div class="sheet"><div class="pad${letter ? ' pad--letter' : ''}">
     ${wm}
     <div class="classbar classbar--top ${band}">${esc(classification)}</div>
     ${inner}
@@ -1133,6 +1141,7 @@ export function buildInterviewInviteHTML(recruit, actor, accepted = false) {
     distribution: 'The named candidate.',
     footerRef: recruit.ref || 'APPLICATION',
     actor,
+    letter: true,
   });
 }
 
@@ -1210,6 +1219,7 @@ export function buildFeedbackSheetHTML(recruit, actor) {
     distribution: 'The named candidate.',
     footerRef: recruit.ref || 'APPLICATION',
     actor,
+    letter: true,
   });
 }
 
