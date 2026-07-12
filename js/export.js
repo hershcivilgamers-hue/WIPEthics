@@ -361,6 +361,10 @@ const CSS = `
   .letter-addr .la-ref { font-family: 'Courier New', monospace; font-size: 10pt; color: #333; }
   .letter-salut { margin: 0 0 12px; }
   .letter-vale { margin: 26px 0 4px; }
+  /* An emphatic determination line, ruled top and bottom. */
+  .determination { text-align: center; font-weight: 700; text-transform: uppercase; letter-spacing: .11em; font-size: 12.5pt; margin: 20px auto; padding: 12px 0; border-top: 1.5px solid #111; border-bottom: 1.5px solid #111; }
+  /* The Committee's creed — a black-ruled seal motto, set at the foot. */
+  .creed { text-align: center; margin: 24px auto 2px; padding: 9px 0; border-top: 1.5px solid #111; border-bottom: 1.5px solid #111; color: #1a1a1a; text-transform: uppercase; font-weight: 700; letter-spacing: .16em; font-size: 9.5pt; }
 
   /* Candidate feedback sections — quiet rules, no security accents */
   .fb-q { padding: 12px 0; border-bottom: 1px solid #ccc; page-break-inside: avoid; }
@@ -1067,13 +1071,24 @@ export function buildInterviewInviteHTML(recruit, actor, accepted = false) {
   const title = accepted ? 'Notice of Appointment' : 'Invitation to Interview';
   const today = longDate(new Date().toISOString());
 
+  const ref = esc(recruit.ref || '\u2014');
   const body = accepted
-    ? `<p>Following your interview before the Ethics Committee, I am pleased to inform you that your application (reference ${esc(recruit.ref || '\u2014')}) has been <strong>accepted</strong>. You are appointed as an <strong>Assistant to the Ethics Committee</strong>.</p>
-       <p>Your appointment takes effect on issue of your personnel file and sign-in credentials, which the Committee will arrange with you separately. As an Assistant you support the work of the Committee and are held to its standards of conduct, confidentiality and activity; you are expected to weigh competing duties honestly and to raise any concern through the Committee\u2019s proper channels.</p>
-       <p>On behalf of the Committee, welcome.</p>`
-    : `<p>Your application for appointment as an <strong>Assistant to the Ethics Committee</strong> (reference ${esc(recruit.ref || '\u2014')}) has been reviewed, and the Committee invites you to attend an <strong>interview</strong>.</p>
-       <p>The interview is a structured discussion of ethical and situational judgement relevant to the work of the Committee. There are no trick questions and no single correct answers \u2014 you will be asked to reason through a number of scenarios and to explain the judgements you reach. Rehearsing set answers is neither expected nor useful; come prepared to think aloud and to be questioned on your reasoning.</p>
-       <p>A member of the Committee will confirm the time and place with you directly. Please make yourself available, and bring any questions you may have about the role.</p>`;
+    ? `<p>Following your interview before the Committee, sitting in closed session, a determination has been reached upon your application for reassignment to this body (reference ${ref}).</p>
+       <div class="determination">You are appointed as an Assistant to the Ethics Committee.</div>
+       <p>The appointment takes effect on issue of your personnel file and credentials, which the Committee will arrange. You are bound from that moment to the standards of conduct, confidentiality and activity the Committee requires of those who serve it, and to the discretion its work demands. You will weigh competing duties honestly, and you will carry what troubles you through the Committee\u2019s proper channels and no others.</p>
+       <p>Understand what you have accepted. You do not now command the departments; you serve the body that holds them to account, and you will be held to account more strictly than they are. The Committee does not reward loyalty. It requires conscience.</p>`
+    : `<p>The Ethics Committee acknowledges your request for reassignment to this body. Such a request is not made lightly. It requires a willingness to place oneself under a different kind of scrutiny \u2014 one that does not concern containment breaches or operational failure, but the far more uncomfortable question of whether the Foundation is justified in what it does.</p>
+       <p>Your application has been reviewed by the Committee sitting in closed session. We have weighed your record of service, the circumstances of your request, and the character of your prior conduct. The following determination has been reached.</p>
+       <div class="determination">Your application has been accepted for interview.</div>
+       <p>The Committee finds that you demonstrate the temperament and discretion requisite for consideration as an Assistant to the Ethics Committee. This is not a commendation. It is an invitation to be assessed further, and the interview will determine whether that initial judgement is borne out.</p>
+       <p>You will be contacted in due course by a representative of the Committee to arrange the time and manner of your interview. Do not seek us out. The Committee keeps its own schedule, and its own terms. We are aware of your location and your movements; we will make contact when it is appropriate to do so.</p>
+       <p>You will be asked to speak to the following:</p>
+       <div class="judgment">
+         <div class="para">your understanding of the Foundation\u2019s ethical framework, and of the Committee\u2019s place within it;</div>
+         <div class="para">the circumstances that led you to seek this reassignment;</div>
+         <div class="para">and any matter you believe the Committee ought to know.</div>
+       </div>
+       <p>You are not expected to rehearse answers. You are expected to be honest. You will not be asked to prove your competence \u2014 you will be asked to account for your conscience.</p>`;
 
   const inner = `
     ${letterhead('ethics-committee', 'Office of the Ethics Committee')}
@@ -1083,7 +1098,7 @@ export function buildInterviewInviteHTML(recruit, actor, accepted = false) {
     <div class="letter-date">${today}</div>
     <div class="letter-addr">
       <div class="la-name">${esc(recruit.name || 'The Candidate')}</div>
-      <div class="la-ref">Ref. ${esc(recruit.ref || '\u2014')}${recruit.steamId ? ` \u00b7 ${esc(recruit.steamId)}` : ''}</div>
+      <div class="la-ref">Ref. ${ref}${recruit.steamId ? ` \u00b7 ${esc(recruit.steamId)}` : ''}</div>
     </div>
     <div class="memo-body">
       <p class="letter-salut">Dear ${esc(recruit.name || 'Candidate')},</p>
@@ -1091,6 +1106,7 @@ export function buildInterviewInviteHTML(recruit, actor, accepted = false) {
       <div class="letter-vale">By direction of the Ethics Committee,</div>
     </div>
     ${signBlock({ name: esc(actor?.designation || 'ETHICS COMMITTEE'), role: 'For and on behalf of the Ethics Committee', dated: `Issued ${today}` })}
+    <div class="creed">\u25c6 The Ethics Committee does not answer to the departments it oversees \u25c6</div>
   `;
 
   return frameDoc({
@@ -1158,14 +1174,16 @@ export function buildFeedbackSheetHTML(recruit, actor) {
     </div>
     <div class="memo-body">
       <p class="letter-salut">Dear ${esc(recruit.name || 'Candidate')},</p>
-      <p>Thank you for interviewing with the Ethics Committee. The notes below reflect on the answers you
-      gave \u2014 the scenarios have no single correct response, and this feedback concerns the quality of
-      reasoning shown, offered for your development whatever the outcome of your application.</p>
+      <p>The Committee has considered the answers you gave at interview. The scenarios put to you carry no
+      single correct response; what follows concerns the quality of the reasoning you brought to them, set
+      down plainly and without flattery. Read it as it is meant \u2014 an account of where your judgement held
+      and where it did not, recorded whatever the outcome of your application.</p>
     </div>
     ${qBlocks}
     ${overallBlock}
     <div class="letter-vale">By direction of the Ethics Committee,</div>
     ${signBlock({ name: esc(actor?.designation || 'ETHICS COMMITTEE'), role: 'For and on behalf of the Ethics Committee', dated: `Issued ${today}` })}
+    <div class="creed">\u25c6 The Ethics Committee does not answer to the departments it oversees \u25c6</div>
   `;
 
   return frameDoc({
