@@ -386,7 +386,7 @@ const CSS = `
   .foot--meta { border-top: none; margin-top: 14px; padding-top: 0; color: #555; }
   .foot--meta + .foot { margin-top: 4px; }
 
-  @page { size: A4; margin: 16mm 15mm; }
+  @page { size: A4; margin: 13mm 15mm; }
   @media print {
     html, body { background: #fff; }
     .controls { display: none; }
@@ -394,6 +394,22 @@ const CSS = `
     .pad { padding: 0; }
     .para, .log tr, .sign, .field { page-break-inside: avoid; }
     .jhead, .memo-title, .doc-title { page-break-after: avoid; }
+    /* Densify the candidate letters so invitation/appointment land on one page.
+       Scoped to letter furniture, so records/scripts keep their spacing. */
+    .memo-body { font-size: 11pt; line-height: 1.4; }
+    .memo-body p { margin-bottom: 7px; }
+    .lh + hr.rule { margin: 3px 0 9px; }
+    .doc-title { padding: 5px 0; }
+    .letter-date { margin: 2px 0 12px; }
+    .letter-addr { margin: 0 0 12px; }
+    .letter-salut { margin: 0 0 8px; }
+    .letter-vale { margin: 14px 0 2px; }
+    .determination { margin: 13px auto; padding: 8px 0; font-size: 11.5pt; }
+    .judgment .para { margin-bottom: 5px; }
+    .sign { margin-top: 4px; }
+    .sign__line { height: 22px; }
+    .creed { margin: 14px auto 2px; padding: 7px 0; }
+    .handling { margin-top: 14px; }
   }
 `;
 
