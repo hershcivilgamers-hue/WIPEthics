@@ -15,6 +15,7 @@
 // =============================================================================
 
 import { getUser, getSubject } from './storage.js';
+import { CONFIG } from './config.js';
 import { orgLogo } from './logos.js';
 import {
   OPERATION_KIND, OPERATION_STATUS, OPERATION_RESULT, OP_LOG_TYPE,
@@ -194,7 +195,7 @@ const ETHICS_MOTIF = `
 
 export function orgSeal(orgKey) {
   const logo = orgLogo(orgKey);
-  if (logo) return `<img src="${logo}" alt="" width="56" height="56" style="display:block;object-fit:contain;" />`;
+  if (logo) return `<img src="${logo}" alt="" width="64" height="64" style="display:block;object-fit:contain;" />`;
   return SEAL;
 }
 
@@ -226,13 +227,16 @@ function signBlock({ name, role, dated }) {
     </div>`;
 }
 
+// The letterhead proper: seal, issuing authority and office over a heavy rule.
+// The thin `<hr class="rule">` every builder places immediately after completes
+// the classic thick-over-thin double rule of institutional stationery.
 function letterhead(orgKey, office) {
   return `<div class="lh">
     <div class="lh__seal">${orgSeal(orgKey)}</div>
     <div class="lh__stack">
       <div class="lh__org">SCP Foundation</div>
       <div class="lh__body">${authorityLine(orgKey)}</div>
-      <div class="lh__office">${esc(office)}</div>
+      <div class="lh__office">${esc(office)} · ${esc(CONFIG.facility)}</div>
     </div>
     <div class="lh__spacer"></div>
   </div>`;
@@ -257,28 +261,25 @@ const CSS = `
   .wm img { width: 430px; max-width: 70%; }
 
   /* Classification markings: plain, bold, black — markings, not decoration */
-  .classbar { text-align: center; font-family: Arial, Helvetica, sans-serif; font-weight: 700; letter-spacing: .14em; font-size: 9.5pt; color: #111; text-transform: uppercase; padding: 2px 0; }
+  .classbar { text-align: center; font-family: Arial, Helvetica, sans-serif; font-weight: 700; letter-spacing: .12em; font-size: 9pt; color: #111; text-transform: uppercase; padding: 2px 0; }
   .classbar--top { margin-bottom: 14px; }
   .classbar--bottom { margin-top: 22px; }
   .classbar--yellow { background: #e8b100; color: #201a00; border-top: 3px solid #201a00; border-bottom: 3px solid #201a00; padding: 5px 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .classbar--red { background: #8f1515; color: #fff; border-top: 3px solid #3a0808; border-bottom: 3px solid #3a0808; padding: 5px 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
-  /* Document control block */
-  .ctrl { border-collapse: collapse; margin: 0 0 16px auto; }
-  .ctrl .cl { font-family: Arial, Helvetica, sans-serif; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .06em; color: #555; padding: 1px 12px 1px 0; text-align: right; }
-  .ctrl .cv { font-family: 'Courier New', monospace; font-size: 9pt; color: #111; padding: 1px 0; }
-
-  /* Letterhead */
-  .lh { display: flex; align-items: center; gap: 18px; color: #111; }
-  .lh__seal { flex: 0 0 56px; }
-  .lh__spacer { flex: 0 0 56px; }
-  .lh__stack { flex: 1; text-align: center; }
-  .lh__org { font-size: 9pt; letter-spacing: .3em; text-transform: uppercase; color: #333; }
-  .lh__body { font-size: 15pt; letter-spacing: .06em; text-transform: uppercase; font-weight: 700; margin-top: 2px; }
-  .lh__office { font-size: 8.5pt; letter-spacing: .18em; text-transform: uppercase; color: #444; margin-top: 3px; }
+  /* Letterhead — thick rule here + the builder's thin hr = double rule */
+  .lh { display: flex; align-items: center; gap: 16px; color: #111; margin-top: 6px; border-bottom: 2.5px solid #111; padding-bottom: 12px; }
+  .lh__seal { flex: 0 0 64px; }
+  .lh__spacer { flex: 0 0 64px; }
+  .lh__stack { flex: 1; text-align: center; min-width: 0; }
+  .lh__org { font-size: 9pt; letter-spacing: .32em; text-transform: uppercase; color: #333; white-space: nowrap; }
+  .lh__body { font-size: 16pt; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; margin-top: 3px; white-space: nowrap; }
+  .lh__office { font-size: 8.5pt; letter-spacing: .16em; text-transform: uppercase; color: #444; margin-top: 4px; white-space: nowrap; }
 
   hr.rule { border: none; border-top: 1px solid #111; margin: 12px 0; }
   hr.rule--bold { border: none; border-top: 2.5px solid #111; margin: 5px 0; }
+  /* The thin half of the letterhead's double rule sits close under the thick. */
+  .lh + hr.rule { margin: 3px 0 16px; }
 
   p { margin: 0 0 11px; text-align: justify; }
   .muted { color: #666; font-style: italic; }
@@ -292,7 +293,8 @@ const CSS = `
   .party .pname { font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
   .party .role { font-style: italic; color: #333; white-space: nowrap; }
   .vs { text-align: center; font-style: italic; margin: 4px 0; color: #333; }
-  .doc-title { text-align: center; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; font-size: 13pt; padding: 8px 0; }
+  /* One title treatment for every document (memo-title kept as an alias). */
+  .doc-title, .memo-title { text-align: center; font-weight: 700; text-transform: uppercase; letter-spacing: .18em; font-size: 14pt; padding: 8px 0; }
   .panel-line { text-align: center; font-size: 10.5pt; color: #333; margin-bottom: 4px; }
 
   /* Numbered record paragraphs */
@@ -321,7 +323,6 @@ const CSS = `
   .attest { font-style: italic; max-width: 470px; margin: 4px 0 12px; font-size: 10.5pt; color: #222; }
 
   /* Memorandum */
-  .memo-title { text-align: center; font-weight: 700; text-transform: uppercase; letter-spacing: .28em; font-size: 13.5pt; padding: 5px 0; }
   .memo-h { width: 100%; border-collapse: collapse; margin: 8px 0 12px; }
   .memo-h td { padding: 3px 0; vertical-align: top; font-size: 11.5pt; }
   .memo-h .ml { width: 150px; font-family: Arial, Helvetica, sans-serif; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; font-size: 9pt; padding-top: 5px; color: #333; }
@@ -349,12 +350,33 @@ const CSS = `
   .redacted { font-family: 'Courier New', monospace; background: #111; color: #111; padding: 0 4px; border-radius: 1px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .sealed { font-family: 'Courier New', monospace; font-size: 10pt; letter-spacing: .05em; color: #7a1010; }
 
+  /* Formal correspondence (candidate-facing letters) */
+  .letter-date { text-align: right; margin: 2px 0 20px; font-size: 11.5pt; }
+  .letter-addr { margin: 0 0 20px; line-height: 1.55; font-size: 11.5pt; }
+  .letter-addr .la-name { font-weight: 700; }
+  .letter-addr .la-ref { font-family: 'Courier New', monospace; font-size: 10pt; color: #333; }
+  .letter-salut { margin: 0 0 12px; }
+  .letter-vale { margin: 26px 0 4px; }
+
+  /* Candidate feedback sections — quiet rules, no security accents */
+  .fb-q { padding: 12px 0; border-bottom: 1px solid #ccc; page-break-inside: avoid; }
+  .fb-q:last-of-type { border-bottom: none; }
+  .fb-qhead { font-family: Arial, Helvetica, sans-serif; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .08em; color: #555; margin-bottom: 5px; }
+  .fb-qhead .fb-n { font-weight: 700; color: #111; margin-right: 8px; }
+  .fb-prompt { margin: 0 0 8px; }
+  .fb-label { font-family: Arial, Helvetica, sans-serif; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .08em; color: #555; margin: 6px 0 3px; }
+  .fb-answer { background: #f6f5f1; border: 1px solid #ddd; padding: 7px 10px; font-size: 11pt; white-space: pre-wrap; }
+  .fb-feedback { margin-top: 7px; font-size: 11pt; }
+  .fb-feedback .fb-k { font-weight: 700; }
+
   /* Distribution & handling + records footer */
   .handling { margin-top: 24px; border-top: 1px solid #111; padding-top: 9px; font-family: Arial, Helvetica, sans-serif; font-size: 8.5pt; color: #222; line-height: 1.5; }
   .handling > div { margin: 3px 0; }
   .handling .hl { font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding-right: 4px; }
   .foot { margin-top: 10px; padding-top: 7px; border-top: 1px solid #999; display: flex; justify-content: space-between; align-items: center; gap: 12px; font-family: 'Courier New', monospace; font-size: 8pt; color: #333; text-transform: uppercase; }
   .foot__c { text-align: center; letter-spacing: .06em; flex: 1; }
+  .foot--meta { border-top: none; margin-top: 14px; padding-top: 0; color: #555; }
+  .foot--meta + .foot { margin-top: 4px; }
 
   @page { size: A4; margin: 16mm 15mm; }
   @media print {
@@ -391,17 +413,12 @@ function frameDoc({ title, classification, inner, footerRef, actor, org = null, 
   <div class="sheet"><div class="pad">
     ${wm}
     <div class="classbar classbar--top ${band}">${esc(classification)}</div>
-    <table class="ctrl"><tbody>
-      <tr><td class="cl">Control N\u00ba</td><td class="cv">${esc(controlNo)}</td></tr>
-      <tr><td class="cl">Date of issue</td><td class="cv">${longDate(now)}</td></tr>
-      <tr><td class="cl">Copy</td><td class="cv">01 of 01</td></tr>
-      <tr><td class="cl">Originator</td><td class="cv">${esc(actor?.designation || 'SYSTEM')}</td></tr>
-    </tbody></table>
     ${inner}
     <div class="handling">
       <div><span class="hl">Distribution:</span> ${esc(dist)}</div>
       <div><span class="hl">Handling:</span> This record contains information affecting the security of the Foundation. Store and transmit by approved channels only; reproduction requires the originator\u2019s written consent. Unauthorised disclosure is a matter for the Ethics Committee.</div>
     </div>
+    <div class="foot foot--meta"><div>Issued ${longDate(now)}</div><div class="foot__c">Copy 01 of 01</div><div>Originator ${esc(actor?.designation || 'SYSTEM')}</div></div>
     <div class="foot"><div>${esc(controlNo)}</div><div class="foot__c">${esc(classification)}</div><div>Page 1 of 1</div></div>
     <div class="classbar classbar--bottom ${band}">${esc(classification)}</div>
   </div></div>
@@ -1046,13 +1063,6 @@ export function buildInterviewInviteHTML(recruit, actor, accepted = false) {
   const title = accepted ? 'Notice of Appointment' : 'Invitation to Interview';
   const today = longDate(new Date().toISOString());
 
-  const candTable = `<table class="memo-h"><tbody>
-    <tr><td class="ml">Candidate</td><td>${esc(recruit.name || '\u2014')}</td></tr>
-    ${recruit.steamId ? `<tr><td class="ml">SteamID</td><td>${esc(recruit.steamId)}</td></tr>` : ''}
-    <tr><td class="ml">Reference</td><td>${esc(recruit.ref || '\u2014')}</td></tr>
-    <tr><td class="ml">Date</td><td>${today}</td></tr>
-  </tbody></table>`;
-
   const body = accepted
     ? `<p>Following your interview before the Ethics Committee, I am pleased to inform you that your application (reference ${esc(recruit.ref || '\u2014')}) has been <strong>accepted</strong>. You are appointed as an <strong>Assistant to the Ethics Committee</strong>.</p>
        <p>Your appointment takes effect on issue of your personnel file and sign-in credentials, which the Committee will arrange with you separately. As an Assistant you support the work of the Committee and are held to its standards of conduct, confidentiality and activity; you are expected to weigh competing duties honestly and to raise any concern through the Committee\u2019s proper channels.</p>
@@ -1066,18 +1076,22 @@ export function buildInterviewInviteHTML(recruit, actor, accepted = false) {
     <hr class="rule" />
     <div class="doc-title">${esc(title)}</div>
     <hr class="rule" />
-    ${candTable}
-    <hr class="rule" />
+    <div class="letter-date">${today}</div>
+    <div class="letter-addr">
+      <div class="la-name">${esc(recruit.name || 'The Candidate')}</div>
+      <div class="la-ref">Ref. ${esc(recruit.ref || '\u2014')}${recruit.steamId ? ` \u00b7 ${esc(recruit.steamId)}` : ''}</div>
+    </div>
     <div class="memo-body">
-      <p>To ${esc(recruit.name || 'the candidate')},</p>
+      <p class="letter-salut">Dear ${esc(recruit.name || 'Candidate')},</p>
       ${body}
+      <div class="letter-vale">By direction of the Ethics Committee,</div>
     </div>
     ${signBlock({ name: esc(actor?.designation || 'ETHICS COMMITTEE'), role: 'For and on behalf of the Ethics Committee', dated: `Issued ${today}` })}
   `;
 
   return frameDoc({
     title,
-    classification: 'FOUNDATION GENERAL \u00b7 ETHICS COMMITTEE \u00b7 FOR THE NAMED CANDIDATE',
+    classification: 'FOUNDATION GENERAL \u00b7 FOR THE NAMED CANDIDATE',
     inner,
     org: 'ethics-committee',
     distribution: 'The named candidate.',
@@ -1103,12 +1117,7 @@ export function buildFeedbackSheetHTML(recruit, actor) {
   const items = [...bank, ...custom];
   const responses = recruit.interviewResponses || {};
   const assessment = recruit.interviewAssessment || null;
-
-  const candTable = `<table class="memo-h"><tbody>
-    <tr><td class="ml">Candidate</td><td>${esc(recruit.name || '\u2014')}</td></tr>
-    <tr><td class="ml">Reference</td><td>${esc(recruit.ref || '\u2014')}</td></tr>
-    <tr><td class="ml">Date</td><td>${longDate(new Date().toISOString())}</td></tr>
-  </tbody></table>`;
+  const today = longDate(new Date().toISOString());
 
   const qBlocks = items.map((q, i) => {
     const stored = responses[q.id];
@@ -1116,15 +1125,12 @@ export function buildFeedbackSheetHTML(recruit, actor) {
     const fb = assessment && assessment.perQuestion && assessment.perQuestion[q.id]
       ? String(assessment.perQuestion[q.id].feedback || '').trim() : '';
     return `
-    <section class="iv-q">
-      <div class="iv-qhead">
-        <span class="iv-num">${i + 1}</span>
-        <span class="iv-cat">${esc(q.category)}</span>
-      </div>
-      <div class="iv-prompt">${esc(q.prompt)}</div>
-      <div class="iv-k">Your answer, as recorded</div>
-      ${answer ? `<div class="iv-recorded">${esc(answer)}</div>` : '<p class="muted">No answer was recorded for this scenario.</p>'}
-      ${fb ? `<div class="iv-cairo"><strong>Feedback:</strong> ${esc(fb)}</div>` : ''}
+    <section class="fb-q">
+      <div class="fb-qhead"><span class="fb-n">${i + 1}</span>${esc(q.category)}</div>
+      <div class="fb-prompt">${esc(q.prompt)}</div>
+      <div class="fb-label">Your answer, as recorded</div>
+      ${answer ? `<div class="fb-answer">${esc(answer)}</div>` : '<p class="muted">No answer was recorded for this scenario.</p>'}
+      ${fb ? `<div class="fb-feedback"><span class="fb-k">Feedback \u2014</span> ${esc(fb)}</div>` : ''}
     </section>`;
   }).join('');
 
@@ -1138,22 +1144,29 @@ export function buildFeedbackSheetHTML(recruit, actor) {
   const inner = `
     ${letterhead('ethics-committee', 'Office of the Ethics Committee')}
     <hr class="rule" />
-    <div class="memo-title">Interview Feedback \u2014 Ethics Assistant</div>
+    <div class="doc-title">Interview Feedback</div>
+    <div class="doc-sub">Assistant to the Ethics Committee \u2014 Candidate</div>
     <hr class="rule" />
-    ${IV_STYLE}
-    ${candTable}
-    <hr class="rule" />
-    <div class="iv-intro"><p>Thank you for interviewing with the Ethics Committee. The notes below reflect on the
-    answers you gave \u2014 the scenarios have no single correct response, and this feedback concerns the quality of
-    reasoning shown, offered for your development whatever the outcome of your application.</p></div>
+    <div class="letter-date">${today}</div>
+    <div class="letter-addr">
+      <div class="la-name">${esc(recruit.name || 'The Candidate')}</div>
+      <div class="la-ref">Ref. ${esc(recruit.ref || '\u2014')}</div>
+    </div>
+    <div class="memo-body">
+      <p class="letter-salut">Dear ${esc(recruit.name || 'Candidate')},</p>
+      <p>Thank you for interviewing with the Ethics Committee. The notes below reflect on the answers you
+      gave \u2014 the scenarios have no single correct response, and this feedback concerns the quality of
+      reasoning shown, offered for your development whatever the outcome of your application.</p>
+    </div>
     ${qBlocks}
     ${overallBlock}
-    ${signBlock({ name: esc(actor?.designation || 'ETHICS COMMITTEE'), role: 'For and on behalf of the Ethics Committee', dated: `Issued ${longDate(new Date().toISOString())}` })}
+    <div class="letter-vale">By direction of the Ethics Committee,</div>
+    ${signBlock({ name: esc(actor?.designation || 'ETHICS COMMITTEE'), role: 'For and on behalf of the Ethics Committee', dated: `Issued ${today}` })}
   `;
 
   return frameDoc({
     title: 'Interview Feedback',
-    classification: 'FOUNDATION GENERAL \u00b7 ETHICS COMMITTEE \u00b7 FOR THE NAMED CANDIDATE',
+    classification: 'FOUNDATION GENERAL \u00b7 FOR THE NAMED CANDIDATE',
     inner,
     org: 'ethics-committee',
     distribution: 'The named candidate.',
@@ -1196,6 +1209,7 @@ export function buildSummonsHTML(record, m, actor) {
       You may address the Committee and be heard.</p>
       <p>Failure to appear without cause shown is itself a matter for the Committee and will be recorded
       upon the case.</p>
+      <p>Given under the seal of the Ethics Committee at ${esc(CONFIG.facility)}, this ${longDate(m.ts)}.</p>
     </div>
     ${signBlock({ name: esc(m.by || 'ETHICS COMMITTEE'), role: 'By order of the Ethics Committee, Office of Tribunals', dated: `Issued ${longDate(m.ts)}` })}
   `;
@@ -1388,7 +1402,7 @@ export function exportIdCard(app, user) {
 export function buildMedalCertificateHTML(user, award, actor) {
   const inner = `
     ${letterhead(user.org, 'Office of Honours and Awards')}
-    <hr class="rule--bold" /><hr class="rule" />
+    <hr class="rule" />
     <div class="doc-title">Award of the ${esc(award.title)}</div>
     <div class="judgment">
       <p style="text-align:center;margin-top:14px">By direction of ${esc(authorityBody(user.org))}${award.by ? `, upon the recommendation of <span class="mono">${esc(award.by)}</span>` : ''}, the decoration styled</p>
@@ -1443,7 +1457,7 @@ export function buildCustomDocumentHTML(doc, actor) {
   const office = doc.office || 'Office of Record';
   const inner = `
     ${letterhead(doc.org, office)}
-    <hr class="rule--bold" /><hr class="rule" />
+    <hr class="rule" />
     <div class="doc-title">${esc(doc.title || 'Untitled Document')}</div>
     ${doc.status === 'draft' ? '<div class="notice notice--soft">DRAFT \u2014 NOT YET ISSUED</div>' : ''}
     ${renderDocBlocks(doc.blocks)}`;
