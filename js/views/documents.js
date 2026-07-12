@@ -3,8 +3,9 @@
 //
 // Exposes the shared document-rendering engine through a form: an operator
 // assembles a document from typed blocks (heading, paragraph, numbered clauses,
-// key-value fields, signature), saves it as a draft or issues it, and exports
-// it in full house style. Classification is capped at the composer's clearance;
+// bulleted list, key-value fields, dated log entries, quotation, notice,
+// withheld section, signature, rule), saves it as a draft or issues it, and
+// exports it in full house style. Classification is capped at the composer's clearance;
 // once issued, a document is a record and its content is frozen (supersede,
 // don't rewrite). Visibility follows org + clearance, like directives.
 // =============================================================================
@@ -117,7 +118,34 @@ function renderReadonly(host, app, doc) {
   host.querySelector('#doc-export').addEventListener('click', () => exportCustomDocument(app, doc));
 }
 
-const BLOCK_LABELS = { heading: 'Heading', paragraph: 'Paragraph', clauses: 'Numbered clauses', fields: 'Fields', signature: 'Signature' };
+const BLOCK_LABELS = {
+  heading: 'Heading',
+  paragraph: 'Paragraph',
+  clauses: 'Numbered clauses',
+  list: 'Bulleted list',
+  fields: 'Fields',
+  log: 'Log entries',
+  quote: 'Quotation',
+  notice: 'Notice',
+  withheld: 'Withheld section',
+  signature: 'Signature',
+  rule: 'Rule (divider)',
+};
+
+// The starting shape of each freshly-added block.
+const BLOCK_DEFAULTS = {
+  heading: { text: '' },
+  paragraph: { text: '' },
+  clauses: { items: [''] },
+  list: { items: [''] },
+  fields: { rows: [{ k: '', v: '' }] },
+  log: { entries: [{ date: '', text: '' }] },
+  quote: { text: '', by: '' },
+  notice: { tone: 'warning', text: '' },
+  withheld: { reason: '' },
+  signature: { name: '', role: '', dated: '' },
+  rule: {},
+};
 
 function blockEditor(b, i) {
   const head = `<div class="blk__head"><span class="blk__label">${BLOCK_LABELS[b.type] || b.type}</span>
@@ -130,7 +158,29 @@ function blockEditor(b, i) {
   if (b.type === 'heading') body = `<input class="blk__in" data-f="text" data-i="${i}" value="${esc(b.text || '')}" placeholder="Section heading" maxlength="120" />`;
   else if (b.type === 'paragraph') body = `<textarea class="blk__in" data-f="text" data-i="${i}" rows="3" placeholder="Paragraph text\u2026">${esc(b.text || '')}</textarea>`;
   else if (b.type === 'clauses') body = `<textarea class="blk__in" data-f="items" data-i="${i}" rows="4" placeholder="One clause per line \u2014 each is auto-numbered.">${esc((b.items || []).join('\n'))}</textarea>`;
-  else if (b.type === 'fields') {
+  else if (b.type === 'list') body = `<textarea class="blk__in" data-f="items" data-i="${i}" rows="4" placeholder="One item per line \u2014 rendered as bullets.">${esc((b.items || []).join('\n'))}</textarea>`;
+  else if (b.type === 'quote') {
+    body = `<textarea class="blk__in" data-f="text" data-i="${i}" rows="3" placeholder="Quoted material \u2014 testimony, an excerpt, a radio log\u2026">${esc(b.text || '')}</textarea>
+      <input class="blk__in" data-f="by" data-i="${i}" value="${esc(b.by || '')}" placeholder="Attribution (optional) \u2014 e.g. Testimony of O1-7" maxlength="120" />`;
+  } else if (b.type === 'notice') {
+    body = `<select class="blk__in" data-f="tone" data-i="${i}">
+        <option value="warning" ${b.tone !== 'advisory' ? 'selected' : ''}>Warning (red border)</option>
+        <option value="advisory" ${b.tone === 'advisory' ? 'selected' : ''}>Advisory (grey border)</option>
+      </select>
+      <textarea class="blk__in" data-f="text" data-i="${i}" rows="2" placeholder="Notice text \u2014 e.g. UNAUTHORISED DISCLOSURE IS A MATTER FOR THE ETHICS COMMITTEE.">${esc(b.text || '')}</textarea>`;
+  } else if (b.type === 'withheld') {
+    body = `<input class="blk__in" data-f="reason" data-i="${i}" value="${esc(b.reason || '')}" placeholder="Requirement shown in the bar \u2014 e.g. REQUIRES LEVEL 4 CLEARANCE (blank = BY ORDER OF SITE COMMAND)" maxlength="120" />`;
+  } else if (b.type === 'log') {
+    const rows = (b.entries && b.entries.length ? b.entries : [{ date: '', text: '' }]).map((r, ri) => `
+      <div class="blk__fieldrow">
+        <input class="blk__in" data-f="ld" data-i="${i}" data-ri="${ri}" value="${esc(r.date || '')}" placeholder="Date / time" maxlength="60" style="flex:0 0 140px" />
+        <input class="blk__in" data-f="lt" data-i="${i}" data-ri="${ri}" value="${esc(r.text || '')}" placeholder="Entry" maxlength="300" />
+        <button class="btn btn--xs btn--danger" data-lrow-del data-i="${i}" data-ri="${ri}">\u2715</button>
+      </div>`).join('');
+    body = `${rows}<button class="btn btn--xs" data-lrow-add data-i="${i}">+ Entry</button>`;
+  } else if (b.type === 'rule') {
+    body = '<div class="muted-text">A horizontal rule \u2014 separates sections. No content.</div>';
+  } else if (b.type === 'fields') {
     const rows = (b.rows && b.rows.length ? b.rows : [{ k: '', v: '' }]).map((r, ri) => `
       <div class="blk__fieldrow">
         <input class="blk__in" data-f="fk" data-i="${i}" data-ri="${ri}" value="${esc(r.k || '')}" placeholder="Label" maxlength="60" />
@@ -213,6 +263,11 @@ function renderComposer(host, app) {
         const ri = +el.dataset.ri;
         b.rows[ri] = b.rows[ri] || { k: '', v: '' };
         b.rows[ri][f === 'fk' ? 'k' : 'v'] = el.value;
+      } else if (f === 'ld' || f === 'lt') {
+        b.entries = b.entries || [];
+        const ri = +el.dataset.ri;
+        b.entries[ri] = b.entries[ri] || { date: '', text: '' };
+        b.entries[ri][f === 'ld' ? 'date' : 'text'] = el.value;
       } else b[f] = el.value;
       refresh();
     });
@@ -221,7 +276,7 @@ function renderComposer(host, app) {
   // Block controls.
   host.querySelectorAll('[data-add]').forEach((btn) => btn.addEventListener('click', () => {
     const t = btn.dataset.add;
-    const fresh = t === 'fields' ? { type: t, rows: [{ k: '', v: '' }] } : t === 'clauses' ? { type: t, items: [''] } : t === 'signature' ? { type: t, name: '', role: '', dated: '' } : { type: t, text: '' };
+    const fresh = { type: t, ...JSON.parse(JSON.stringify(BLOCK_DEFAULTS[t] || { text: '' })) };
     d.blocks.push(fresh); renderComposer(host, app);
   }));
   host.querySelectorAll('[data-del]').forEach((btn) => btn.addEventListener('click', () => { d.blocks.splice(+btn.dataset.del, 1); renderComposer(host, app); }));
@@ -235,6 +290,12 @@ function renderComposer(host, app) {
   }));
   host.querySelectorAll('[data-frow-del]').forEach((btn) => btn.addEventListener('click', () => {
     const b = d.blocks[+btn.dataset.i]; if (b.rows) b.rows.splice(+btn.dataset.ri, 1); renderComposer(host, app);
+  }));
+  host.querySelectorAll('[data-lrow-add]').forEach((btn) => btn.addEventListener('click', () => {
+    const b = d.blocks[+btn.dataset.i]; b.entries = b.entries || []; b.entries.push({ date: '', text: '' }); renderComposer(host, app);
+  }));
+  host.querySelectorAll('[data-lrow-del]').forEach((btn) => btn.addEventListener('click', () => {
+    const b = d.blocks[+btn.dataset.i]; if (b.entries) b.entries.splice(+btn.dataset.ri, 1); renderComposer(host, app);
   }));
 
   host.querySelector('#doc-back').addEventListener('click', () => app.navigate('#/documents'));

@@ -307,6 +307,10 @@ const CSS = `
   .reclist .ref { font-family: 'Courier New', monospace; font-weight: 700; }
 
   .so { font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin: 20px 0 14px; }
+  .plainlist { margin: 0 0 11px; padding-left: 22px; }
+  .plainlist li { padding: 2px 0; }
+  .docquote { margin: 12px 0 14px; padding: 2px 16px; border-left: 3px solid #333; font-style: italic; }
+  .docquote__att { text-align: right; font-style: normal; font-size: 10.5pt; color: #333; margin-top: 4px; }
   .votebox { border-collapse: collapse; margin: 2px auto 12px; }
   .votebox th { font-family: Arial, Helvetica, sans-serif; font-size: 8pt; letter-spacing: .06em; text-transform: uppercase; border-bottom: 2px solid #111; padding: 3px 18px; color: #333; }
   .votebox td { border: 1px solid #999; padding: 6px 18px; text-align: center; font-size: 14pt; font-weight: 700; }
@@ -1442,10 +1446,31 @@ function renderDocBlocks(blocks) {
       const items = (b.items || []).filter((x) => String(x).trim());
       return items.length ? `<div class="judgment">${items.map((x) => `<div class="para">${esc(x)}</div>`).join('')}</div>` : '';
     }
+    if (b.type === 'list') {
+      const items = (b.items || []).filter((x) => String(x).trim());
+      return items.length ? `<ul class="plainlist">${items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
+    }
     if (b.type === 'fields') {
       const rows = (b.rows || []).filter((r) => (r.k || r.v));
       return rows.length ? `<table class="memo-h"><tbody>${rows.map((r) => `<tr><td class="ml">${esc(r.k || '')}</td><td>${esc(r.v || '')}</td></tr>`).join('')}</tbody></table>` : '';
     }
+    if (b.type === 'log') {
+      const rows = (b.entries || []).filter((r) => (r.date || r.text));
+      return rows.length ? `<table class="log"><tbody>${rows.map((r) => `<tr><td class="ld">${esc(r.date || '—')}</td><td>${esc(r.text || '')}</td></tr>`).join('')}</tbody></table>` : '';
+    }
+    if (b.type === 'quote') {
+      if (!String(b.text || '').trim()) return '';
+      return `<blockquote class="docquote">${esc(b.text).replace(/\n/g, '<br/>')}${b.by ? `<div class="docquote__att">— ${esc(b.by)}</div>` : ''}</blockquote>`;
+    }
+    if (b.type === 'notice') {
+      if (!String(b.text || '').trim()) return '';
+      return `<div class="notice${b.tone === 'advisory' ? ' notice--soft' : ''}">${esc(b.text).replace(/\n/g, '<br/>')}</div>`;
+    }
+    if (b.type === 'withheld') {
+      const reason = String(b.reason || '').trim() || 'BY ORDER OF SITE COMMAND';
+      return `<div class="withheld">[ CONTENT WITHHELD — ${esc(reason.toUpperCase())} ]</div>`;
+    }
+    if (b.type === 'rule') return '<hr class="rule" />';
     if (b.type === 'signature') {
       return signBlock({ name: esc(b.name || ''), role: b.role || '', dated: b.dated || '' });
     }
