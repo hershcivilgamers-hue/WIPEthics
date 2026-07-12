@@ -134,6 +134,17 @@ CREATE TABLE IF NOT EXISTS recruits (
 );
 CREATE INDEX IF NOT EXISTS idx_recruits_org ON recruits (org);
 
+-- Weekly per-operator engagement scores (Sr CL4 command tool).
+CREATE TABLE IF NOT EXISTS engagement (
+  id          TEXT PRIMARY KEY,
+  org         TEXT,
+  deleted     INTEGER NOT NULL DEFAULT 0,
+  version     INTEGER NOT NULL DEFAULT 1,
+  updated_at  TEXT,
+  data        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_engagement_org ON engagement (org);
+
 CREATE TABLE IF NOT EXISTS promo_reqs (
   id          TEXT PRIMARY KEY,
   org         TEXT,

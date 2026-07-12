@@ -105,6 +105,23 @@
 }
 .tag-row__label { color: var(--text-3); font-size: 12px; margin-right: 4px; }
 
+/* --- Engagement board ------------------------------------------------------ */
+.eng-weeknav { align-items: center; }
+.eng-week { font-weight: 600; letter-spacing: .02em; }
+.eng-table th.cell-num, .eng-table td.cell-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.eng-table th.cell-center, .eng-table td.cell-center { text-align: center; white-space: nowrap; }
+.eng-max { color: var(--text-3); font-size: 10px; }
+.eng-cell--ov { color: var(--amber-2); font-weight: 600; }        /* quality override */
+.eng-cell--man { color: var(--info); }                            /* reviewer-entered */
+.eng-rankrow td { background: var(--surface-2); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-3); font-weight: 700; padding: 6px var(--s4); }
+.eng-req { font-weight: 700; font-size: 12px; }
+.eng-req--ok { color: var(--ok); }
+.eng-req--no { color: var(--bad); }
+.eng-table tr.row-click { cursor: pointer; }
+.eng-table tr.row-click:hover > td { background: var(--surface-2); }
+.eng-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.eng-field { margin-bottom: 0; }
+
 /* --- Activity board (hours-based) ------------------------------------------ */
 .activity-table .cell-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .activity-table tr.row-breach > td { background: rgba(207, 68, 54, 0.07); }

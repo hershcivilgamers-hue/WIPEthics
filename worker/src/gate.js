@@ -808,6 +808,7 @@ const AUTHORIZERS = {
   operations: authorizeOperation,
   intel: authorizeIntel,
   trainings: authorizeTraining,
+  engagement: authorizeEngagement,
   blacklist: authorizeBlacklist,
   promo_reqs: authorizePromoReq,
   settings: authorizeSettings,
@@ -912,6 +913,21 @@ function authorizeTraining(actor, cur, next) {
     return next.deleted ? ok('REMOVE_TRAINING', `Retired course ${ref}.`) : ok('RESTORE_TRAINING', `Restored course ${ref}.`);
   }
   return ok('EDIT_TRAINING', `Updated course ${ref}.`);
+}
+
+// Weekly engagement scores. A Sr CL4 command tool: only a manager of the owning
+// organisation (CL4·Senior with a stake, or CL5) may enter or amend scores. The
+// derived sections are recomputed on read and never stored, so nothing here can
+// forge a countable metric — only the manual scores and quality overrides move.
+function authorizeEngagement(actor, cur, next) {
+  const org = (next || cur).org || 'omega-1';
+  const who = (next || cur).userId || 'operator';
+  if (!canManageOrg(actor, org)) return deny('Engagement scoring is maintained by senior command.');
+  if (!cur) return ok('CREATE_ENGAGEMENT', `Engagement scored for ${who}.`);
+  if (!!next.deleted !== !!cur.deleted) {
+    return next.deleted ? ok('REMOVE_ENGAGEMENT', `Removed an engagement score.`) : ok('RESTORE_ENGAGEMENT', `Restored an engagement score.`);
+  }
+  return ok('EDIT_ENGAGEMENT', `Engagement re-scored for ${who}.`);
 }
 
 export function authorizeWrite(collection, actor, cur, next, ctx) {

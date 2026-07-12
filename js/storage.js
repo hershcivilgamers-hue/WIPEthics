@@ -37,6 +37,7 @@ function emptyDb() {
     intel: [],
     blacklist: [],
     trainings: [],
+    engagement: [],
     promoReqs: [],
     settings: [],
     audit: [],
@@ -114,6 +115,7 @@ export function applyServerSnapshot(snap) {
     operations: snap.operations || [],
     intel: snap.intel || [],
     trainings: snap.trainings || [],
+    engagement: snap.engagement || [],
     blacklist: snap.blacklist || [],
     promoReqs: snap.promoReqs || [],
     settings: snap.settings || [],
@@ -365,6 +367,22 @@ export function upsertTraining(record) {
   const i = list.findIndex((r) => r.id === record.id);
   if (i >= 0) list[i] = record; else list.push(record);
   afterWrite('trainings', record);
+  return record;
+}
+
+// Weekly engagement scores — one record per (operator, weekStart).
+export const engagement = () => loadDb().engagement;
+export function getEngagement(id) {
+  return engagement().find((r) => r.id === id) || null;
+}
+export function getEngagementFor(userId, weekStart) {
+  return engagement().find((r) => r.userId === userId && r.weekStart === weekStart && !r.deleted) || null;
+}
+export function upsertEngagement(record) {
+  const list = engagement();
+  const i = list.findIndex((r) => r.id === record.id);
+  if (i >= 0) list[i] = record; else list.push(record);
+  afterWrite('engagement', record);
   return record;
 }
 

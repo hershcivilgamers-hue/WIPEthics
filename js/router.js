@@ -19,6 +19,8 @@ const canSeeAnyRecruitment = (u) => canSeeOmegaRecruitment(u) || canSeeEthicsRec
 const canSeeDeployments = (u) => isCL5(u) || u.org === 'omega-1' || u.org === 'command';
 const canSeeIntel = (u) => isCL5(u) || u.org === 'omega-1' || u.org === 'command';
 const canSeeDashboard = (u) => isCL5(u) || u.org === 'omega-1' || u.org === 'command';
+// Engagement scoring is a Sr CL4 command tool (CL4·Senior with an Omega stake, or CL5).
+const canSeeEngagement = (u) => isCL5(u) || canManageOrg(u, 'omega-1');
 
 // Sidebar structure, grouped by organisation. `feature` ties an item to a
 // CONFIG feature flag; `guard` ties it to a permission check.
@@ -48,6 +50,7 @@ export const NAV = [
       { name: 'recruit-omega', hash: '#/omega-1/recruitment', label: 'Recruitment', feature: 'recruitment', guard: canSeeOmegaRecruitment },
       { name: 'deployments',   hash: '#/deployments',        label: 'Deployment Log', feature: 'deployments', guard: canSeeDeployments },
       { name: 'intel',         hash: '#/intel',              label: 'Intelligence',   feature: 'intel', guard: canSeeIntel },
+      { name: 'engagement',    hash: '#/engagement',         label: 'Engagement',     feature: 'engagement', guard: canSeeEngagement },
     ],
   },
   {
@@ -78,6 +81,7 @@ const GUARDS = {
   intel: canSeeIntel,
   source: canSeeIntel,
   dashboard: canSeeDashboard,
+  engagement: canSeeEngagement,
   'recruit-ethics': canSeeEthicsRecruitment,
   docket: canSeeDocket,
   recruit: canSeeAnyRecruitment,
@@ -100,10 +104,11 @@ function featureBlocked(name) {
   if (name === 'blacklist') return !CONFIG.features.blacklist;
   if (name === 'dashboard') return !CONFIG.features.dashboard;
   if (name === 'docket') return !CONFIG.features.dashboard;
+  if (name === 'engagement') return !CONFIG.features.engagement;
   return false;
 }
 
-const TOP_LEVEL = ['overview', 'notifications', 'search', 'surveillance', 'compartments', 'operations', 'trainings', 'deployments', 'intel', 'dashboard', 'docket', 'tribunals', 'directives', 'documents', 'terminal', 'activity', 'blacklist', 'recruit-omega', 'recruit-ethics', 'omega-1', 'ethics', 'command', 'admin'];
+const TOP_LEVEL = ['overview', 'notifications', 'search', 'surveillance', 'compartments', 'operations', 'trainings', 'deployments', 'intel', 'engagement', 'dashboard', 'docket', 'tribunals', 'directives', 'documents', 'terminal', 'activity', 'blacklist', 'recruit-omega', 'recruit-ethics', 'omega-1', 'ethics', 'command', 'admin'];
 
 // Parse the current location hash into a route { name, params }.
 export function parseHash() {

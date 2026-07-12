@@ -18,7 +18,7 @@ import {
   compartmentClears, readIntoCompartment, canManageCompartment,
   canViewActivity, canViewRecruitment, canViewOperation, isAssignedToOperation,
   canViewIntel, isAssignedToIntel, canViewTraining,
-  canViewDocument,
+  canViewDocument, canManageOrg,
 } from '../../js/permissions.js';
 import { strikeVoided } from '../../js/constants.js';
 
@@ -213,6 +213,9 @@ export function buildSnapshot(actor, db) {
         && (isAssignedToIntel(actor, s) || compartmentClears(actor, s, compMap)))
       .map((s) => withCaveat(s, compMap)),
     trainings: (db.trainings || []).filter((t) => !t.deleted && canViewTraining(actor, t)),
+    // Engagement scores are a Sr CL4 command tool — shipped only to managers of the
+    // owning organisation (or CL5), matching who may view/edit the board.
+    engagement: (db.engagement || []).filter((e) => !e.deleted && (isCL5(actor) || canManageOrg(actor, e.org || 'omega-1'))),
     blacklist: (db.blacklist || []).filter((b) => !b.deleted),
     promoReqs: db.promoReqs || [],
     settings: db.settings || [],

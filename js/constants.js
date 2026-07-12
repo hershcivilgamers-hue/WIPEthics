@@ -491,6 +491,88 @@ export function activityInBreach(user, record, reqs = ACTIVITY_REQ_DEFAULT, now 
   return k === 'semi' || k === 'inactive';
 }
 
+// --- Omega-1 weekly engagement score ----------------------------------------
+// A per-operator weekly score across eight sections. Five are DERIVED from the
+// logs the system already holds (scouting, orders, PoIs, trainings, activity);
+// three are entered by a Sr CL4 reviewer (evidence, squadron, RP), who may also
+// OVERRIDE any derived score for quality. The review week runs Sunday→Saturday,
+// matching the unit's practice ("backdate from the previous Saturday").
+//
+// ENGAGEMENT record (one per operator per week; manual fields only — derived
+// scores are recomputed on read, never stored):
+//   { id, userId, org:'omega-1', weekStart(ms),
+//     manual:{ evidence, squadron, rp },
+//     overrides:{ scouting?, orders?, pois?, trainings?, activity? },
+//     note, by, createdAt, updatedAt, version, deleted, deletedAt }
+export const ENGAGEMENT_SECTIONS = [
+  { key: 'scouting',  label: 'Scouting',       max: 10, mode: 'auto' },
+  { key: 'orders',    label: 'Orders',         max: 10, mode: 'auto' },
+  { key: 'evidence',  label: 'Evidence',       max: 5,  mode: 'manual' },
+  { key: 'pois',      label: 'PoIs / Targets', max: 10, mode: 'auto' },
+  { key: 'squadron',  label: 'Squadron',       max: 10, mode: 'manual' },
+  { key: 'trainings', label: 'Trainings',      max: 10, mode: 'auto' },
+  { key: 'activity',  label: 'Activity',       max: 10, mode: 'auto' },
+  { key: 'rp',        label: 'RP',             max: 5,  mode: 'manual' },
+];
+export const ENGAGEMENT_MANUAL_KEYS = ENGAGEMENT_SECTIONS.filter((s) => s.mode === 'manual').map((s) => s.key);
+export const ENGAGEMENT_OVERRIDE_KEYS = ENGAGEMENT_SECTIONS.filter((s) => s.mode === 'auto').map((s) => s.key);
+export const ENGAGEMENT_MAX = Object.fromEntries(ENGAGEMENT_SECTIONS.map((s) => [s.key, s.max]));
+export const ENGAGEMENT_TOTAL_MAX = ENGAGEMENT_SECTIONS.reduce((s, x) => s + x.max, 0); // 70
+// Point weights (tune here). Count-per-point for the count sections; host/attend
+// for trainings. Activity maps logged hours straight to points (capped).
+export const ENGAGEMENT_WEIGHTS = { scoutingPer: 3, ordersPer: 2, poisPer: 2, trainHost: 3, trainAttend: 1 };
+export const ENGAGEMENT_WEEK_MS = 7 * 24 * 3600000;
+
+// Sunday 00:00 (local) of the review week containing `now`.
+export function engagementWeekStart(now = Date.now()) {
+  const d = new Date(now); d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - d.getDay()); // getDay(): 0 = Sunday
+  return d.getTime();
+}
+export function clampEngagement(v, max) {
+  const n = Math.round(Number(v) || 0);
+  return Math.max(0, Math.min(max, n));
+}
+
+// Pure: derived scores from a raw event-count bundle (see engagement.js gather).
+//   raw = { scoutingCount, ordersCount, poisCount, trainHost, trainAttend, hours, host3wk }
+export function engagementAutoScores(raw = {}) {
+  const w = ENGAGEMENT_WEIGHTS;
+  return {
+    scouting:  clampEngagement((raw.scoutingCount || 0) * w.scoutingPer, ENGAGEMENT_MAX.scouting),
+    orders:    clampEngagement((raw.ordersCount || 0) * w.ordersPer, ENGAGEMENT_MAX.orders),
+    pois:      clampEngagement((raw.poisCount || 0) * w.poisPer, ENGAGEMENT_MAX.pois),
+    trainings: clampEngagement((raw.trainHost || 0) * w.trainHost + (raw.trainAttend || 0) * w.trainAttend, ENGAGEMENT_MAX.trainings),
+    activity:  clampEngagement(Math.floor(raw.hours || 0), ENGAGEMENT_MAX.activity),
+  };
+}
+
+// Pure: fold auto scores, manual scores and quality overrides into final values.
+// Returns { val:{key:score}, src:{key:'auto'|'override'|'manual'}, auto, total }.
+export function engagementResolved(raw = {}, record = null) {
+  const auto = engagementAutoScores(raw);
+  const ov = (record && record.overrides) || {};
+  const man = (record && record.manual) || {};
+  const val = {}; const src = {};
+  for (const s of ENGAGEMENT_SECTIONS) {
+    if (s.mode === 'manual') { val[s.key] = clampEngagement(man[s.key], s.max); src[s.key] = 'manual'; continue; }
+    const o = ov[s.key];
+    if (o !== undefined && o !== null && o !== '') { val[s.key] = clampEngagement(o, s.max); src[s.key] = 'override'; }
+    else { val[s.key] = auto[s.key]; src[s.key] = 'auto'; }
+  }
+  const total = Object.values(val).reduce((a, b) => a + b, 0);
+  return { val, src, auto, total };
+}
+
+// Pure: the two engagement requirements. Req1 — ≥1 Scouting/Order/Evidence/PoI
+// engagement this week. Req2 — ≥1 training hosted in the trailing three weeks.
+export function engagementReqs(raw = {}, record = null) {
+  const man = (record && record.manual) || {};
+  const engagements = (raw.scoutingCount || 0) + (raw.ordersCount || 0) + (raw.poisCount || 0)
+    + (clampEngagement(man.evidence, ENGAGEMENT_MAX.evidence) > 0 ? 1 : 0);
+  return { req1: engagements >= 1, req2: (raw.host3wk || 0) >= 1 };
+}
+
 // --- Recruitment (two org-specific pipelines) -------------------------------
 // Omega-1 runs a scouting pipeline; the Ethics Committee runs an application /
 // interview pipeline for Assistants. Both share the candidate record, comment
