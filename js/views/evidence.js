@@ -15,9 +15,9 @@ import {
 } from '../constants.js';
 import {
   users, evidenceFor, getEvidence, upsertEvidence, getUser, upsertUser, newId,
-  directives, intel, subjects,
+  directives, intel, subjects, getSubject, upsertSubject, getIntel, upsertIntel,
 } from '../storage.js';
-import { isCL5, canManageOrg } from '../permissions.js';
+import { isCL5, canManageOrg, canManageSubject, canLogIntel } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { esc, fmtDate, toast, openModal, confirmDialog } from '../ui.js';
 
@@ -226,7 +226,36 @@ function submit(app, targetUser, { title, link, note, ref }) {
     createdAt: nowIso, updatedAt: nowIso, version: 1, deleted: false, deletedAt: null,
   });
   logAction(app.user, 'SUBMIT_EVIDENCE', `Evidence filed for ${targetUser.designation}: ${title}.`);
+  if (ref) crossPost(app, ref, title);
   app.refresh();
+}
+
+// Mirror the citation onto the linked record's own thread — but only where a
+// thread exists AND the submitter is cleared to write it (the same gate the
+// Worker enforces, so this never 403s). Surveillance subjects take a log entry;
+// intel sources take a report. Standing Orders are immutable and have no thread,
+// so an Order stays a one-way link. Compartmented subjects are skipped to avoid
+// the need-to-know write block.
+function crossPost(app, ref, evTitle) {
+  if (!ref || !ref.id) return;
+  const actor = app.user;
+  const nowIso = new Date().toISOString();
+  const cite = `Cited as engagement evidence by ${actor.designation}: ${evTitle}`;
+  if (ref.kind === 'subject') {
+    const s = getSubject(ref.id);
+    if (!s || s.deleted || s.compartment || !canManageSubject(actor, s)) return;
+    s.logs = [...(s.logs || []), { id: newId('log'), ts: nowIso, by: actor.designation, type: 'note', text: cite }];
+    s.updatedAt = nowIso; s.version = (s.version || 1) + 1;
+    upsertSubject(s);
+    logAction(actor, 'ADD_SURVEILLANCE_LOG', `Evidence citation added to ${s.ref}.`);
+  } else if (ref.kind === 'intel') {
+    const s = getIntel(ref.id);
+    if (!s || s.deleted || !canLogIntel(actor, s)) return;
+    s.reports = [...(s.reports || []), { id: newId('ir'), at: Date.now(), by: actor.designation, text: cite }];
+    s.updatedAt = nowIso; s.version = (s.version || 1) + 1;
+    upsertIntel(s);
+    logAction(actor, 'LOG_INTEL', `Evidence citation added to ${s.ref}.`);
+  }
 }
 
 function review(app, id, status) {
