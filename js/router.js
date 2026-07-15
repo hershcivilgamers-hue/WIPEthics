@@ -117,7 +117,9 @@ const TOP_LEVEL = ['overview', 'notifications', 'search', 'surveillance', 'compa
 
 // Parse the current location hash into a route { name, params }.
 export function parseHash() {
-  const raw = (window.location.hash || '#/overview').replace(/^#\/?/, '');
+  // Strip a trailing ?query — routes match on the path only; views that want
+  // bookmarkable state (e.g. the activity-log filters) read the query themselves.
+  const raw = (window.location.hash || '#/overview').replace(/^#\/?/, '').split('?')[0];
   const parts = raw.split('/').filter(Boolean);
 
   if (parts.length === 0) return { name: 'overview', params: {} };

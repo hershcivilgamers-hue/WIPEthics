@@ -32,7 +32,7 @@ const TONE = {
   SET_PANEL: 'info', CITE_SUBJECT: 'info', SET_CASE_STATUS: 'info', RECLASSIFY_CASE: 'warn',
   ENTER_RULING: 'ok', VOTE_CASE: 'info', REMOVE_CASE: 'bad', CASE_ACCESS_DENIED: 'bad',
   EXPORT_CASE: 'muted', EXPORT_SUBJECT: 'muted', EXPORT_PERSONNEL: 'muted', EXPORT_DIRECTIVE: 'muted',
-  EXPORT_INTERVIEW: 'muted', EXPORT_OPERATION: 'muted', EXPORT_INTEL: 'muted', EXPORT_SUMMONS: 'muted',
+  EXPORT_INTERVIEW: 'muted', EXPORT_OPERATION: 'muted', EXPORT_INTEL: 'muted', EXPORT_SUMMONS: 'muted', EXPORT_ENGAGEMENT: 'muted',
   CREATE_COMPARTMENT: 'ok', EDIT_COMPARTMENT: 'info', REMOVE_COMPARTMENT: 'bad', RESTORE_COMPARTMENT: 'ok',
   READ_IN: 'warn', READ_OUT: 'muted', ROSTER_UPDATE: 'info', SEAL_COMPARTMENT: 'warn',
   LOG_ACTIVITY: 'info', OPEN_ACTIVITY: 'muted', SET_ACTIVITY_OVERRIDE: 'warn', CLEAR_ACTIVITY_OVERRIDE: 'muted', SET_SETTING: 'warn',
@@ -69,13 +69,37 @@ export function filterAuditEntries(entries, f = {}) {
   });
 }
 
-// Filters persist across visits within the session (like the search query).
+// Filters persist across visits within the session, and are mirrored into the
+// URL hash (#/activity?q=…&action=…&from=…&to=…) so a filtered view can be
+// bookmarked or shared. The URL is updated via replaceState so it never
+// re-routes mid-typing.
 let fQ = '';
 let fAction = '';
 let fFrom = '';
 let fTo = '';
 
+function readUrlFilters() {
+  const h = window.location.hash || '';
+  const qi = h.indexOf('?');
+  if (qi < 0) return null;
+  const p = new URLSearchParams(h.slice(qi + 1));
+  return { q: p.get('q') || '', action: p.get('action') || '', from: p.get('from') || '', to: p.get('to') || '' };
+}
+function syncUrlFilters() {
+  const p = new URLSearchParams();
+  if (fQ) p.set('q', fQ);
+  if (fAction) p.set('action', fAction);
+  if (fFrom) p.set('from', fFrom);
+  if (fTo) p.set('to', fTo);
+  const qs = p.toString();
+  try { history.replaceState(null, '', '#/activity' + (qs ? `?${qs}` : '')); } catch (_) { /* no history API */ }
+}
+
 export function render(host, app) {
+  // A bookmarked/shared URL wins over the in-session filters on entry.
+  const urlF = readUrlFilters();
+  if (urlF) { fQ = urlF.q; fAction = urlF.action; fFrom = urlF.from; fTo = urlF.to; }
+
   const entries = recentActions(400);
   const actions = [...new Set(entries.map((e) => e.action))].sort();
 
@@ -117,9 +141,9 @@ export function render(host, app) {
     <div class="card"><ul class="log" id="log-list"></ul></div>
   `;
 
-  host.querySelector('#log-q').addEventListener('input', (e) => { fQ = e.target.value; draw(); });
-  host.querySelector('#log-filter').addEventListener('change', (e) => { fAction = e.target.value; draw(); });
-  host.querySelector('#log-from').addEventListener('change', (e) => { fFrom = e.target.value; draw(); });
-  host.querySelector('#log-to').addEventListener('change', (e) => { fTo = e.target.value; draw(); });
+  host.querySelector('#log-q').addEventListener('input', (e) => { fQ = e.target.value; draw(); syncUrlFilters(); });
+  host.querySelector('#log-filter').addEventListener('change', (e) => { fAction = e.target.value; draw(); syncUrlFilters(); });
+  host.querySelector('#log-from').addEventListener('change', (e) => { fFrom = e.target.value; draw(); syncUrlFilters(); });
+  host.querySelector('#log-to').addEventListener('change', (e) => { fTo = e.target.value; draw(); syncUrlFilters(); });
   draw();
 }

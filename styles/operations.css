@@ -119,6 +119,7 @@
 .eng-req--no { color: var(--bad); }
 .eng-table tr.row-click { cursor: pointer; }
 .eng-table tr.row-click:hover > td { background: var(--surface-2); }
+.eng-spark { font-family: var(--mono); letter-spacing: 1px; color: var(--accent, #6ea8fe); line-height: 1; }
 /* auto-fill (not auto-fit) so a short row's fields keep their width instead of
    stretching; flex column + a reserved label height so inputs stay aligned even
    when a label ("PoIs / Targets") wraps to two lines. */

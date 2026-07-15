@@ -1274,6 +1274,55 @@ export function buildSummonsHTML(record, m, actor) {
 }
 
 // ===========================================================================
+// WEEKLY ENGAGEMENT SUMMARY — command roll-up sheet
+// ===========================================================================
+// `summary` is prepared by the engagement view (which owns the scoring), so this
+// builder stays decoupled from the engagement model:
+//   { weekLabel, totalMax, sections:[{key,label,max}], atRisk,
+//     rows:[{designation,codename,rank,val:{key:score},total,req1,req2}] }
+export function buildEngagementSummaryHTML(summary, actor) {
+  const { weekLabel, sections, totalMax, rows, atRisk } = summary;
+  const th = 'border-bottom:1px solid #111;padding:4px 5px;font-size:9px;letter-spacing:.04em;text-transform:uppercase';
+  const td = 'padding:4px 5px;border-bottom:1px solid #ccc;font-size:10px';
+  const body = rows.length ? rows.map((r) => `
+      <tr>
+        <td style="${td};text-align:left">${esc(r.designation)} ${esc(r.codename || '')}<div style="font-size:8px;color:#555">${esc(r.rank || '')}</div></td>
+        ${sections.map((s) => `<td style="${td};text-align:center">${r.val[s.key]}</td>`).join('')}
+        <td style="${td};text-align:center;font-weight:700">${r.total}/${totalMax}</td>
+        <td style="${td};text-align:center">${r.req1 ? '✓' : '✕'} ${r.req2 ? '✓' : '✕'}</td>
+      </tr>`).join('') : `<tr><td style="${td}" colspan="${sections.length + 3}">No active operators.</td></tr>`;
+
+  const inner = `
+    ${letterhead('omega-1', 'Command Section')}
+    <hr class="rule" />
+    <div class="doc-title">Weekly Engagement Summary</div>
+    <div class="doc-sub">Review week: ${esc(weekLabel)}</div>
+    <hr class="rule" />
+    ${atRisk ? `<p class="muted"><strong>${esc(String(atRisk))}</strong> operator(s) below the weekly engagement requirement this week.</p>` : ''}
+    <table style="width:100%;border-collapse:collapse;margin-top:6px">
+      <thead><tr>
+        <th style="${th};text-align:left">Operator</th>
+        ${sections.map((s) => `<th style="${th};text-align:center">${esc(s.label)}</th>`).join('')}
+        <th style="${th};text-align:center">Total</th>
+        <th style="${th};text-align:center">Reqs</th>
+      </tr></thead>
+      <tbody>${body}</tbody>
+    </table>
+    <p class="muted" style="margin-top:8px">Reqs: (1) one Scouting / Order / Evidence / PoI engagement this week; (2) one training hosted in the trailing three weeks. Derived sections are recomputed from the records at time of issue.</p>
+  `;
+
+  return frameDoc({
+    title: 'Weekly Engagement Summary',
+    classification: banner('CL4-S', 'Command'),
+    inner,
+    org: 'omega-1',
+    distribution: 'Omega-1 Command; Site Command.',
+    footerRef: 'O1-ENG-SUMMARY',
+    actor,
+  });
+}
+
+// ===========================================================================
 // SIDE-EFFECTING EXPORT (new tab, or download if pop-ups blocked)
 // ===========================================================================
 function openDocument(html, downloadName) {
@@ -1333,6 +1382,10 @@ export function exportSummons(app, record, m) {
 export function exportSourceFile(app, src) {
   logAction(app.user, 'EXPORT_INTEL', `Generated source file for ${src.ref}.`);
   openDocument(buildSourceFileHTML(src, app.user), `${src.ref}-source-file.html`);
+}
+export function exportEngagementSummary(app, summary) {
+  logAction(app.user, 'EXPORT_ENGAGEMENT', `Generated Omega-1 engagement summary (${summary.weekLabel}).`);
+  openDocument(buildEngagementSummaryHTML(summary, app.user), 'omega-1-engagement-summary.html');
 }
 export function exportAfterAction(app, op) {
   const closed = op.status === 'concluded' || op.status === 'aborted';

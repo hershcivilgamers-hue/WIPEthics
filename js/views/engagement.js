@@ -19,6 +19,7 @@ import { users, getEngagement, getEngagementFor, upsertEngagement, newId } from 
 import { isCL5, canManageOrg } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { esc, fmtDate, toast, openModal } from '../ui.js';
+import { exportEngagementSummary } from '../export.js';
 
 const ORG = 'omega-1';
 let viewWeek = engagementWeekStart();
@@ -51,11 +52,25 @@ export function render(host, app) {
   };
   const reqDot = (ok, label) => `<span class="eng-req ${ok ? 'eng-req--ok' : 'eng-req--no'}" title="${esc(label)}">${ok ? '✓' : '✕'}</span>`;
 
+  // Trend: the last few weeks' totals as a compact spark, computed from the same
+  // engagementModel the board uses (cheap at unit scale) so the two always agree.
+  const SPARK = '▁▂▃▄▅▆▇█';
+  const TREND_WEEKS = 5;
+  const sparkline = (u) => {
+    const totals = [];
+    for (let k = TREND_WEEKS - 1; k >= 0; k--) totals.push(engagementModel(u, engagementWeekShift(viewWeek, -k)).total);
+    const bars = totals.map((t) => SPARK[Math.max(0, Math.min(7, Math.round((t / ENGAGEMENT_TOTAL_MAX) * 7)))]).join('');
+    return `<span class="eng-spark" title="Totals, last ${TREND_WEEKS} weeks (oldest → newest): ${totals.join(' → ')}">${bars}</span>`;
+  };
+
+  // Operators below either weekly requirement — surfaced as an at-risk banner.
+  const atRisk = list.filter((u) => { const m = models.get(u.id); return !m.reqs.req1 || !m.reqs.req2; });
+
   // Rows, with a rank subheader inserted whenever the rank changes.
   let lastRank = null;
   const bodyRows = list.map((u) => {
     const m = models.get(u.id);
-    const header = u.rank !== lastRank ? `<tr class="eng-rankrow"><td colspan="${ENGAGEMENT_SECTIONS.length + 4}">${esc(u.rank || 'Unranked')}</td></tr>` : '';
+    const header = u.rank !== lastRank ? `<tr class="eng-rankrow"><td colspan="${ENGAGEMENT_SECTIONS.length + 5}">${esc(u.rank || 'Unranked')}</td></tr>` : '';
     lastRank = u.rank;
     const totalTone = m.total >= ENGAGEMENT_TOTAL_MAX * 0.6 ? 'ok' : (m.total >= ENGAGEMENT_TOTAL_MAX * 0.3 ? 'warn' : 'bad');
     return `${header}
@@ -63,6 +78,7 @@ export function render(host, app) {
         <td class="cell-name"><span class="mono">${esc(u.designation)}</span> ${esc(u.codename || '')}</td>
         ${ENGAGEMENT_SECTIONS.map((s) => scoreCell(m, s.key)).join('')}
         <td class="cell-num"><span class="badge badge--${totalTone}">${m.total}<span class="eng-max">/${ENGAGEMENT_TOTAL_MAX}</span></span></td>
+        <td class="cell-center">${sparkline(u)}</td>
         <td class="cell-center">${reqDot(m.reqs.req1, '1 Scouting/Order/Evidence/PoI this week')} ${reqDot(m.reqs.req2, '1 training host in 3 weeks')}</td>
         <td class="cell-right">${editable ? '<span class="row-go">Score →</span>' : ''}</td>
       </tr>`;
@@ -82,16 +98,19 @@ export function render(host, app) {
       <span class="eng-week">${weekLabel(viewWeek)}</span>
       <button class="btn btn--sm" id="eng-next" ${engagementWeekShift(viewWeek, 1) > engagementWeekStart() ? 'disabled' : ''}>Next week ▶</button>
       ${viewWeek !== engagementWeekStart() ? '<button class="btn btn--sm btn--ghost" id="eng-now">This week</button>' : ''}
+      <button class="btn btn--sm" id="eng-export" style="margin-left:auto">⤓ Export sheet</button>
     </div>
+
+    ${atRisk.length ? `<div class="readiness-banner readiness-banner--warn"><strong>${atRisk.length}</strong> of ${list.length} operator${list.length === 1 ? '' : 's'} below the weekly engagement requirement this week.</div>` : ''}
 
     <div class="card">
       <table class="table eng-table">
         <thead><tr>
           <th>Operator</th>
           ${ENGAGEMENT_SECTIONS.map((s) => `<th class="cell-num" title="Max ${s.max}">${esc(s.label)}</th>`).join('')}
-          <th class="cell-num">Total</th><th class="cell-center">Reqs</th><th></th>
+          <th class="cell-num">Total</th><th class="cell-center" title="Total score, last 5 weeks">Trend</th><th class="cell-center">Reqs</th><th></th>
         </tr></thead>
-        <tbody>${list.length ? bodyRows : `<tr><td colspan="${ENGAGEMENT_SECTIONS.length + 4}" class="empty">No active Omega-1 operators.</td></tr>`}</tbody>
+        <tbody>${list.length ? bodyRows : `<tr><td colspan="${ENGAGEMENT_SECTIONS.length + 5}" class="empty">No active Omega-1 operators.</td></tr>`}</tbody>
       </table>
     </div>
     <p class="field__hint" style="margin-top:12px">Derived sections (Scouting, Orders, Evidence, PoIs, Trainings, Activity) come from the week's records — Evidence from the <a class="rec-link" href="#/evidence">evidence submissions</a>; Squadron and RP are entered by a reviewer, who may override any derived score for quality. Expectation: one Scouting/Order/Evidence/PoI engagement a week, one training host every three weeks.</p>
@@ -100,6 +119,13 @@ export function render(host, app) {
   host.querySelector('#eng-prev').addEventListener('click', () => { viewWeek = engagementWeekShift(viewWeek, -1); render(host, app); });
   const nx = host.querySelector('#eng-next');
   if (nx) nx.addEventListener('click', () => { viewWeek = engagementWeekShift(viewWeek, 1); render(host, app); });
+  host.querySelector('#eng-export').addEventListener('click', () => exportEngagementSummary(app, {
+    weekLabel: weekLabel(viewWeek),
+    sections: ENGAGEMENT_SECTIONS,
+    totalMax: ENGAGEMENT_TOTAL_MAX,
+    atRisk: atRisk.length,
+    rows: list.map((u) => { const m = models.get(u.id); return { designation: u.designation, codename: u.codename, rank: u.rank, val: m.val, total: m.total, req1: m.reqs.req1, req2: m.reqs.req2 }; }),
+  }));
   const nowBtn = host.querySelector('#eng-now');
   if (nowBtn) nowBtn.addEventListener('click', () => { viewWeek = engagementWeekStart(); render(host, app); });
 
