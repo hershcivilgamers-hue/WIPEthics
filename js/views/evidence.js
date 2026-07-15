@@ -15,6 +15,7 @@ import {
 } from '../constants.js';
 import {
   users, evidenceFor, getEvidence, upsertEvidence, getUser, upsertUser, newId,
+  directives, intel, subjects,
 } from '../storage.js';
 import { isCL5, canManageOrg } from '../permissions.js';
 import { logAction } from '../audit.js';
@@ -22,6 +23,15 @@ import { esc, fmtDate, toast, openModal, confirmDialog } from '../ui.js';
 
 const ORG = 'omega-1';
 let viewWeek = engagementWeekStart();
+
+// The record kinds an evidence item can point at. `rows` reads the (already
+// access-filtered) snapshot, so an operator can only reference what they can see.
+const REF_KINDS = {
+  directive: { label: 'Order',        rows: () => directives(), hash: (id) => `#/directive/${id}`, opt: (d) => `${d.ref || ''} ${d.title || ''}`.trim() || d.id },
+  intel:     { label: 'Intelligence', rows: () => intel(),      hash: (id) => `#/source/${id}`,     opt: (s) => `${s.ref || ''} ${s.codename || ''}`.trim() || s.id },
+  subject:   { label: 'Surveillance', rows: () => subjects(),   hash: (id) => `#/subject/${id}`,     opt: (s) => `${s.ref || ''} ${s.alias || ''}`.trim() || s.id },
+};
+const refHash = (ref) => (ref && REF_KINDS[ref.kind] ? REF_KINDS[ref.kind].hash(ref.id) : '#');
 
 const isReviewer = (actor) => isCL5(actor) || canManageOrg(actor, ORG);
 
@@ -46,6 +56,7 @@ function itemRow(e, controls) {
     <div class="ev-item" data-ev="${esc(e.id)}">
       <div class="ev-item__head">
         <span class="ev-item__title">${esc(e.title)}</span>
+        ${e.ref && e.ref.id ? `<a class="rec-link" href="${esc(refHash(e.ref))}">${esc((REF_KINDS[e.ref.kind] || {}).label || 'record')}: ${esc(e.ref.label || e.ref.id)}</a>` : ''}
         ${e.link ? `<a class="rec-link" href="${esc(e.link)}" target="_blank" rel="noopener">link ↗</a>` : ''}
         ${statusBadge(e)}
       </div>
@@ -153,13 +164,20 @@ export function render(host, app) {
 // --- Actions ----------------------------------------------------------------
 function openSubmit(app, targetUser) {
   const self = targetUser.id === app.user.id;
-  openModal({
+  const kindOpts = Object.entries(REF_KINDS).map(([k, v]) => `<option value="${k}">${esc(v.label)}</option>`).join('');
+  const dialog = openModal({
     title: self ? 'Submit evidence' : `File evidence — ${targetUser.designation}`,
     wide: true,
     body: `
       <p class="modal__message">Week of ${esc(weekLabel(viewWeek))}. ${targetUser.evidenceReviewRequired ? 'This operator is under review — the item will be held until a reviewer counts it.' : 'The item counts toward the Evidence score straight away.'}</p>
       <div class="field"><label>Title</label><input id="ev-title" type="text" placeholder="What the evidence shows…" /></div>
-      <div class="field"><label>Link <span class="muted-text">(optional)</span></label><input id="ev-link" type="text" placeholder="https://… (clip, screenshot, log)" /></div>
+      <div class="field"><label>Link to a record <span class="muted-text">(optional)</span></label>
+        <div class="ev-ref-row">
+          <select id="ev-ref-kind"><option value="">— none —</option>${kindOpts}</select>
+          <select id="ev-ref-id" disabled><option value="">Select a record…</option></select>
+        </div>
+      </div>
+      <div class="field"><label>External link <span class="muted-text">(optional)</span></label><input id="ev-link" type="text" placeholder="https://… (clip, screenshot)" /></div>
       <div class="field"><label>Note <span class="muted-text">(optional)</span></label><textarea id="ev-note" rows="2" placeholder="Any context for the reviewer…"></textarea></div>
       <div id="ev-err" class="auth__error" hidden></div>`,
     actions: [
@@ -169,22 +187,41 @@ function openSubmit(app, targetUser) {
           const link = d.querySelector('#ev-link').value.trim();
           const note = d.querySelector('#ev-note').value.trim();
           if (!title) { const e = d.querySelector('#ev-err'); e.textContent = 'A title is required.'; e.hidden = false; return; }
-          submit(app, targetUser, { title, link, note });
+          const kind = d.querySelector('#ev-ref-kind').value;
+          const refId = d.querySelector('#ev-ref-id').value;
+          let ref = null;
+          if (kind && refId && REF_KINDS[kind]) {
+            const row = REF_KINDS[kind].rows().find((r) => r.id === refId);
+            if (row) ref = { kind, id: refId, label: REF_KINDS[kind].opt(row) };
+          }
+          submit(app, targetUser, { title, link, note, ref });
           c();
           toast('Evidence submitted.', 'success');
         } },
     ],
   });
+
+  // Populate the record dropdown from the chosen kind's visible records.
+  const kindSel = dialog.querySelector('#ev-ref-kind');
+  const idSel = dialog.querySelector('#ev-ref-id');
+  kindSel.addEventListener('change', () => {
+    const k = REF_KINDS[kindSel.value];
+    if (!k) { idSel.innerHTML = '<option value="">Select a record…</option>'; idSel.disabled = true; return; }
+    const rows = k.rows().filter((r) => !r.deleted);
+    idSel.innerHTML = '<option value="">Select a record…</option>'
+      + rows.map((r) => `<option value="${esc(r.id)}">${esc(k.opt(r))}</option>`).join('');
+    idSel.disabled = false;
+  });
 }
 
-function submit(app, targetUser, { title, link, note }) {
+function submit(app, targetUser, { title, link, note, ref }) {
   const nowIso = new Date().toISOString();
   // The server re-derives status from the operator's review flag; this is the
   // optimistic local value so the UI reads right before the snapshot returns.
   const status = targetUser.evidenceReviewRequired ? 'pending' : 'counted';
   upsertEvidence({
     id: newId('ev'), org: ORG, userId: targetUser.id, weekStart: viewWeek,
-    title, link: link || '', note: note || '', status,
+    title, link: link || '', note: note || '', ref: ref || null, status,
     submittedBy: app.user.designation, reviewedBy: null, reviewedAt: null,
     createdAt: nowIso, updatedAt: nowIso, version: 1, deleted: false, deletedAt: null,
   });

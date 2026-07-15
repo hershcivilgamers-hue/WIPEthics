@@ -139,6 +139,8 @@
 .ev-item__note { font-size: 13px; color: var(--text-2); margin-top: 4px; }
 .ev-item__meta { font-size: 11px; color: var(--text-3); margin-top: 4px; }
 .ev-item__actions { display: flex; gap: 6px; margin-top: 8px; }
+.ev-ref-row { display: flex; gap: 8px; }
+.ev-ref-row select { flex: 1; min-width: 0; }
 
 /* --- Activity board (hours-based) ------------------------------------------ */
 .activity-table .cell-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
