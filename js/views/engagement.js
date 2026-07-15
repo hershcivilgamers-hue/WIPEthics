@@ -137,11 +137,15 @@ function openEditor(app, userId) {
   const manualSecs = ENGAGEMENT_SECTIONS.filter((s) => s.mode === 'manual');
   const autoSecs = ENGAGEMENT_SECTIONS.filter((s) => s.mode === 'auto');
 
-  openModal({
+  // Last week's record, so the reviewer can carry its entries forward.
+  const lastRec = getEngagementFor(user.id, engagementWeekShift(viewWeek, -1));
+
+  const dialog = openModal({
     title: `Engagement — ${user.designation}`,
     wide: true,
     body: `
       <p class="modal__message">Week of ${weekLabel(viewWeek)}. Enter the reviewer sections; leave an override blank to keep the derived score (its auto value is shown as the placeholder).</p>
+      <div class="ev-item__actions" style="margin-bottom:10px"><button class="btn btn--sm" id="eng-copy-last" ${lastRec ? '' : 'disabled title="No scores recorded last week"'}>Copy last week’s entries</button></div>
       <div class="card__subtitle">Reviewer sections</div>
       <div class="eng-grid">${manualSecs.map(manualField).join('')}</div>
       <div class="card__subtitle" style="margin-top:10px">Quality overrides <span class="muted-text">(blank = derived)</span></div>
@@ -161,6 +165,15 @@ function openEditor(app, userId) {
           toast('Engagement score saved.', 'success');
         } },
     ],
+  });
+
+  // Carry last week's manual entries and quality overrides into the fields.
+  const copyBtn = lastRec && dialog.querySelector('#eng-copy-last');
+  if (copyBtn) copyBtn.addEventListener('click', () => {
+    const lm = lastRec.manual || {}; const lo = lastRec.overrides || {};
+    for (const s of manualSecs) { const inp = dialog.querySelector(`#eng-m-${s.key}`); if (inp) inp.value = lm[s.key] != null ? String(lm[s.key]) : ''; }
+    for (const s of autoSecs) { const inp = dialog.querySelector(`#eng-o-${s.key}`); if (inp) inp.value = (lo[s.key] != null && lo[s.key] !== '') ? String(lo[s.key]) : ''; }
+    toast('Copied last week’s entries.', 'info');
   });
 }
 

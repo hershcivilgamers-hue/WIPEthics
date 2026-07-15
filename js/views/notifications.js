@@ -18,7 +18,7 @@ import {
   rankUp, promoChecklistComplete } from '../constants.js';
 import {
   users, operations, intel, recruits, directives, cases, compartments, subjects,
-  getActivityForUser, getSetting, blacklist, promoReqs } from '../storage.js';
+  getActivityForUser, getSetting, blacklist, promoReqs, evidence } from '../storage.js';
 import {
   isAssignedToOperation, isAssignedToIntel, canViewOperation, canViewIntel,
   canReadDirective, canManageOrg, canParticipateRecruitment, canRuleTribunal,
@@ -221,6 +221,19 @@ export function buildNotifications(actor, now = Date.now()) {
         if (hit) add('info', '@', `${hit.by} mentioned you in ${src.ref(rec)}.`, src.hash(rec), hit.when);
       }
     }
+  }
+
+  // 14. Evidence awaiting review — for an Omega reviewer, held submissions.
+  if (isCL5(actor) || canManageOrg(actor, 'omega-1')) {
+    const held = evidence().filter((e) => !e.deleted && e.status === 'pending').length;
+    if (held) add('warn', '◈', `${held} evidence submission${held > 1 ? 's' : ''} awaiting your review.`, '#/evidence', null);
+  }
+
+  // 15. Your own evidence was rejected recently — so you know to resubmit.
+  for (const e of evidence()) {
+    if (e.deleted || e.userId !== actor.id || e.status !== 'rejected') continue;
+    const when = e.reviewedAt ? Date.parse(e.reviewedAt) : null;
+    if (when && when > now - FOURTEEN_DAYS) add('bad', '✕', `Your evidence “${e.title}” was rejected.`, '#/evidence', when);
   }
 
   // Newest first; undated items sink to the bottom.
