@@ -38,6 +38,7 @@ function emptyDb() {
     blacklist: [],
     trainings: [],
     engagement: [],
+    evidence: [],
     promoReqs: [],
     settings: [],
     audit: [],
@@ -116,6 +117,7 @@ export function applyServerSnapshot(snap) {
     intel: snap.intel || [],
     trainings: snap.trainings || [],
     engagement: snap.engagement || [],
+    evidence: snap.evidence || [],
     blacklist: snap.blacklist || [],
     promoReqs: snap.promoReqs || [],
     settings: snap.settings || [],
@@ -383,6 +385,22 @@ export function upsertEngagement(record) {
   const i = list.findIndex((r) => r.id === record.id);
   if (i >= 0) list[i] = record; else list.push(record);
   afterWrite('engagement', record);
+  return record;
+}
+
+// Evidence submissions — many per (operator, weekStart); feed the derived score.
+export const evidence = () => loadDb().evidence;
+export function getEvidence(id) {
+  return evidence().find((r) => r.id === id) || null;
+}
+export function evidenceFor(userId, weekStart) {
+  return evidence().filter((r) => r.userId === userId && r.weekStart === weekStart && !r.deleted);
+}
+export function upsertEvidence(record) {
+  const list = evidence();
+  const i = list.findIndex((r) => r.id === record.id);
+  if (i >= 0) list[i] = record; else list.push(record);
+  afterWrite('evidence', record);
   return record;
 }
 

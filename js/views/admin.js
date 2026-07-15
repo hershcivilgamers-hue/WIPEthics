@@ -938,23 +938,28 @@ function drawSystem(panel, app) {
     <div class="card">
       <div class="card__title">Data</div>
       <div class="card__body">
-        <p class="muted-text">Export a full snapshot of the dataset, or reset the system to its seeded state.</p>
+        <p class="muted-text">Download a full JSON backup of every record you can see (credentials are never included), or reset the system to its seeded state.</p>
         <div class="btn-row">
-          <button class="btn" id="sys-export">Export dataset (JSON)</button>
+          <button class="btn" id="sys-export">Download backup (JSON)</button>
           <button class="btn btn--danger" id="sys-reset">Reset system\u2026</button>
         </div>
       </div>
     </div>`;
 
   panel.querySelector('#sys-export').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify(loadDb(), null, 2)], { type: 'application/json' });
+    const snapshot = loadDb();
+    const backup = {
+      _meta: { exportedAt: new Date().toISOString(), exportedBy: app.user.designation, backend },
+      ...snapshot,
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `cairo-aic-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `cairo-aic-backup-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    toast('Dataset exported.', 'success');
+    toast('Backup downloaded.', 'success');
   });
 
   panel.querySelector('#sys-reset').addEventListener('click', async () => {

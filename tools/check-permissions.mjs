@@ -62,4 +62,14 @@ assert.equal(sub(member, pendingCur, refused).action, 'REFUSE_TARGET', 'Ethics m
 // 6. Invariant: a subject can never become a Target with NO authorisation at all.
 assert.equal(sub(assistant, poi, targetNoAuth).ok, false, 'a Target needs an authorisation record');
 
+// 7. Recruitment: CL5 (oversight tier) may run ANY pipeline, mirroring the
+//    client gate. A CL5 Ethics member acting on an Omega-1 candidate is the case
+//    that was wrongly 403'd (client showed the buttons; server denied the write).
+const rec = (actor, cur, next) => authorizeWrite('recruits', actor, cur, next, ctx);
+const omegaRec  = { id: 'r1', ref: 'SCT-0001', org: 'omega-1', stage: 'scouting', votes: {}, version: 1, deleted: false };
+const omegaVote = { ...omegaRec, votes: { m1: 'yes' } };            // member casts own vote
+assert.equal(rec(member, omegaRec, omegaVote).action, 'VOTE_RECRUIT', 'CL5 Ethics member may act on an Omega candidate');
+assert.equal(rec(omegaMgr, omegaRec, { ...omegaRec, votes: { o1: 'yes' } }).action, 'VOTE_RECRUIT', 'Omega CL4 cadre may act on an Omega candidate');
+assert.equal(rec(assistant, omegaRec, { ...omegaRec, votes: { a1: 'yes' } }).ok, false, 'CL4·J Ethics Assistant may NOT touch an Omega candidate');
+
 console.log('OK — surveillance / Target-authorisation gate holds.');

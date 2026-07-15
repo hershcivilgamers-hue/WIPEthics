@@ -393,7 +393,7 @@ export function renderRecruit(host, app, id) {
             ${comments.length ? `<ul class="timeline">${thread}</ul>` : thread}
             ${canComment ? `
               <div class="comment-box">
-                <input id="rc-text" type="text" placeholder="Add to the thread\u2026" />
+                <input id="rc-text" type="text" placeholder="Add to the thread \u2014 @designation to notify\u2026" />
                 <button class="btn btn--sm" id="rc-add">Comment</button>
               </div>` : (isEthics && stage === 'interview' && !cl5 ? '<p class="modal__message">Interview-stage notes are restricted to CL5.</p>' : '')}
           </div>

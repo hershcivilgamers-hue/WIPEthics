@@ -145,6 +145,17 @@ CREATE TABLE IF NOT EXISTS engagement (
 );
 CREATE INDEX IF NOT EXISTS idx_engagement_org ON engagement (org);
 
+-- Per-operator weekly evidence submissions; feed the derived engagement score.
+CREATE TABLE IF NOT EXISTS evidence (
+  id          TEXT PRIMARY KEY,
+  org         TEXT,
+  deleted     INTEGER NOT NULL DEFAULT 0,
+  version     INTEGER NOT NULL DEFAULT 1,
+  updated_at  TEXT,
+  data        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_evidence_org ON evidence (org);
+
 CREATE TABLE IF NOT EXISTS promo_reqs (
   id          TEXT PRIMARY KEY,
   org         TEXT,

@@ -14,10 +14,11 @@
 
 import {
   activityStatus, mergeActivityReqs, ACTIVITY_REQ_SETTING_ID,
-  RECRUIT_PIPELINE_OMEGA, RECRUIT_PIPELINE_ETHICS, strikeActive } from '../constants.js';
+  RECRUIT_PIPELINE_OMEGA, RECRUIT_PIPELINE_ETHICS, strikeActive,
+  rankUp, promoChecklistComplete } from '../constants.js';
 import {
-  users, operations, intel, recruits, directives, cases, compartments,
-  getActivityForUser, getSetting, blacklist } from '../storage.js';
+  users, operations, intel, recruits, directives, cases, compartments, subjects,
+  getActivityForUser, getSetting, blacklist, promoReqs } from '../storage.js';
 import {
   isAssignedToOperation, isAssignedToIntel, canViewOperation, canViewIntel,
   canReadDirective, canManageOrg, canParticipateRecruitment, canRuleTribunal,
@@ -25,7 +26,36 @@ import {
 import { esc, relTime } from '../ui.js';
 
 const SEVEN_DAYS = 7 * 24 * 3600000;
+const FOURTEEN_DAYS = 14 * 24 * 3600000;
 const lastAt = (log) => { const l = log || []; return l.length ? Math.max(...l.map((e) => e.at)) : null; };
+
+// Does `text` @-mention one of `handles` (lower-cased designation / codename)?
+// Boundary-aware so "@EC-1" does not fire on a comment that says "@EC-10".
+// Exported pure so the boundary rule can be unit-tested.
+export function mentionsActor(text, handles) {
+  if (!text) return false;
+  const t = String(text).toLowerCase();
+  return handles.some((h) => {
+    if (!h) return false;
+    let from = 0;
+    for (;;) {
+      const i = t.indexOf('@' + h, from);
+      if (i < 0) return false;
+      const after = t[i + 1 + h.length];
+      if (after === undefined || !/[a-z0-9-]/.test(after)) return true;
+      from = i + 1;
+    }
+  });
+}
+
+// Comment/log/report threads that carry free text, with the fields each uses.
+const MENTION_THREADS = [
+  { rows: () => recruits(),   thread: (r) => r.comments, at: 'ts', hash: (r) => `#/recruit/${r.id}`,   ref: (r) => r.ref },
+  { rows: () => subjects(),   thread: (s) => s.logs,     at: 'ts', hash: (s) => `#/subject/${s.id}`,   ref: (s) => s.ref },
+  { rows: () => cases(),      thread: (c) => c.entries,  at: 'ts', hash: (c) => `#/case/${c.id}`,      ref: (c) => c.ref },
+  { rows: () => operations(), thread: (o) => o.log,      at: 'at', hash: (o) => `#/operation/${o.id}`, ref: (o) => o.ref },
+  { rows: () => intel(),      thread: (s) => s.reports,  at: 'at', hash: (s) => `#/source/${s.id}`,    ref: (s) => s.ref },
+];
 
 // Build the attention list for an operator. Each item:
 //   { tone, icon, text, hash, at }  — `at` (ms) may be null (undated).
@@ -157,6 +187,39 @@ export function buildNotifications(actor, now = Date.now()) {
     if (e.deleted) continue;
     if (e.appeal && e.appeal.status === 'pending' && canManageOrg(actor, e.org)) {
       add('warn', '\u2298', `Blacklist appeal awaiting review \u2014 ${e.name}.`, '#/blacklist', e.appeal.at ? new Date(e.appeal.at).getTime() : null);
+    }
+  }
+
+  // 12. Promotion eligibility: an operator whose checklist is fully met, shown to
+  //     those who may promote them. Skipped if they already filed an advancement
+  //     request (branch 11b covers that), so the two don't double up.
+  for (const u of users()) {
+    if (u.deleted || u.id === actor.id) continue;
+    if (!canPromote(actor, u)) continue; // canPromote already ensures a next rank exists
+    if (u.advancementRequest && u.advancementRequest.status === 'pending') continue;
+    const set = promoReqs().find((r) => r.org === u.org && r.fromRank === u.rank);
+    if (!promoChecklistComplete(u, set)) continue;
+    add('ok', '⬆', `${u.designation} has met every promotion requirement for ${rankUp(u.org, u.rank)} — eligible for review.`, `#/personnel/${u.id}`, null);
+  }
+
+  // 13. @mentions: someone named you in a thread you can see, within a fortnight.
+  //     Derives from the redacted snapshot, so a thread you cannot read cannot
+  //     mention you. One item per record — the most recent mentioning entry.
+  const handles = [actor.designation, actor.codename].filter(Boolean).map((h) => String(h).toLowerCase());
+  if (handles.length) {
+    for (const src of MENTION_THREADS) {
+      for (const rec of src.rows()) {
+        if (rec.deleted) continue;
+        let hit = null;
+        for (const e of (src.thread(rec) || [])) {
+          if (e.by === actor.designation) continue; // your own message
+          const when = typeof e[src.at] === 'number' ? e[src.at] : Date.parse(e[src.at]);
+          if (!(when > now - FOURTEEN_DAYS)) continue;
+          if (!mentionsActor(e.text, handles)) continue;
+          if (!hit || when > hit.when) hit = { when, by: e.by };
+        }
+        if (hit) add('info', '@', `${hit.by} mentioned you in ${src.ref(rec)}.`, src.hash(rec), hit.when);
+      }
     }
   }
 

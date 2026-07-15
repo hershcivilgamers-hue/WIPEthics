@@ -21,8 +21,8 @@ import { buildSnapshot, redactUser, redactDirective, redactCompartment, redactDo
 import { canReadDirective, compartmentClears, canManageOrg, isCL5, canParticipateRecruitment } from '../../js/permissions.js';
 import { CLEARANCES } from '../../js/constants.js';
 
-const WRITABLE = new Set(['users', 'documents', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'engagement', 'blacklist', 'promo_reqs', 'settings']);
-const SNAPSHOT = ['users', 'documents', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'engagement', 'blacklist', 'promo_reqs', 'settings', 'audit'];
+const WRITABLE = new Set(['users', 'documents', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'engagement', 'evidence', 'blacklist', 'promo_reqs', 'settings']);
+const SNAPSHOT = ['users', 'documents', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'engagement', 'evidence', 'blacklist', 'promo_reqs', 'settings', 'audit'];
 
 function uid() { return (globalThis.crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`); }
 function randomToken() {
@@ -285,6 +285,17 @@ async function writeRecord(collection, id, actor, request, repo, env) {
   // CAIRO's interview verdict is authored only by the dedicated /assess endpoint.
   // Freeze it from `cur` so an ordinary sync write can neither forge nor blank it.
   if (collection === 'recruits' && cur) incoming.interviewAssessment = cur.interviewAssessment ?? null;
+  // Evidence: the status a NEW self-submission lands with follows the operator's
+  // review flag — the client cannot choose it, so nobody self-approves an item
+  // that was meant for review. A manager may file with any valid status.
+  if (collection === 'evidence' && !cur) {
+    const target = await repo.getById('users', incoming.userId);
+    const reviewReq = !!(target && target.evidenceReviewRequired);
+    const isMgr = canManageOrg(actor, incoming.org || 'omega-1');
+    if (!isMgr || !['counted', 'pending', 'rejected'].includes(incoming.status)) {
+      incoming.status = reviewReq ? 'pending' : 'counted';
+    }
+  }
   incoming.updatedAt = new Date().toISOString();
 
   if (cur) {

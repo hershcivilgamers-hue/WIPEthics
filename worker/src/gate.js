@@ -274,6 +274,15 @@ function authorizeUser(actor, cur, next) {
     return ok('SET_TAGS', `Updated tags on ${cur.designation}.`);
   }
 
+  // The evidence-review flag: a command tool that makes an operator's evidence
+  // submissions land for review instead of counting straight away. Set by a
+  // manager of the operator's org (CL4·Senior with a stake, or CL5), atomically.
+  if (j(next.evidenceReviewRequired ?? false) !== j(cur.evidenceReviewRequired ?? false) &&
+      !changedOutside(cur, next, ['evidenceReviewRequired', 'events', 'version', 'updatedAt'])) {
+    if (!canManageOrg(actor, cur.org)) return deny('You cannot change the evidence-review setting for this operator.');
+    return ok('SET_EVIDENCE_REVIEW', `${cur.designation}: evidence review ${next.evidenceReviewRequired ? 'required' : 'cleared'}.`);
+  }
+
   // Discharge (honourable / dishonourable) and reinstatement. Junior command
   // (CL4·J with a stake, over a subordinate) or CL5. Only the status, the
   // discharge record and events may change.
@@ -658,7 +667,10 @@ function authorizeActivity(actor, cur, next, ctx) {
 // in the interview stage — is CL5 only.
 function authorizeRecruit(actor, cur, next, ctx) {
   const org = (next || cur).org;
-  if (!canParticipateRecruitment(actor, org)) return deny('Recruitment is run by the unit\u2019s CL4 cadre.');
+  // CL5 (Command / oversight tier) may run any pipeline \u2014 mirrors the client
+  // gate (isCL5 || canParticipateRecruitment). Without the isCL5 half a CL5
+  // Ethics member sees every button but is 403'd on write. See [[permissions-gate-split]].
+  if (!(isCL5(actor) || canParticipateRecruitment(actor, org))) return deny('Recruitment is run by the unit\u2019s CL4 cadre.');
   const ref = (next || cur).ref || 'candidate';
   const isEthics = org === 'ethics-committee';
 
@@ -809,6 +821,7 @@ const AUTHORIZERS = {
   intel: authorizeIntel,
   trainings: authorizeTraining,
   engagement: authorizeEngagement,
+  evidence: authorizeEvidence,
   blacklist: authorizeBlacklist,
   promo_reqs: authorizePromoReq,
   settings: authorizeSettings,
@@ -928,6 +941,42 @@ function authorizeEngagement(actor, cur, next) {
     return next.deleted ? ok('REMOVE_ENGAGEMENT', `Removed an engagement score.`) : ok('RESTORE_ENGAGEMENT', `Restored an engagement score.`);
   }
   return ok('EDIT_ENGAGEMENT', `Engagement re-scored for ${who}.`);
+}
+
+// Evidence submissions. An operator files their OWN evidence; a manager of the
+// owning org (CL4·Senior with a stake, or CL5) may file for anyone and is the
+// only one who can change a submission's status (count / reject). A submitter may
+// withdraw their own item; a manager may withdraw any. The status a self-file
+// lands with is enforced server-side from the operator's review flag (see
+// writeRecord) — never trusted from the client, so nobody self-approves.
+function authorizeEvidence(actor, cur, next) {
+  const org = (next || cur).org || 'omega-1';
+  const rec = next || cur;
+  const isSelf = rec.userId === actor.id;
+  const isMgr = canManageOrg(actor, org);
+  if (!isSelf && !isMgr) return deny('You can only submit your own evidence.');
+
+  if (!cur) {
+    if (isSelf && !isMgr && next.submittedBy !== actor.designation) return deny('Evidence must be filed in your own name.');
+    return ok('SUBMIT_EVIDENCE', `Evidence filed for ${rec.userId}.`);
+  }
+
+  if (!!next.deleted !== !!cur.deleted) {
+    return next.deleted ? ok('REMOVE_EVIDENCE', 'Evidence withdrawn.') : ok('RESTORE_EVIDENCE', 'Evidence restored.');
+  }
+
+  // Accept / reject / re-open is a reviewer action; nothing else may change with it.
+  if (j(next.status) !== j(cur.status)) {
+    if (!isMgr) return deny('Only a reviewer may accept or reject evidence.');
+    if (!['counted', 'pending', 'rejected'].includes(next.status)) return deny('Unknown evidence status.');
+    if (changedOutside(cur, next, ['status', 'reviewedBy', 'reviewedAt', 'version', 'updatedAt'])) {
+      return deny('A review decision cannot be combined with other edits.');
+    }
+    return ok('REVIEW_EVIDENCE', `Evidence ${next.status}.`);
+  }
+
+  // Otherwise an edit to the item's own content by the submitter or a manager.
+  return ok('EDIT_EVIDENCE', 'Evidence updated.');
 }
 
 export function authorizeWrite(collection, actor, cur, next, ctx) {

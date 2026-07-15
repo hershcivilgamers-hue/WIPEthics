@@ -31,6 +31,7 @@ import * as operationsView from './views/operations.js';
 import * as deploymentsView from './views/deployments.js';
 import * as intelView from './views/intel.js';
 import * as engagementView from './views/engagement.js';
+import * as evidenceView from './views/evidence.js';
 import * as blacklistView from './views/blacklist.js';
 import * as trainingsView from './views/trainings.js';
 import * as dashboardView from './views/dashboard.js';
@@ -213,6 +214,7 @@ function dispatch(route, user) {
     case 'intel':        intelView.renderList(view, app); break;
     case 'source':       intelView.renderSource(view, app, route.params.id); break;
     case 'engagement':   engagementView.render(view, app); break;
+    case 'evidence':     evidenceView.render(view, app); break;
     case 'trainings':    trainingsView.render(view, app); break;
     case 'blacklist':    blacklistView.render(view, app); break;
     case 'dashboard':    dashboardView.render(view, app); break;

@@ -12,7 +12,7 @@
 
 import {
   RANKS, ENGAGEMENT_SECTIONS, ENGAGEMENT_MANUAL_KEYS, ENGAGEMENT_OVERRIDE_KEYS,
-  ENGAGEMENT_MAX, ENGAGEMENT_TOTAL_MAX, ENGAGEMENT_WEEK_MS, engagementWeekStart, rankIndex,
+  ENGAGEMENT_MAX, ENGAGEMENT_TOTAL_MAX, engagementWeekStart, engagementWeekShift, rankIndex,
 } from '../constants.js';
 import { engagementModel } from '../engagement.js';
 import { users, getEngagement, getEngagementFor, upsertEngagement, newId } from '../storage.js';
@@ -73,14 +73,14 @@ export function render(host, app) {
       <div>
         <div class="eyebrow">CAIRO · Omega-1</div>
         <h1 class="page-title">Engagement</h1>
-        <div class="page-sub">Weekly engagement score · five sections derived from the logs, three entered by Sr CL4</div>
+        <div class="page-sub">Weekly engagement score · six sections derived from the records, two entered by Sr CL4</div>
       </div>
     </div>
 
     <div class="toolbar eng-weeknav">
       <button class="btn btn--sm" id="eng-prev">◀ Previous week</button>
       <span class="eng-week">${weekLabel(viewWeek)}</span>
-      <button class="btn btn--sm" id="eng-next" ${viewWeek + ENGAGEMENT_WEEK_MS > engagementWeekStart() + 1 ? 'disabled' : ''}>Next week ▶</button>
+      <button class="btn btn--sm" id="eng-next" ${engagementWeekShift(viewWeek, 1) > engagementWeekStart() ? 'disabled' : ''}>Next week ▶</button>
       ${viewWeek !== engagementWeekStart() ? '<button class="btn btn--sm btn--ghost" id="eng-now">This week</button>' : ''}
     </div>
 
@@ -94,12 +94,12 @@ export function render(host, app) {
         <tbody>${list.length ? bodyRows : `<tr><td colspan="${ENGAGEMENT_SECTIONS.length + 4}" class="empty">No active Omega-1 operators.</td></tr>`}</tbody>
       </table>
     </div>
-    <p class="field__hint" style="margin-top:12px">Derived sections (Scouting, Orders, PoIs, Trainings, Activity) come from the week's logs; Evidence, Squadron and RP are entered by a reviewer, who may override any derived score for quality. Expectation: one Scouting/Order/Evidence/PoI engagement a week, one training host every three weeks.</p>
+    <p class="field__hint" style="margin-top:12px">Derived sections (Scouting, Orders, Evidence, PoIs, Trainings, Activity) come from the week's records — Evidence from the <a class="rec-link" href="#/evidence">evidence submissions</a>; Squadron and RP are entered by a reviewer, who may override any derived score for quality. Expectation: one Scouting/Order/Evidence/PoI engagement a week, one training host every three weeks.</p>
   `;
 
-  host.querySelector('#eng-prev').addEventListener('click', () => { viewWeek -= ENGAGEMENT_WEEK_MS; render(host, app); });
+  host.querySelector('#eng-prev').addEventListener('click', () => { viewWeek = engagementWeekShift(viewWeek, -1); render(host, app); });
   const nx = host.querySelector('#eng-next');
-  if (nx) nx.addEventListener('click', () => { viewWeek += ENGAGEMENT_WEEK_MS; render(host, app); });
+  if (nx) nx.addEventListener('click', () => { viewWeek = engagementWeekShift(viewWeek, 1); render(host, app); });
   const nowBtn = host.querySelector('#eng-now');
   if (nowBtn) nowBtn.addEventListener('click', () => { viewWeek = engagementWeekStart(); render(host, app); });
 

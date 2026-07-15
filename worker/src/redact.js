@@ -44,6 +44,7 @@ export function redactUser(actor, user) {
     deletedAt: user.deletedAt ?? null,
     accessLevel: level,
     tags: Array.isArray(user.tags) ? user.tags : [],
+    evidenceReviewRequired: !!user.evidenceReviewRequired,
   };
 
   if (level === 'full') {
@@ -216,6 +217,9 @@ export function buildSnapshot(actor, db) {
     // Engagement scores are a Sr CL4 command tool — shipped only to managers of the
     // owning organisation (or CL5), matching who may view/edit the board.
     engagement: (db.engagement || []).filter((e) => !e.deleted && (isCL5(actor) || canManageOrg(actor, e.org || 'omega-1'))),
+    // Evidence — a manager of the owning org (or CL5) sees all of it; an operator
+    // sees their own submissions (so they can file and track them).
+    evidence: (db.evidence || []).filter((e) => !e.deleted && (isCL5(actor) || canManageOrg(actor, e.org || 'omega-1') || e.userId === actor.id)),
     blacklist: (db.blacklist || []).filter((b) => !b.deleted),
     promoReqs: db.promoReqs || [],
     settings: db.settings || [],

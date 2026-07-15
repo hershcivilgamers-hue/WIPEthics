@@ -113,6 +113,16 @@ export function clearanceForRank(org, rank) {
   return RANK_CLEARANCE[org]?.[rank] || null;
 }
 
+// Has this operator ticked every item on the promotion checklist for their
+// current rank's transition? `reqSet` is the promo_reqs record for (org,fromRank).
+// A transition with no defined items is never "complete" (nothing to meet yet).
+export function promoChecklistComplete(user, reqSet) {
+  const items = (reqSet && reqSet.items) || [];
+  if (!items.length) return false;
+  const checked = new Set(user?.promoChecks || []);
+  return items.every((it) => checked.has(it.id));
+}
+
 // --- Personnel status (the operational lifecycle of a record) ---------------
 export const STATUSES = {
   active:     { code: 'active',     label: 'Active',     tone: 'ok' },
@@ -492,22 +502,25 @@ export function activityInBreach(user, record, reqs = ACTIVITY_REQ_DEFAULT, now 
 }
 
 // --- Omega-1 weekly engagement score ----------------------------------------
-// A per-operator weekly score across eight sections. Five are DERIVED from the
-// logs the system already holds (scouting, orders, PoIs, trainings, activity);
-// three are entered by a Sr CL4 reviewer (evidence, squadron, RP), who may also
-// OVERRIDE any derived score for quality. The review week runs Sunday→Saturday,
-// matching the unit's practice ("backdate from the previous Saturday").
+// A per-operator weekly score across eight sections. Six are DERIVED from the
+// records the system already holds (scouting, orders, evidence, PoIs, trainings,
+// activity); two are entered by a Sr CL4 reviewer (squadron, RP). The reviewer
+// may also OVERRIDE any derived score for quality. The review week runs Sunday→
+// Saturday, matching the unit's practice ("backdate from the previous Saturday").
+//
+// Evidence is derived from the evidence collection (see evidence.js): each
+// counted submission for the week is worth `evidencePer` points, capped at 5.
 //
 // ENGAGEMENT record (one per operator per week; manual fields only — derived
 // scores are recomputed on read, never stored):
 //   { id, userId, org:'omega-1', weekStart(ms),
-//     manual:{ evidence, squadron, rp },
-//     overrides:{ scouting?, orders?, pois?, trainings?, activity? },
+//     manual:{ squadron, rp },
+//     overrides:{ scouting?, orders?, evidence?, pois?, trainings?, activity? },
 //     note, by, createdAt, updatedAt, version, deleted, deletedAt }
 export const ENGAGEMENT_SECTIONS = [
   { key: 'scouting',  label: 'Scouting',       max: 10, mode: 'auto' },
   { key: 'orders',    label: 'Orders',         max: 10, mode: 'auto' },
-  { key: 'evidence',  label: 'Evidence',       max: 5,  mode: 'manual' },
+  { key: 'evidence',  label: 'Evidence',       max: 5,  mode: 'auto' },
   { key: 'pois',      label: 'PoIs / Targets', max: 10, mode: 'auto' },
   { key: 'squadron',  label: 'Squadron',       max: 10, mode: 'manual' },
   { key: 'trainings', label: 'Trainings',      max: 10, mode: 'auto' },
@@ -520,13 +533,38 @@ export const ENGAGEMENT_MAX = Object.fromEntries(ENGAGEMENT_SECTIONS.map((s) => 
 export const ENGAGEMENT_TOTAL_MAX = ENGAGEMENT_SECTIONS.reduce((s, x) => s + x.max, 0); // 70
 // Point weights (tune here). Count-per-point for the count sections; host/attend
 // for trainings. Activity maps logged hours straight to points (capped).
-export const ENGAGEMENT_WEIGHTS = { scoutingPer: 3, ordersPer: 2, poisPer: 2, trainHost: 3, trainAttend: 1 };
+export const ENGAGEMENT_WEIGHTS = { scoutingPer: 3, ordersPer: 2, evidencePer: 2, poisPer: 2, trainHost: 3, trainAttend: 1 };
 export const ENGAGEMENT_WEEK_MS = 7 * 24 * 3600000;
+
+// --- Evidence submissions ---------------------------------------------------
+// Operators submit evidence of their weekly engagement; each counted item feeds
+// the derived Evidence score above. By default a submission counts immediately;
+// an operator flagged `evidenceReviewRequired` has submissions land as 'pending'
+// until a reviewer counts or rejects them.
+//   EVIDENCE record: { id, org:'omega-1', userId, weekStart(ms), title, link,
+//     note, status:'counted'|'pending'|'rejected', submittedBy, reviewedBy,
+//     reviewedAt, createdAt, updatedAt, version, deleted, deletedAt }
+export const EVIDENCE_STATUS = {
+  counted:  { code: 'counted',  label: 'Counted',  tone: 'ok' },
+  pending:  { code: 'pending',  label: 'In review', tone: 'warn' },
+  rejected: { code: 'rejected', label: 'Rejected', tone: 'bad' },
+};
+export const evidenceCounts = (e) => !!e && !e.deleted && e.status === 'counted';
 
 // Sunday 00:00 (local) of the review week containing `now`.
 export function engagementWeekStart(now = Date.now()) {
   const d = new Date(now); d.setHours(0, 0, 0, 0);
   d.setDate(d.getDate() - d.getDay()); // getDay(): 0 = Sunday
+  return d.getTime();
+}
+// Shift a (Sunday-00:00) week start by whole weeks, staying on the calendar so
+// it survives DST. Navigating with a fixed 7×24h step drifts an hour across a
+// DST boundary, so the shifted stamp no longer equals the canonical weekStart a
+// score was saved under — the week reads empty and a duplicate record is made.
+export function engagementWeekShift(weekStart, deltaWeeks) {
+  const d = new Date(weekStart);
+  d.setDate(d.getDate() + deltaWeeks * 7);
+  d.setHours(0, 0, 0, 0);
   return d.getTime();
 }
 export function clampEngagement(v, max) {
@@ -542,6 +580,7 @@ export function engagementAutoScores(raw = {}) {
     scouting:  clampEngagement((raw.scoutingCount || 0) * w.scoutingPer, ENGAGEMENT_MAX.scouting),
     orders:    clampEngagement((raw.ordersCount || 0) * w.ordersPer, ENGAGEMENT_MAX.orders),
     pois:      clampEngagement((raw.poisCount || 0) * w.poisPer, ENGAGEMENT_MAX.pois),
+    evidence:  clampEngagement((raw.evidenceCount || 0) * w.evidencePer, ENGAGEMENT_MAX.evidence),
     trainings: clampEngagement((raw.trainHost || 0) * w.trainHost + (raw.trainAttend || 0) * w.trainAttend, ENGAGEMENT_MAX.trainings),
     activity:  clampEngagement(Math.floor(raw.hours || 0), ENGAGEMENT_MAX.activity),
   };
@@ -566,10 +605,9 @@ export function engagementResolved(raw = {}, record = null) {
 
 // Pure: the two engagement requirements. Req1 — ≥1 Scouting/Order/Evidence/PoI
 // engagement this week. Req2 — ≥1 training hosted in the trailing three weeks.
-export function engagementReqs(raw = {}, record = null) {
-  const man = (record && record.manual) || {};
-  const engagements = (raw.scoutingCount || 0) + (raw.ordersCount || 0) + (raw.poisCount || 0)
-    + (clampEngagement(man.evidence, ENGAGEMENT_MAX.evidence) > 0 ? 1 : 0);
+export function engagementReqs(raw = {}) {
+  const engagements = (raw.scoutingCount || 0) + (raw.ordersCount || 0)
+    + (raw.poisCount || 0) + (raw.evidenceCount || 0);
   return { req1: engagements >= 1, req2: (raw.host3wk || 0) >= 1 };
 }
 

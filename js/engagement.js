@@ -9,8 +9,8 @@
 // numbers are recomputed on every read.
 // =============================================================================
 
-import { ENGAGEMENT_WEEK_MS, engagementResolved, engagementReqs } from './constants.js';
-import { recruits, subjects, users, getActivityForUser, getEngagementFor } from './storage.js';
+import { ENGAGEMENT_WEEK_MS, engagementResolved, engagementReqs, evidenceCounts } from './constants.js';
+import { recruits, subjects, users, getActivityForUser, getEngagementFor, evidenceFor } from './storage.js';
 
 const ms = (t) => (typeof t === 'number' ? t : Date.parse(t)) || 0;
 const inWin = (t, start, end) => { const v = ms(t); return v >= start && v < end; };
@@ -48,6 +48,9 @@ export function gatherRaw(user, weekStart, now = Date.now()) {
     poisCount += (s.logs || []).filter((l) => l.by === desig && inWin(l.ts, weekStart, end)).length;
   }
 
+  // Evidence — this operator's counted submissions for the week (evidence.js).
+  const evidenceCount = evidenceFor(user.id, weekStart).filter(evidenceCounts).length;
+
   // Trainings — attended (own completions) + hosted (completions this operator
   // recorded onto OTHER operators). host3wk drives requirement two.
   let trainAttend = 0; let trainHost = 0; let host3wk = 0;
@@ -62,7 +65,7 @@ export function gatherRaw(user, weekStart, now = Date.now()) {
     }
   }
 
-  return { scoutingCount, ordersCount, poisCount, trainAttend, trainHost, hours, host3wk };
+  return { scoutingCount, ordersCount, poisCount, evidenceCount, trainAttend, trainHost, hours, host3wk };
 }
 
 // The full model for one operator/week: raw counts, the stored record, resolved
@@ -71,6 +74,6 @@ export function engagementModel(user, weekStart, now = Date.now()) {
   const raw = gatherRaw(user, weekStart, now);
   const record = getEngagementFor(user.id, weekStart);
   const resolved = engagementResolved(raw, record);
-  const reqs = engagementReqs(raw, record);
+  const reqs = engagementReqs(raw);
   return { user, weekStart, raw, record, ...resolved, reqs };
 }
