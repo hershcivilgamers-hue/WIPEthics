@@ -6,8 +6,9 @@
   <meta name="robots" content="noindex, nofollow" />
   <title>CAIRO.AIC — Automated Identity &amp; Clearance</title>
 
-  <!-- IBM Plex — the registry type system: Serif (documents & headings),
-       Sans (interface), Mono (designations, IDs, system voice). -->
+  <!-- IBM Plex — the registry type system used by the CL5 preview build only
+       (see styles/preview.css). Loaded globally but applied through preview
+       tokens, so the production design keeps the system font stack. -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
@@ -25,6 +26,10 @@
   <link rel="stylesheet" href="styles/tribunals.css" />
   <link rel="stylesheet" href="styles/compartments.css" />
   <link rel="stylesheet" href="styles/operations.css" />
+
+  <!-- CL5-only preview re-skin. Inert unless js/preview.js sets
+       data-preview="on" on <html>; loaded last so its scoped rules win. -->
+  <link rel="stylesheet" href="styles/preview.css" />
 </head>
 <body>
   <!-- The application renders into this root. -->

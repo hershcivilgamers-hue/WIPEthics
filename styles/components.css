@@ -28,63 +28,46 @@
 .muted-text { color: var(--text-2); font-size: 13px; }
 .restricted-line { color: var(--text-2); font-size: 13.5px; }
 
-/* --- Buttons ---------------------------------------------------------------
-   Squared 3px corners, tactile press, procedural motion. Gold primary carries
-   a low CTA glow; destructive actions are oxblood; system actions read as a
-   monospace console command. A disabled control names its gate. */
+/* --- Buttons --- */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--s2);
-  padding: 9px 18px;
+  padding: 9px 15px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  background: transparent;
+  background: var(--surface-2);
   color: var(--text);
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: .01em;
+  font-size: 13.5px;
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: background .16s, border-color .16s, color .16s, box-shadow .16s, transform .1s;
+  transition: background .12s, border-color .12s, color .12s, opacity .12s;
 }
-.btn:hover { border-color: var(--amber); color: var(--amber); background: rgba(200, 162, 75, .06); }
+.btn:hover { background: var(--surface-3); border-color: #4a5360; }
 .btn:active { transform: translateY(1px); }
-.btn--primary { background: var(--amber); border-color: var(--amber); color: var(--bg); font-weight: 600; box-shadow: var(--gold-glow); }
-.btn--primary:hover { background: var(--amber-2); border-color: var(--amber-2); color: var(--bg); transform: translateY(-1px); box-shadow: 0 10px 26px -8px rgba(200, 162, 75, .7); }
-.btn--primary:active { transform: translateY(1px); box-shadow: 0 2px 8px -4px rgba(200, 162, 75, .6); }
-.btn--danger { background: transparent; border-color: #6b2f2f; color: var(--bad-text); font-weight: 600; box-shadow: none; }
-.btn--danger:hover { background: var(--oxblood); border-color: var(--oxblood); color: #fff; }
-.btn--system { background: #14181a; border-color: var(--line); color: var(--info); font-family: var(--mono); font-size: 12px; font-weight: 500; }
-.btn--system:hover { background: #171d20; border-color: var(--info); color: var(--info); }
+.btn--primary { background: var(--amber); border-color: var(--amber); color: #1a1407; }
+.btn--primary:hover { background: var(--amber-2); border-color: var(--amber-2); }
+.btn--danger { background: rgba(207, 68, 54, .14); border-color: rgba(207, 68, 54, .5); color: #f0a59b; }
+.btn--danger:hover { background: rgba(207, 68, 54, .24); }
 .btn--ghost { background: transparent; border-color: transparent; color: var(--text-2); }
-.btn--ghost:hover { background: var(--surface-2); color: var(--text); border-color: transparent; }
-.btn--sm { padding: 6px 12px; font-size: 12.5px; }
-.btn--xs { padding: 4px 10px; font-size: 11.5px; font-weight: 600; }
+.btn--ghost:hover { background: var(--surface-2); color: var(--text); }
+.btn--sm { padding: 6px 11px; font-size: 12.5px; }
+.btn--xs { padding: 4px 9px; font-size: 11.5px; font-weight: 600; }
 .btn--block { width: 100%; margin-top: var(--s4); }
-.btn:disabled, .btn[disabled], .btn.is-disabled {
-  background: #14181a; border-color: #23282c; color: var(--faint);
-  cursor: not-allowed; box-shadow: none; transform: none;
-}
-.btn:disabled:hover, .btn[disabled]:hover, .btn.is-disabled:hover {
-  background: #14181a; border-color: #23282c; color: var(--faint);
-}
 .btn-row { display: flex; gap: var(--s3); flex-wrap: wrap; }
 
-/* --- Form fields -----------------------------------------------------------
-   Labels above the field in mono; inputs sit on Ink 900; focus draws a
-   Classified-Gold ring. Every field is a record entry. */
+/* --- Form fields --- */
 .field { margin-bottom: var(--s3); }
 .field > label {
   display: block;
-  margin-bottom: 8px;
-  font-family: var(--mono);
+  margin-bottom: 5px;
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: .05em;
-  color: var(--text-2);
-  font-weight: 500;
+  letter-spacing: .1em;
+  color: var(--text-3);
+  font-weight: 600;
 }
 .field input:not([type="checkbox"]):not([type="radio"]),
 .field select,
@@ -93,21 +76,18 @@
 .toolbar__select,
 .inline-set select {
   width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--line);
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  padding: 10px 12px;
+  padding: 9px 11px;
   color: var(--text);
-  transition: border-color .16s, box-shadow .16s;
+  transition: border-color .12s, box-shadow .12s;
 }
 .field input:not([type="checkbox"]):not([type="radio"]):focus,
 .field select:focus,
-.field textarea:focus,
-.toolbar__search:focus,
-.toolbar__select:focus,
-.inline-set select:focus {
-  border-color: var(--amber);
-  box-shadow: 0 0 0 3px rgba(200, 162, 75, .15);
+.field textarea:focus {
+  border-color: var(--amber-dim);
+  box-shadow: 0 0 0 2px rgba(217, 164, 65, .15);
   outline: none;
 }
 
@@ -126,46 +106,42 @@
 .table thead th {
   text-align: left;
   padding: var(--s3) var(--s4);
-  font-family: var(--mono);
-  font-size: 10px;
+  font-size: 10.5px;
   text-transform: uppercase;
-  letter-spacing: .08em;
-  color: var(--text-2);
-  background: var(--surface);
-  border-bottom: 1px solid var(--line-soft);
-  font-weight: 500;
+  letter-spacing: .1em;
+  color: var(--text-3);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
 }
-.table tbody td { padding: 12px var(--s4); border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+.table tbody td { padding: 11px var(--s4); border-bottom: 1px solid var(--line); vertical-align: middle; }
 .table tbody tr:last-child td { border-bottom: none; }
-.table tbody tr[data-id] { cursor: pointer; transition: background .14s; }
+.table tbody tr[data-id] { cursor: pointer; transition: background .1s; }
 .table tbody tr[data-id]:hover { background: var(--surface-2); }
-.cell-name { font-family: var(--serif); font-weight: 500; font-size: 14.5px; }
+.cell-name { font-weight: 600; }
 .cell-right { text-align: right; }
 .row-go { color: var(--text-3); font-size: 12px; opacity: 0; transition: opacity .1s; }
 .table tbody tr[data-id]:hover .row-go { opacity: 1; color: var(--amber); }
 
-/* --- Badges — clearance & status chips -------------------------------------
-   Squared 3px mono chips bordered in the level colour. Clearance is encoded in
-   colour AND the level label, never colour alone. */
+/* --- Badges --- */
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 8px;
-  border-radius: var(--radius);
-  font-family: var(--mono);
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: .06em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
   border: 1px solid transparent;
   white-space: nowrap;
 }
-.badge--cl3   { color: #93b0da; background: rgba(74, 111, 165, .14);  border-color: var(--cl3); }
-.badge--cl4   { color: var(--amber); background: rgba(200, 162, 75, .12); border-color: var(--amber-dim); }
-.badge--cl5   { color: var(--bad-text); background: rgba(166, 61, 61, .16); border-color: var(--cl5); }
-.badge--ok    { color: #84c69a; background: rgba(94, 140, 106, .14);  border-color: rgba(94, 140, 106, .5); }
-.badge--warn  { color: var(--amber); background: rgba(200, 162, 75, .12); border-color: var(--amber-dim); }
-.badge--bad   { color: var(--bad-text); background: rgba(166, 61, 61, .16); border-color: rgba(166, 61, 61, .5); }
-.badge--info  { color: var(--info); background: rgba(143, 179, 201, .12); border-color: rgba(143, 179, 201, .4); }
+.badge--cl3   { color: #9cc0ec; background: rgba(95, 143, 208, .14);  border-color: rgba(95, 143, 208, .4); }
+.badge--cl4   { color: #f0c978; background: rgba(217, 164, 65, .14);  border-color: rgba(217, 164, 65, .4); }
+.badge--cl5   { color: #f0a59b; background: rgba(207, 68, 54, .16);   border-color: rgba(207, 68, 54, .45); }
+.badge--ok    { color: #84d3a3; background: rgba(79, 157, 107, .14);  border-color: rgba(79, 157, 107, .4); }
+.badge--warn  { color: #f0c978; background: rgba(217, 164, 65, .14);  border-color: rgba(217, 164, 65, .4); }
+.badge--bad   { color: #f0a59b; background: rgba(207, 68, 54, .16);   border-color: rgba(207, 68, 54, .45); }
+.badge--info  { color: #9cc0ec; background: rgba(95, 143, 208, .14);  border-color: rgba(95, 143, 208, .4); }
 .badge--muted { color: var(--text-2); background: var(--surface-3);   border-color: var(--line-strong); }
 
 /* --- Org tags --- */
@@ -181,27 +157,25 @@
   border: 1px solid var(--line-strong);
   color: var(--text-2);
 }
-.org-tag--omega   { color: #d18a80; border-color: rgba(176, 82, 74, .5);  background: rgba(176, 82, 74, .12); }
-.org-tag--ethics  { color: var(--ethics); border-color: rgba(143, 179, 201, .5); background: rgba(143, 179, 201, .1); }
-.org-tag--command { color: var(--amber); border-color: var(--amber-dim); background: rgba(200, 162, 75, .1); }
+.org-tag--omega   { color: #e08a7c; border-color: rgba(194, 80, 63, .5);  background: rgba(194, 80, 63, .1); }
+.org-tag--ethics  { color: #93b6e0; border-color: rgba(87, 134, 189, .5); background: rgba(87, 134, 189, .1); }
+.org-tag--command { color: #f0c978; border-color: rgba(217, 164, 65, .5); background: rgba(217, 164, 65, .1); }
 
-/* --- Redaction bar ---------------------------------------------------------
-   A solid ink block over withheld data (prints solid black). Shown only when
-   the viewer is not cleared for the field, so there is nothing to reveal. */
+/* --- Redaction bar --- */
 .redacted {
   display: inline-block;
   width: var(--rw, 12ch);
   vertical-align: middle;
   background:
-    repeating-linear-gradient(45deg, #06080a 0 6px, #12161a 6px 12px);
-  color: rgba(232, 228, 217, .20);
+    repeating-linear-gradient(45deg, #05060a 0 6px, #0c0e13 6px 12px);
+  color: rgba(226, 230, 236, .22);
   font-family: var(--mono);
   font-size: 9px;
   letter-spacing: .18em;
   text-align: center;
   text-transform: uppercase;
   border-radius: 2px;
-  border: 1px solid #06080a;
+  border: 1px solid #05060a;
   line-height: 1.55;
   overflow: hidden;
   user-select: none;
@@ -300,7 +274,7 @@
 .tab__count {
   font-size: 10.5px;
   background: var(--amber);
-  color: var(--bg);
+  color: #1a1407;
   border-radius: 999px;
   padding: 0 6px;
   font-weight: 700;
@@ -361,7 +335,7 @@
   padding: var(--s4);
   border-bottom: 1px solid var(--line);
 }
-.modal__title { font-family: var(--serif); font-size: 17px; font-weight: 600; }
+.modal__title { font-size: 16px; font-weight: 700; }
 .modal__close {
   background: none;
   border: none;
@@ -593,7 +567,7 @@
 .link-list a:hover { text-decoration: underline; }
 
 /* --- Notifications nav badge -------------------------------------------------- */
-.nav__badge { margin-left: auto; background: var(--warn); color: var(--bg); font-size: 10px; font-weight: 700; min-width: 17px; height: 17px; padding: 0 5px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
+.nav__badge { margin-left: auto; background: var(--warn, #d9a441); color: #14171d; font-size: 10px; font-weight: 700; min-width: 17px; height: 17px; padding: 0 5px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
 
 /* --- Custom document composer ------------------------------------------------ */
 .doc-composer { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s4); align-items: start; }

@@ -1,0 +1,317 @@
+/* ===========================================================================
+   preview.css — CL5-only preview of the Ethics Committee UMS redesign.
+
+   The whole SCP Ethics Committee design-handoff re-skin lives here, scoped
+   under :root[data-preview="on"]. That attribute is set by js/preview.js ONLY
+   for CL5 operators (and can be toggled off from the TESTING banner). Everyone
+   below CL5 — and CL5 with preview off — sees the production design untouched,
+   because none of these rules match without the attribute.
+
+   IBM Plex is loaded globally in index.html but only *applied* through the
+   tokens below, so non-preview users keep the system font stack.
+
+   This is a review build. Nothing here is final; see PR / design handoff v0.1.
+   =========================================================================== */
+
+/* --- Motion (global keyframes; only referenced by preview/export chrome) --- */
+@keyframes blink   { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@keyframes scan    { 0% { transform: translateY(-100%); } 100% { transform: translateY(2200%); } }
+@keyframes stampin {
+  0%   { opacity: 0;   transform: rotate(-14deg) scale(1.6); }
+  60%  { opacity: .9; }
+  100% { opacity: .88; transform: rotate(-8deg) scale(1); }
+}
+
+/* ===========================================================================
+   Design tokens — the registry palette, retargeted for the preview subtree.
+   Scoped on :root[data-preview] so it also wins over the [data-theme] blocks.
+   =========================================================================== */
+:root[data-preview="on"] {
+  /* Surfaces — Ink family */
+  --bg:          #0A0C0D;
+  --ink-800:     #0E1113;
+  --surface:     #12161A;
+  --surface-2:   #171B1F;
+  --surface-3:   #1C1F22;
+  --line:        #2E3439;
+  --line-strong: #3B4247;
+  --line-soft:   #1F2427;
+
+  /* Text */
+  --text:   #E8E4D9;
+  --text-2: #8A9198;
+  --text-3: #5C636A;
+  --faint:  #4B5258;
+
+  /* Classified Gold */
+  --amber:     #C8A24B;
+  --amber-2:   #D8B45E;
+  --amber-dim: #6B5A2E;
+  --gold-glow: 0 6px 20px -8px rgba(200, 162, 75, .6);
+
+  /* Clearance L0–L5 */
+  --cl0: #6B7075;
+  --cl1: #5E8C6A;
+  --cl2: #4E8A9A;
+  --cl3: #4A6FA5;
+  --cl4: #C8A24B;
+  --cl5: #A63D3D;
+
+  /* Organisation accents */
+  --omega:   #B0524A;
+  --ethics:  #8FB3C9;
+  --command: #C8A24B;
+
+  /* Semantic status */
+  --ok:       #5E8C6A;
+  --warn:     #C8A24B;
+  --bad:      #A63D3D;
+  --bad-text: #C96A6A;
+  --info:     #8FB3C9;
+  --muted:    #6B7075;
+
+  /* Geometry */
+  --radius:    3px;
+  --radius-lg: 5px;
+
+  /* Type — IBM Plex */
+  --serif: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --sans:  "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono:  "IBM Plex Mono", ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  /* Layout */
+  --sidebar-w: 210px;
+  --max-content: 1180px;
+
+  /* Elevation */
+  --shadow: 0 26px 50px -30px rgba(0, 0, 0, .9);
+}
+
+/* ===========================================================================
+   Base — serif headings, gold selection
+   =========================================================================== */
+:root[data-preview="on"] :is(h1, h2, h3) { font-family: var(--serif); font-weight: 600; letter-spacing: -.01em; }
+:root[data-preview="on"] ::selection { background: var(--amber); color: var(--bg); }
+
+/* ===========================================================================
+   Layout — shell, classbar, sidebar, page head, auth
+   =========================================================================== */
+:root[data-preview="on"] .shell__main { background: linear-gradient(180deg, var(--ink-800), var(--bg)); }
+
+:root[data-preview="on"] .classbar {
+  background:
+    repeating-linear-gradient(-45deg, rgba(200, 162, 75, .06) 0 10px, transparent 10px 20px),
+    var(--surface);
+}
+
+:root[data-preview="on"] .sidebar { background: var(--bg); border-right-color: var(--line-soft); }
+:root[data-preview="on"] .sidebar__brand { border-bottom-color: var(--line-soft); }
+:root[data-preview="on"] .sidebar__name { font-family: var(--serif); font-weight: 600; letter-spacing: .01em; }
+
+:root[data-preview="on"] .nav { padding: var(--s3) 0; }
+:root[data-preview="on"] .nav__group-label { padding: var(--s2) 20px; }
+:root[data-preview="on"] .nav__item {
+  padding: 10px 20px;
+  border-radius: 0;
+  font-size: 13px;
+  transition: background .14s, color .14s, border-color .14s;
+}
+:root[data-preview="on"] .nav__item:hover { background: var(--surface); color: var(--text); }
+:root[data-preview="on"] .nav__item--active { background: var(--surface); color: var(--amber); border-left-color: var(--amber); }
+:root[data-preview="on"] .sidebar__foot { border-top-color: var(--line-soft); }
+
+:root[data-preview="on"] .page-title { font-family: var(--serif); font-size: 26px; font-weight: 600; letter-spacing: -.01em; }
+:root[data-preview="on"] .page-sub { font-family: var(--mono); font-size: 12px; letter-spacing: .02em; margin-top: 5px; }
+
+:root[data-preview="on"] .topbar__search:focus { box-shadow: 0 0 0 3px rgba(200, 162, 75, .15); }
+
+:root[data-preview="on"] .auth {
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(200, 162, 75, .05), transparent 60%),
+    var(--bg);
+}
+:root[data-preview="on"] .auth__name { font-family: var(--serif); font-size: 20px; font-weight: 700; letter-spacing: .02em; }
+:root[data-preview="on"] .auth__error {
+  color: var(--bad-text);
+  background: rgba(166, 61, 61, .12);
+  border-color: rgba(166, 61, 61, .4);
+}
+
+/* ===========================================================================
+   Components — buttons, forms, tables, badges, redaction
+   =========================================================================== */
+:root[data-preview="on"] .btn {
+  padding: 9px 18px;
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .01em;
+  transition: background .16s, border-color .16s, color .16s, box-shadow .16s, transform .1s;
+}
+:root[data-preview="on"] .btn:hover { border-color: var(--amber); color: var(--amber); background: rgba(200, 162, 75, .06); }
+:root[data-preview="on"] .btn:active { transform: translateY(1px); }
+:root[data-preview="on"] .btn--primary { background: var(--amber); border-color: var(--amber); color: var(--bg); font-weight: 600; box-shadow: var(--gold-glow); }
+:root[data-preview="on"] .btn--primary:hover { background: var(--amber-2); border-color: var(--amber-2); color: var(--bg); transform: translateY(-1px); box-shadow: 0 10px 26px -8px rgba(200, 162, 75, .7); }
+:root[data-preview="on"] .btn--primary:active { transform: translateY(1px); box-shadow: 0 2px 8px -4px rgba(200, 162, 75, .6); }
+:root[data-preview="on"] .btn--danger { background: transparent; border-color: #6b2f2f; color: var(--bad-text); font-weight: 600; box-shadow: none; }
+:root[data-preview="on"] .btn--danger:hover { background: var(--oxblood, #7A2B2B); border-color: var(--oxblood, #7A2B2B); color: #fff; }
+:root[data-preview="on"] .btn--ghost { background: transparent; border-color: transparent; color: var(--text-2); }
+:root[data-preview="on"] .btn--ghost:hover { background: var(--surface-2); color: var(--text); border-color: transparent; }
+:root[data-preview="on"] .btn--sm { padding: 6px 12px; font-size: 12.5px; }
+:root[data-preview="on"] .btn--xs { padding: 4px 10px; font-size: 11.5px; }
+:root[data-preview="on"] .btn:disabled,
+:root[data-preview="on"] .btn[disabled] { background: #14181a; border-color: #23282c; color: var(--faint); box-shadow: none; transform: none; }
+
+/* Form fields — mono labels above, inputs on Ink 900, gold focus ring */
+:root[data-preview="on"] .field > label {
+  margin-bottom: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .05em;
+  color: var(--text-2);
+  font-weight: 500;
+}
+:root[data-preview="on"] .field input:not([type="checkbox"]):not([type="radio"]),
+:root[data-preview="on"] .field select,
+:root[data-preview="on"] .field textarea,
+:root[data-preview="on"] .toolbar__search,
+:root[data-preview="on"] .toolbar__select,
+:root[data-preview="on"] .inline-set select {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  transition: border-color .16s, box-shadow .16s;
+}
+:root[data-preview="on"] .field input:not([type="checkbox"]):not([type="radio"]):focus,
+:root[data-preview="on"] .field select:focus,
+:root[data-preview="on"] .field textarea:focus,
+:root[data-preview="on"] .toolbar__search:focus,
+:root[data-preview="on"] .toolbar__select:focus,
+:root[data-preview="on"] .inline-set select:focus {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px rgba(200, 162, 75, .15);
+  outline: none;
+}
+
+/* Tables — mono headers, serif name cells */
+:root[data-preview="on"] .table thead th {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .08em;
+  color: var(--text-2);
+  background: var(--surface);
+  border-bottom-color: var(--line-soft);
+  font-weight: 500;
+}
+:root[data-preview="on"] .table tbody td { padding: 12px var(--s4); border-bottom-color: var(--line-soft); }
+:root[data-preview="on"] .table tbody tr[data-id]:hover { background: var(--surface-2); }
+:root[data-preview="on"] .cell-name { font-family: var(--serif); font-weight: 500; font-size: 14.5px; }
+
+/* Badges — squared mono clearance/status chips in level colours */
+:root[data-preview="on"] .badge {
+  padding: 3px 8px;
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .06em;
+}
+:root[data-preview="on"] .badge--cl3   { color: #93b0da; background: rgba(74, 111, 165, .14);  border-color: var(--cl3); }
+:root[data-preview="on"] .badge--cl4   { color: var(--amber); background: rgba(200, 162, 75, .12); border-color: var(--amber-dim); }
+:root[data-preview="on"] .badge--cl5   { color: var(--bad-text); background: rgba(166, 61, 61, .16); border-color: var(--cl5); }
+:root[data-preview="on"] .badge--ok    { color: #84c69a; background: rgba(94, 140, 106, .14);  border-color: rgba(94, 140, 106, .5); }
+:root[data-preview="on"] .badge--warn  { color: var(--amber); background: rgba(200, 162, 75, .12); border-color: var(--amber-dim); }
+:root[data-preview="on"] .badge--bad   { color: var(--bad-text); background: rgba(166, 61, 61, .16); border-color: rgba(166, 61, 61, .5); }
+:root[data-preview="on"] .badge--info  { color: var(--info); background: rgba(143, 179, 201, .12); border-color: rgba(143, 179, 201, .4); }
+
+/* Org tags */
+:root[data-preview="on"] .org-tag--omega   { color: #d18a80; border-color: rgba(176, 82, 74, .5);  background: rgba(176, 82, 74, .12); }
+:root[data-preview="on"] .org-tag--ethics  { color: var(--ethics); border-color: rgba(143, 179, 201, .5); background: rgba(143, 179, 201, .1); }
+:root[data-preview="on"] .org-tag--command { color: var(--amber); border-color: var(--amber-dim); background: rgba(200, 162, 75, .1); }
+
+/* Redaction bar — solid ink block */
+:root[data-preview="on"] .redacted {
+  background: repeating-linear-gradient(45deg, #06080a 0 6px, #12161a 6px 12px);
+  color: rgba(232, 228, 217, .20);
+  border-color: #06080a;
+}
+
+/* Misc chrome */
+:root[data-preview="on"] .modal__title { font-family: var(--serif); font-size: 17px; font-weight: 600; }
+:root[data-preview="on"] .tab__count { color: var(--bg); }
+:root[data-preview="on"] .nav__badge { background: var(--warn); color: var(--bg); }
+
+/* Surveillance / tribunals semantic chips → oxblood/info */
+:root[data-preview="on"] .subj-kind--info,
+:root[data-preview="on"] .case-kind--info { color: var(--info); border-color: rgba(143, 179, 201, .5); background: rgba(143, 179, 201, .1); }
+:root[data-preview="on"] .subj-kind--bad,
+:root[data-preview="on"] .case-kind--bad  { color: var(--bad-text); border-color: rgba(166, 61, 61, .55); background: rgba(166, 61, 61, .12); }
+:root[data-preview="on"] .case-kind--warn { color: var(--amber); border-color: var(--amber-dim); background: rgba(200, 162, 75, .1); }
+
+/* ===========================================================================
+   Dossier / directives — serif display + oxblood redaction tints
+   =========================================================================== */
+:root[data-preview="on"] .dossier-codename { font-family: var(--serif); font-size: 25px; font-weight: 600; letter-spacing: -.01em; }
+:root[data-preview="on"] .directive__title { font-family: var(--serif); font-size: 16px; font-weight: 600; }
+:root[data-preview="on"] .memo__body { font-family: var(--serif); font-size: 15px; line-height: 1.7; }
+:root[data-preview="on"] .redact-banner {
+  background: rgba(166, 61, 61, .1);
+  border-color: rgba(166, 61, 61, .35);
+}
+:root[data-preview="on"] .redact-banner strong { color: var(--bad-text); }
+:root[data-preview="on"] .redact-banner--soft { background: rgba(200, 162, 75, .08); border-color: rgba(200, 162, 75, .3); }
+:root[data-preview="on"] .memo__withheld { border-color: rgba(166, 61, 61, .5); }
+
+/* ===========================================================================
+   TESTING banner + preview toggle — shown only in preview mode (CL5)
+   =========================================================================== */
+.preview-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s3, 12px);
+  flex-wrap: wrap;
+  padding: 7px 16px;
+  background:
+    repeating-linear-gradient(-45deg, rgba(200, 162, 75, .16) 0 12px, rgba(200, 162, 75, .06) 12px 24px),
+    #171207;
+  border-bottom: 1px solid #6B5A2E;
+  color: #E8E4D9;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.preview-banner__dot { color: #C8A24B; font-weight: 700; letter-spacing: .2em; }
+.preview-banner__msg { color: #C8A24B; }
+.preview-banner__note { color: #b9b7ac; letter-spacing: .06em; text-transform: none; font-size: 11px; }
+.preview-banner__btn {
+  background: transparent;
+  border: 1px solid #6B5A2E;
+  color: #C8A24B;
+  border-radius: 3px;
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  cursor: pointer;
+  transition: background .16s, color .16s, border-color .16s;
+}
+.preview-banner__btn:hover { background: rgba(200, 162, 75, .12); border-color: #C8A24B; }
+
+/* The small on/off control shown in the topbar for CL5 operators. */
+.preview-toggle {
+  background: var(--surface-2);
+  color: var(--text-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 9px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.preview-toggle:hover { color: var(--text); border-color: var(--line-strong); }
+.preview-toggle--on { color: #C8A24B; border-color: #6B5A2E; }

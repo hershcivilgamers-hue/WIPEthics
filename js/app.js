@@ -14,6 +14,7 @@ import { currentUser, endSession, setServerUser } from './state.js';
 import { logAction } from './audit.js';
 import { NAV, parseHash, isRouteAllowed } from './router.js';
 import { THEMES, getTheme, setTheme } from './theme.js';
+import { previewAllowed, previewOn, setPreviewPref, applyPreview } from './preview.js';
 import { getUser, getSubject, getCase, getRecruit, applyServerSnapshot } from './storage.js';
 import { esc, clearanceBadge, toast } from './ui.js';
 import * as api from './api.js';
@@ -132,8 +133,21 @@ function renderShell(user, route) {
 
   const banner = `CLASSIFIED \u00b7 ${esc(CONFIG.facility)} \u00b7 OPERATOR CLEARANCE ${esc(clearanceWord(user))} \u00b7 ACCESS LOGGED`;
 
+  // Redesign preview (CL5 only). data-preview is already applied in renderApp;
+  // here we surface the TESTING banner and the topbar on/off toggle.
+  const canPreview = previewAllowed(user);
+  const pvOn = previewOn(user);
+  const previewBanner = pvOn ? `
+      <div class="preview-banner">
+        <span class="preview-banner__dot">\u25cf TESTING</span>
+        <span class="preview-banner__msg">Ethics UMS redesign \u2014 preview build</span>
+        <span class="preview-banner__note">Visible to Command (CL5) only \u00b7 reads live data \u00b7 not production</span>
+        <button class="preview-banner__btn" id="preview-off">Switch to classic</button>
+      </div>` : '';
+
   root.innerHTML = `
     <div class="shell">
+      ${previewBanner}
       <div class="classbar classbar--top">${banner}</div>
       <div class="shell__body">
         ${buildSidebar(user, activeName)}
@@ -149,6 +163,7 @@ function renderShell(user, route) {
                 <span class="op-chip__name">${esc(user.codename)}</span>
                 ${clearanceBadge(user.clearance)}
               </div>
+              ${canPreview ? `<button class="preview-toggle ${pvOn ? 'preview-toggle--on' : ''}" id="preview-toggle" title="Toggle the Ethics UMS redesign preview (Command / CL5 only)">Preview: ${pvOn ? 'On' : 'Off'}</button>` : ''}
               <select id="theme-select" class="theme-select" aria-label="Display theme" title="Display theme">
                 ${THEMES.map((t) => `<option value="${t.id}" ${t.id === getTheme() ? 'selected' : ''}>${t.label}</option>`).join('')}
               </select>
@@ -169,6 +184,10 @@ function renderShell(user, route) {
   if (tourBtn) tourBtn.addEventListener('click', () => startTutorial(app));
   const themeSel = root.querySelector('#theme-select');
   if (themeSel) themeSel.addEventListener('change', (e) => setTheme(e.target.value));
+  const previewToggle = root.querySelector('#preview-toggle');
+  if (previewToggle) previewToggle.addEventListener('click', () => { setPreviewPref(!previewOn(user)); renderApp(); });
+  const previewOff = root.querySelector('#preview-off');
+  if (previewOff) previewOff.addEventListener('click', () => { setPreviewPref(false); renderApp(); });
 
   root.querySelector('#logout').addEventListener('click', () => {
     logAction(user, 'LOGOUT', `${user.designation} signed out.`);
@@ -260,6 +279,7 @@ function updateNavBadge(user) {
 
 function renderApp() {
   const user = app.user;
+  applyPreview(user); // set/clear data-preview + document-export mode for this operator
   if (!user) {
     loginView.render(root, app);
     return;

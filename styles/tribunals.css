@@ -20,9 +20,9 @@
   border: 1px solid var(--line-strong);
   color: var(--text-2);
 }
-.case-kind--info { color: var(--info); border-color: rgba(143, 179, 201, .5); background: rgba(143, 179, 201, .1); }
-.case-kind--bad  { color: var(--bad-text); border-color: rgba(166, 61, 61, .55); background: rgba(166, 61, 61, .12); }
-.case-kind--warn { color: var(--amber); border-color: var(--amber-dim); background: rgba(200, 162, 75, .1); }
+.case-kind--info { color: #9cc0ec; border-color: rgba(95, 143, 208, .5); background: rgba(95, 143, 208, .1); }
+.case-kind--bad  { color: #f0a59b; border-color: rgba(207, 68, 54, .55); background: rgba(207, 68, 54, .12); }
+.case-kind--warn { color: #f0c978; border-color: rgba(217, 164, 65, .5); background: rgba(217, 164, 65, .1); }
 .case-kind--muted { color: var(--text-2); background: var(--surface-3); }
 
 /* --- Cross-reference links (to dossiers / subjects) --- */
