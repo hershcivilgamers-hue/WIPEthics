@@ -3,7 +3,7 @@
 
    The whole SCP Ethics Committee design-handoff re-skin lives here, scoped
    under :root[data-preview="on"]. That attribute is set by js/preview.js ONLY
-   for CL5 operators (and can be toggled off from the TESTING banner). Everyone
+   for CL5 operators (and can be toggled off from the topbar). Everyone
    below CL5 — and CL5 with preview off — sees the production design untouched,
    because none of these rules match without the attribute.
 
@@ -265,43 +265,8 @@
 :root[data-preview="on"] .memo__withheld { border-color: rgba(166, 61, 61, .5); }
 
 /* ===========================================================================
-   TESTING banner + preview toggle — shown only in preview mode (CL5)
+   Preview toggle — the CL5 on/off control in the topbar
    =========================================================================== */
-.preview-banner {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--s3, 12px);
-  flex-wrap: wrap;
-  padding: 7px 16px;
-  background:
-    repeating-linear-gradient(-45deg, rgba(200, 162, 75, .16) 0 12px, rgba(200, 162, 75, .06) 12px 24px),
-    #171207;
-  border-bottom: 1px solid #6B5A2E;
-  color: #E8E4D9;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-size: 11px;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-}
-.preview-banner__dot { color: #C8A24B; font-weight: 700; letter-spacing: .2em; }
-.preview-banner__msg { color: #C8A24B; }
-.preview-banner__note { color: #b9b7ac; letter-spacing: .06em; text-transform: none; font-size: 11px; }
-.preview-banner__btn {
-  background: transparent;
-  border: 1px solid #6B5A2E;
-  color: #C8A24B;
-  border-radius: 3px;
-  padding: 3px 10px;
-  font: inherit;
-  font-size: 10.5px;
-  letter-spacing: .08em;
-  cursor: pointer;
-  transition: background .16s, color .16s, border-color .16s;
-}
-.preview-banner__btn:hover { background: rgba(200, 162, 75, .12); border-color: #C8A24B; }
-
-/* The small on/off control shown in the topbar for CL5 operators. */
 .preview-toggle {
   background: var(--surface-2);
   color: var(--text-2);

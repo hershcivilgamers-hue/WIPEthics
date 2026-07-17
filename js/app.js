@@ -133,21 +133,13 @@ function renderShell(user, route) {
 
   const banner = `CLASSIFIED \u00b7 ${esc(CONFIG.facility)} \u00b7 OPERATOR CLEARANCE ${esc(clearanceWord(user))} \u00b7 ACCESS LOGGED`;
 
-  // Redesign preview (CL5 only). data-preview is already applied in renderApp;
-  // here we surface the TESTING banner and the topbar on/off toggle.
+  // Redesign preview (CL5 only). data-preview is applied in renderApp; here we
+  // surface the topbar on/off toggle for Command operators.
   const canPreview = previewAllowed(user);
   const pvOn = previewOn(user);
-  const previewBanner = pvOn ? `
-      <div class="preview-banner">
-        <span class="preview-banner__dot">\u25cf TESTING</span>
-        <span class="preview-banner__msg">Ethics UMS redesign \u2014 preview build</span>
-        <span class="preview-banner__note">Visible to Command (CL5) only \u00b7 reads live data \u00b7 not production</span>
-        <button class="preview-banner__btn" id="preview-off">Switch to classic</button>
-      </div>` : '';
 
   root.innerHTML = `
     <div class="shell">
-      ${previewBanner}
       <div class="classbar classbar--top">${banner}</div>
       <div class="shell__body">
         ${buildSidebar(user, activeName)}
@@ -186,8 +178,6 @@ function renderShell(user, route) {
   if (themeSel) themeSel.addEventListener('change', (e) => setTheme(e.target.value));
   const previewToggle = root.querySelector('#preview-toggle');
   if (previewToggle) previewToggle.addEventListener('click', () => { setPreviewPref(!previewOn(user)); renderApp(); });
-  const previewOff = root.querySelector('#preview-off');
-  if (previewOff) previewOff.addEventListener('click', () => { setPreviewPref(false); renderApp(); });
 
   root.querySelector('#logout').addEventListener('click', () => {
     logAction(user, 'LOGOUT', `${user.designation} signed out.`);
