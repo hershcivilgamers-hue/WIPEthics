@@ -16,9 +16,12 @@ import {
 import {
   users, evidenceFor, getEvidence, upsertEvidence, getUser, upsertUser, newId,
   directives, intel, subjects, getSubject, upsertSubject, getIntel, upsertIntel,
-  operations, getOperation, upsertOperation,
+  operations, getOperation, upsertOperation, cases, getCase, upsertCase,
 } from '../storage.js';
-import { isCL5, canManageOrg, canManageSubject, canLogIntel, canLogToOperation } from '../permissions.js';
+import {
+  isCL5, canManageOrg, canManageSubject, canLogIntel, canLogToOperation,
+  canManageTribunal, canViewCase,
+} from '../permissions.js';
 import { logAction } from '../audit.js';
 import { esc, fmtDate, toast, openModal, confirmDialog } from '../ui.js';
 
@@ -32,6 +35,7 @@ const REF_KINDS = {
   intel:     { label: 'Intelligence', rows: () => intel(),       hash: (id) => `#/source/${id}`,     opt: (s) => `${s.ref || ''} ${s.codename || ''}`.trim() || s.id },
   subject:   { label: 'Surveillance', rows: () => subjects(),    hash: (id) => `#/subject/${id}`,     opt: (s) => `${s.ref || ''} ${s.alias || ''}`.trim() || s.id },
   operation: { label: 'Operation',    rows: () => operations(),  hash: (id) => `#/operation/${id}`,   opt: (o) => `${o.ref || ''} ${o.name || ''}`.trim() || o.id },
+  case:      { label: 'Case',         rows: () => cases(),       hash: (id) => `#/case/${id}`,        opt: (c) => `${c.ref || ''} ${c.title || ''}`.trim() || c.id },
 };
 const refHash = (ref) => (ref && REF_KINDS[ref.kind] ? REF_KINDS[ref.kind].hash(ref.id) : '#');
 
@@ -235,9 +239,10 @@ function submit(app, targetUser, { title, link, note, ref }) {
 // Mirror the citation onto the linked record's own thread — but only where a
 // thread exists AND the submitter is cleared to write it (the same gate the
 // Worker enforces, so this never 403s). Surveillance subjects and operations
-// take a log entry; intel sources take a report. Standing Orders are immutable
-// and have no thread, so an Order stays a one-way link. Compartmented subjects
-// and operations are skipped to avoid the need-to-know write block.
+// take a log entry, intel sources take a report, and tribunal cases take a
+// docket entry (only where the submitter can run that case). Standing Orders
+// are immutable and have no thread, so an Order stays a one-way link.
+// Compartmented records are skipped to avoid the need-to-know write block.
 function crossPost(app, ref, evTitle) {
   if (!ref || !ref.id) return;
   const actor = app.user;
@@ -264,6 +269,14 @@ function crossPost(app, ref, evTitle) {
     o.updatedAt = nowIso; o.version = (o.version || 1) + 1;
     upsertOperation(o);
     logAction(actor, 'LOG_OPERATION', `Evidence citation added to ${o.ref}.`);
+  } else if (ref.kind === 'case') {
+    const c = getCase(ref.id);
+    if (!c || c.deleted || c.compartment || !canViewCase(actor, c) || !canManageTribunal(actor)) return;
+    // Docket entries read newest-first, so prepend (matches tribunals.js addEntry).
+    c.entries = [{ id: newId('ent'), ts: nowIso, by: actor.designation, type: 'note', text: cite }, ...(c.entries || [])];
+    c.updatedAt = nowIso; c.version = (c.version || 1) + 1;
+    upsertCase(c);
+    logAction(actor, 'ADD_CASE_ENTRY', `Evidence citation added to ${c.ref}.`);
   }
 }
 
