@@ -16,8 +16,9 @@ import {
 import {
   users, evidenceFor, getEvidence, upsertEvidence, getUser, upsertUser, newId,
   directives, intel, subjects, getSubject, upsertSubject, getIntel, upsertIntel,
+  operations, getOperation, upsertOperation,
 } from '../storage.js';
-import { isCL5, canManageOrg, canManageSubject, canLogIntel } from '../permissions.js';
+import { isCL5, canManageOrg, canManageSubject, canLogIntel, canLogToOperation } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { esc, fmtDate, toast, openModal, confirmDialog } from '../ui.js';
 
@@ -27,9 +28,10 @@ let viewWeek = engagementWeekStart();
 // The record kinds an evidence item can point at. `rows` reads the (already
 // access-filtered) snapshot, so an operator can only reference what they can see.
 const REF_KINDS = {
-  directive: { label: 'Order',        rows: () => directives(), hash: (id) => `#/directive/${id}`, opt: (d) => `${d.ref || ''} ${d.title || ''}`.trim() || d.id },
-  intel:     { label: 'Intelligence', rows: () => intel(),      hash: (id) => `#/source/${id}`,     opt: (s) => `${s.ref || ''} ${s.codename || ''}`.trim() || s.id },
-  subject:   { label: 'Surveillance', rows: () => subjects(),   hash: (id) => `#/subject/${id}`,     opt: (s) => `${s.ref || ''} ${s.alias || ''}`.trim() || s.id },
+  directive: { label: 'Order',        rows: () => directives(),  hash: (id) => `#/directive/${id}`, opt: (d) => `${d.ref || ''} ${d.title || ''}`.trim() || d.id },
+  intel:     { label: 'Intelligence', rows: () => intel(),       hash: (id) => `#/source/${id}`,     opt: (s) => `${s.ref || ''} ${s.codename || ''}`.trim() || s.id },
+  subject:   { label: 'Surveillance', rows: () => subjects(),    hash: (id) => `#/subject/${id}`,     opt: (s) => `${s.ref || ''} ${s.alias || ''}`.trim() || s.id },
+  operation: { label: 'Operation',    rows: () => operations(),  hash: (id) => `#/operation/${id}`,   opt: (o) => `${o.ref || ''} ${o.name || ''}`.trim() || o.id },
 };
 const refHash = (ref) => (ref && REF_KINDS[ref.kind] ? REF_KINDS[ref.kind].hash(ref.id) : '#');
 
@@ -232,10 +234,10 @@ function submit(app, targetUser, { title, link, note, ref }) {
 
 // Mirror the citation onto the linked record's own thread — but only where a
 // thread exists AND the submitter is cleared to write it (the same gate the
-// Worker enforces, so this never 403s). Surveillance subjects take a log entry;
-// intel sources take a report. Standing Orders are immutable and have no thread,
-// so an Order stays a one-way link. Compartmented subjects are skipped to avoid
-// the need-to-know write block.
+// Worker enforces, so this never 403s). Surveillance subjects and operations
+// take a log entry; intel sources take a report. Standing Orders are immutable
+// and have no thread, so an Order stays a one-way link. Compartmented subjects
+// and operations are skipped to avoid the need-to-know write block.
 function crossPost(app, ref, evTitle) {
   if (!ref || !ref.id) return;
   const actor = app.user;
@@ -255,6 +257,13 @@ function crossPost(app, ref, evTitle) {
     s.updatedAt = nowIso; s.version = (s.version || 1) + 1;
     upsertIntel(s);
     logAction(actor, 'LOG_INTEL', `Evidence citation added to ${s.ref}.`);
+  } else if (ref.kind === 'operation') {
+    const o = getOperation(ref.id);
+    if (!o || o.deleted || o.compartment || !canLogToOperation(actor, o)) return;
+    o.log = [...(o.log || []), { id: newId('ol'), at: Date.now(), by: actor.designation, type: 'note', text: cite }];
+    o.updatedAt = nowIso; o.version = (o.version || 1) + 1;
+    upsertOperation(o);
+    logAction(actor, 'LOG_OPERATION', `Evidence citation added to ${o.ref}.`);
   }
 }
 
