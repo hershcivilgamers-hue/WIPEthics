@@ -83,12 +83,14 @@ const banner = (code, category) => {
   return `${m.tier} // ${cls} // ${m.caveat}`;
 };
 
-// SCP cover-sheet colour band by classification level: amber/yellow at Level 3,
-// red at Level 4 and above. Derived from the marking text so every builder gets
-// it automatically; commendations and unlevelled records stay unbanded.
+// Classification band colour by level, per the Document System design language:
+// L2 teal, L3 slate, L4 registry gold, L5 oxblood. Derived from the marking
+// text so every builder gets it automatically; unlevelled records stay unbanded.
 function classBand(classification) {
-  if (/\bLEVEL 3\b/.test(classification)) return 'classbar--yellow';
-  if (/\bLEVEL [45]\b/.test(classification)) return 'classbar--red';
+  if (/\bLEVEL 5\b/.test(classification)) return 'classbar--l5';
+  if (/\bLEVEL 4\b/.test(classification)) return 'classbar--l4';
+  if (/\bLEVEL 3\b/.test(classification)) return 'classbar--l3';
+  if (/\bLEVEL 2\b/.test(classification)) return 'classbar--l2';
   return '';
 }
 
@@ -244,146 +246,154 @@ function letterhead(orgKey, office) {
 
 const CSS = `
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: #6b6b6b; }
-  body { font-family: 'Times New Roman', Times, Georgia, serif; color: #111; font-size: 12pt; line-height: 1.5; }
+  html, body { margin: 0; padding: 0; background: #2a2d30; }
+  body { font-family: 'IBM Plex Serif', Georgia, 'Times New Roman', serif; color: #1a1e21; font-size: 12pt; line-height: 1.6; }
 
-  .controls { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; justify-content: center; padding: 10px; background: #2b2b2b; box-shadow: 0 1px 6px rgba(0,0,0,.4); }
-  .controls button { font-family: Arial, Helvetica, sans-serif; font-size: 13px; padding: 7px 16px; border: 1px solid #555; background: #f4f4f2; color: #1b1b1a; border-radius: 3px; cursor: pointer; }
-  .controls button:hover { background: #fff; }
-  .controls .ghost { background: transparent; color: #ddd; }
+  .controls { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; justify-content: center; padding: 10px; background: #12161a; box-shadow: 0 1px 8px rgba(0,0,0,.5); }
+  .controls button { font-family: 'IBM Plex Sans', Arial, Helvetica, sans-serif; font-size: 13px; font-weight: 600; padding: 8px 18px; border: 1px solid #c8a24b; background: #c8a24b; color: #0a0c0d; border-radius: 3px; cursor: pointer; transition: background .16s, transform .1s; }
+  .controls button:hover { background: #d8b45e; }
+  .controls button:active { transform: translateY(1px); }
+  .controls .ghost { background: transparent; color: #b9b7ac; border-color: #3b4247; }
+  .controls .ghost:hover { background: transparent; color: #e8e4d9; border-color: #c8a24b; }
 
-  .sheet { background: #fff; max-width: 830px; margin: 22px auto; box-shadow: 0 2px 18px rgba(0,0,0,.4); }
-  .pad { padding: 46px 66px 40px; position: relative; }
+  .sheet { background: #fbfaf6; max-width: 830px; margin: 26px auto; box-shadow: 0 30px 70px -40px #000; }
+  .pad { padding: 48px 66px 40px; position: relative; }
   .pad > *:not(.wm) { position: relative; z-index: 1; }
 
-  /* Crest watermark behind the record */
+  /* Crest watermark behind the record — ~5% ink */
   .wm { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; opacity: .05; z-index: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .wm img { width: 430px; max-width: 70%; }
+  .wm img { width: 430px; max-width: 68%; }
 
-  /* Classification markings: plain, bold, black — markings, not decoration */
-  .classbar { text-align: center; font-family: Arial, Helvetica, sans-serif; font-weight: 700; letter-spacing: .12em; font-size: 9pt; color: #111; text-transform: uppercase; padding: 2px 0; }
-  .classbar--top { margin-bottom: 14px; }
+  /* Classification banners — colour-coded by level; first thing a reader sees.
+     L2 teal · L3 slate · L4 registry gold · L5 oxblood. */
+  .classbar { text-align: center; font-family: 'IBM Plex Mono', 'Courier New', monospace; font-weight: 600; letter-spacing: .16em; font-size: 8.5pt; color: #1a1e21; text-transform: uppercase; padding: 5px 0; border: 1px solid #d8d2c4; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .classbar--top { margin-bottom: 16px; }
   .classbar--bottom { margin-top: 22px; }
-  .classbar--yellow { background: #e8b100; color: #201a00; border-top: 3px solid #201a00; border-bottom: 3px solid #201a00; padding: 5px 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .classbar--red { background: #8f1515; color: #fff; border-top: 3px solid #3a0808; border-bottom: 3px solid #3a0808; padding: 5px 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .classbar--l2 { background: #e3eaec; color: #2f5560; border-color: #c4d2d6; }
+  .classbar--l3 { background: #3a3f43; color: #fbfaf6; border-color: #3a3f43; }
+  .classbar--l4 { background: #8a6d2b; color: #fbfaf6; border-color: #8a6d2b; }
+  .classbar--l5 { background: #7a2b2b; color: #fbfaf6; border-color: #7a2b2b; }
+  .classbar--expunged { background: #1a1e21; color: #c96a6a; border-color: #1a1e21; }
 
   /* Letterhead — thick rule here + the builder's thin hr = double rule */
-  .lh { display: flex; align-items: center; gap: 16px; color: #111; margin-top: 6px; border-bottom: 2.5px solid #111; padding-bottom: 12px; }
+  .lh { display: flex; align-items: center; gap: 16px; color: #1a1e21; margin-top: 6px; border-bottom: 2.5px solid #1a1e21; padding-bottom: 12px; }
   .lh__seal { flex: 0 0 64px; }
   .lh__spacer { flex: 0 0 64px; }
   .lh__stack { flex: 1; text-align: center; min-width: 0; }
-  .lh__org { font-size: 9pt; letter-spacing: .32em; text-transform: uppercase; color: #333; white-space: nowrap; }
-  .lh__body { font-size: 16pt; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; margin-top: 3px; white-space: nowrap; }
-  .lh__office { font-size: 8.5pt; letter-spacing: .16em; text-transform: uppercase; color: #444; margin-top: 4px; white-space: nowrap; }
+  .lh__org { font-family: 'IBM Plex Serif', Georgia, serif; font-weight: 700; font-size: 10pt; letter-spacing: .30em; text-transform: uppercase; color: #1a1e21; white-space: nowrap; }
+  .lh__body { font-family: 'IBM Plex Sans', Arial, sans-serif; font-size: 15pt; letter-spacing: .10em; text-transform: uppercase; font-weight: 700; margin-top: 4px; white-space: nowrap; color: #8a6d2b; }
+  .lh__office { font-family: 'IBM Plex Mono', 'Courier New', monospace; font-size: 8pt; letter-spacing: .14em; text-transform: uppercase; color: #5a5f63; margin-top: 5px; white-space: nowrap; }
 
-  hr.rule { border: none; border-top: 1px solid #111; margin: 12px 0; }
-  hr.rule--bold { border: none; border-top: 2.5px solid #111; margin: 5px 0; }
+  hr.rule { border: none; border-top: 1px solid #1a1e21; margin: 12px 0; }
+  hr.rule--bold { border: none; border-top: 2.5px solid #1a1e21; margin: 5px 0; }
   /* The thin half of the letterhead's double rule sits close under the thick. */
   .lh + hr.rule { margin: 3px 0 16px; }
 
-  p { margin: 0 0 11px; text-align: justify; }
-  .muted { color: #666; font-style: italic; }
+  p { margin: 0 0 11px; text-align: justify; color: #2a2e31; }
+  .muted { color: #7a7f83; font-style: italic; }
 
   /* Court caption (record of proceedings) */
   .court { text-align: center; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; font-size: 13pt; margin-top: 6px; }
-  .matter { text-align: center; font-style: italic; margin: 10px auto 0; max-width: 86%; font-size: 11.5pt; }
-  .caseno { text-align: center; margin-top: 6px; font-size: 11pt; letter-spacing: .04em; }
+  .matter { text-align: center; font-style: italic; margin: 10px auto 0; max-width: 86%; font-size: 11.5pt; color: #2a2e31; }
+  .caseno { text-align: center; margin-top: 6px; font-family: 'IBM Plex Mono', 'Courier New', monospace; font-size: 10.5pt; letter-spacing: .04em; }
   .parties { margin: 18px auto 6px; max-width: 78%; }
   .party { display: flex; justify-content: space-between; align-items: baseline; padding: 3px 0; gap: 16px; }
   .party .pname { font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
-  .party .role { font-style: italic; color: #333; white-space: nowrap; }
-  .vs { text-align: center; font-style: italic; margin: 4px 0; color: #333; }
-  /* One title treatment for every document (memo-title kept as an alias). */
-  .doc-title, .memo-title { text-align: center; font-weight: 700; text-transform: uppercase; letter-spacing: .18em; font-size: 14pt; padding: 8px 0; }
-  .panel-line { text-align: center; font-size: 10.5pt; color: #333; margin-bottom: 4px; }
+  .party .role { font-style: italic; color: #5a5f63; white-space: nowrap; }
+  .vs { text-align: center; font-style: italic; margin: 4px 0; color: #5a5f63; }
+  /* Document title — Serif, title-case. Section heads (jhead/so) stay Sans. */
+  .doc-title, .memo-title { text-align: center; font-family: 'IBM Plex Serif', Georgia, serif; font-weight: 700; letter-spacing: -.005em; font-size: 20pt; padding: 10px 0 4px; }
+  .panel-line { text-align: center; font-size: 10.5pt; color: #5a5f63; margin-bottom: 4px; }
 
   /* Numbered record paragraphs */
   .judgment { counter-reset: para; margin-top: 12px; }
-  .jhead { font-weight: 700; text-transform: uppercase; letter-spacing: .06em; font-size: 11pt; margin: 20px 0 8px; }
-  .para { counter-increment: para; position: relative; padding-left: 2.7em; margin-bottom: 10px; text-align: justify; }
-  .para::before { content: counter(para) "."; position: absolute; left: 0; top: 0; font-variant-numeric: tabular-nums; }
+  .jhead { font-family: 'IBM Plex Sans', Arial, sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; font-size: 10.5pt; color: #3a3f43; margin: 20px 0 8px; }
+  .para { counter-increment: para; position: relative; padding-left: 2.7em; margin-bottom: 10px; text-align: justify; color: #2a2e31; }
+  .para::before { content: counter(para) "."; position: absolute; left: 0; top: 0; font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; color: #8a6d2b; }
   .reclist { list-style: none; padding: 0 0 0 2.7em; margin: 0 0 11px; }
   .reclist li { padding: 2px 0; }
-  .reclist .ref { font-family: 'Courier New', monospace; font-weight: 700; }
+  .reclist .ref { font-family: 'IBM Plex Mono', 'Courier New', monospace; font-weight: 600; color: #8a6d2b; }
 
-  .so { font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin: 20px 0 14px; }
-  .plainlist { margin: 0 0 11px; padding-left: 22px; }
+  .so { font-family: 'IBM Plex Sans', Arial, sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: #3a3f43; margin: 20px 0 14px; }
+  .plainlist { margin: 0 0 11px; padding-left: 22px; color: #2a2e31; }
   .plainlist li { padding: 2px 0; }
-  .docquote { margin: 12px 0 14px; padding: 2px 16px; border-left: 3px solid #333; font-style: italic; }
-  .docquote__att { text-align: right; font-style: normal; font-size: 10.5pt; color: #333; margin-top: 4px; }
+  .docquote { margin: 12px 0 14px; padding: 2px 16px; border-left: 3px solid #8a6d2b; font-style: italic; color: #2a2e31; }
+  .docquote__att { text-align: right; font-style: normal; font-size: 10.5pt; color: #5a5f63; margin-top: 4px; }
   .votebox { border-collapse: collapse; margin: 2px auto 12px; }
-  .votebox th { font-family: Arial, Helvetica, sans-serif; font-size: 8pt; letter-spacing: .06em; text-transform: uppercase; border-bottom: 2px solid #111; padding: 3px 18px; color: #333; }
-  .votebox td { border: 1px solid #999; padding: 6px 18px; text-align: center; font-size: 14pt; font-weight: 700; }
+  .votebox th { font-family: 'IBM Plex Sans', Arial, sans-serif; font-size: 8pt; letter-spacing: .08em; text-transform: uppercase; border-bottom: 2px solid #1a1e21; padding: 3px 18px; color: #5a5f63; }
+  .votebox td { border: 1px solid #d8d2c4; padding: 6px 18px; text-align: center; font-size: 14pt; font-weight: 700; }
   .votemembers { border-collapse: collapse; width: 86%; margin: 0 auto 12px; }
-  .votemembers td { border-bottom: 1px solid #ccc; padding: 4px 8px; font-size: 10.5pt; }
-  .votemembers .vm-pos { text-align: right; color: #333; }
+  .votemembers td { border-bottom: 1px solid #e0d9c9; padding: 4px 8px; font-size: 10.5pt; }
+  .votemembers .vm-pos { text-align: right; color: #5a5f63; }
 
-  /* Signature */
+  /* Signature — italic serif name over an ink rule + mono caption */
   .sign { margin-top: 10px; }
-  .sign__line { width: 280px; border-bottom: 1px solid #111; height: 30px; }
-  .sign__name { font-weight: 700; margin-top: 4px; }
-  .sign__role, .sign__date { font-size: 10pt; color: #333; }
-  .sig-e { font-family: 'Courier New', monospace; font-size: 7.5pt; letter-spacing: .04em; color: #333; margin-top: 3px; }
-  .attest { font-style: italic; max-width: 470px; margin: 4px 0 12px; font-size: 10.5pt; color: #222; }
+  .sign__line { width: 280px; border-bottom: 1px solid #1a1e21; height: 30px; }
+  .sign__name { font-style: italic; font-size: 15pt; font-weight: 500; margin-top: 4px; color: #2a2e31; }
+  .sign__role, .sign__date { font-family: 'IBM Plex Mono', 'Courier New', monospace; font-size: 8.5pt; letter-spacing: .04em; text-transform: uppercase; color: #5a5f63; }
+  .sig-e { font-family: 'IBM Plex Mono', 'Courier New', monospace; font-size: 7.5pt; letter-spacing: .04em; color: #7a7f83; margin-top: 3px; }
+  .attest { font-style: italic; max-width: 470px; margin: 4px 0 12px; font-size: 10.5pt; color: #2a2e31; }
 
   /* Memorandum */
   .memo-h { width: 100%; border-collapse: collapse; margin: 8px 0 12px; }
   .memo-h td { padding: 3px 0; vertical-align: top; font-size: 11.5pt; }
-  .memo-h .ml { width: 150px; font-family: Arial, Helvetica, sans-serif; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; font-size: 9pt; padding-top: 5px; color: #333; }
+  .memo-h .ml { width: 150px; font-family: 'IBM Plex Sans', Arial, sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; font-size: 9pt; padding-top: 5px; color: #5a5f63; }
   .memo-body { margin-top: 6px; }
   .signoff { margin-top: 24px; }
-  .signoff .sn { font-weight: 700; }
-  .signoff .sr { font-size: 10pt; color: #333; }
+  .signoff .sn { font-style: italic; font-size: 14pt; }
+  .signoff .sr { font-family: 'IBM Plex Mono', 'Courier New', monospace; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .04em; color: #5a5f63; }
 
   /* Official record (personnel / surveillance) */
-  .doc-sub { text-align: center; font-size: 10pt; letter-spacing: .1em; text-transform: uppercase; color: #444; margin-top: 3px; }
+  .doc-sub { text-align: center; font-family: 'IBM Plex Mono', 'Courier New', monospace; font-size: 9pt; letter-spacing: .1em; text-transform: uppercase; color: #5a5f63; margin-top: 4px; }
   .fieldgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 36px; margin: 16px 0 6px; }
-  .field { display: flex; justify-content: space-between; gap: 14px; padding: 6px 0; border-bottom: 1px solid #ccc; font-size: 11pt; }
-  .field .fl { color: #555; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .05em; padding-top: 2px; font-family: Arial, Helvetica, sans-serif; }
-  .field .fv { font-weight: 600; text-align: right; }
+  .field { display: flex; justify-content: space-between; gap: 14px; padding: 7px 0; border-bottom: 1px solid #e0d9c9; font-size: 11pt; }
+  .field .fl { color: #5a5f63; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .06em; padding-top: 3px; font-family: 'IBM Plex Sans', Arial, sans-serif; }
+  .field .fv { font-family: 'IBM Plex Mono', 'Courier New', monospace; font-weight: 500; text-align: right; color: #1a1e21; }
 
   .log { width: 100%; border-collapse: collapse; margin-top: 4px; }
-  .log td { padding: 6px 8px; border-bottom: 1px solid #ddd; vertical-align: top; font-size: 11pt; }
-  .log .ld { width: 130px; color: #555; font-size: 9pt; text-transform: uppercase; letter-spacing: .04em; font-family: Arial, Helvetica, sans-serif; }
-  .log .lby { font-size: 9.5pt; color: #666; font-style: italic; margin-top: 2px; }
+  .log td { padding: 6px 8px; border-bottom: 1px solid #e0d9c9; vertical-align: top; font-size: 11pt; }
+  .log .ld { width: 130px; color: #5a5f63; font-size: 9pt; text-transform: uppercase; letter-spacing: .04em; font-family: 'IBM Plex Mono', 'Courier New', monospace; }
+  .log .lby { font-size: 9.5pt; color: #7a7f83; font-style: italic; margin-top: 2px; }
 
   /* Markings */
-  .notice { border: 1px solid #7a1010; color: #7a1010; padding: 9px 12px; margin: 16px 0; font-family: Arial, Helvetica, sans-serif; font-size: 10pt; letter-spacing: .02em; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .notice--soft { border-color: #999; color: #444; }
-  .withheld { text-align: center; border: 1px dashed #7a1010; color: #7a1010; padding: 16px; margin: 16px 0; font-family: 'Courier New', monospace; font-size: 10.5pt; letter-spacing: .08em; }
-  .redacted { font-family: 'Courier New', monospace; background: #111; color: #111; padding: 0 4px; border-radius: 1px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .sealed { font-family: 'Courier New', monospace; font-size: 10pt; letter-spacing: .05em; color: #7a1010; }
+  .notice { border: 1px solid #d8d2c4; border-left: 3px solid #7a2b2b; color: #2a2e31; background: #fbfaf6; padding: 12px 16px; margin: 16px 0; font-family: 'IBM Plex Serif', Georgia, serif; font-size: 10.5pt; letter-spacing: .01em; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .notice .hl, .notice strong { font-family: 'IBM Plex Mono', 'Courier New', monospace; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #7a2b2b; }
+  .notice--soft { border-left-color: #8a8f93; }
+  .notice--soft .hl, .notice--soft strong { color: #5a5f63; }
+  .withheld { text-align: center; border: 1px dashed #7a2b2b; color: #7a2b2b; padding: 16px; margin: 16px 0; font-family: 'IBM Plex Mono', 'Courier New', monospace; font-size: 10.5pt; letter-spacing: .08em; }
+  .redacted { font-family: 'IBM Plex Mono', 'Courier New', monospace; background: #1a1e21; color: #1a1e21; padding: 0 4px; border-radius: 1px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .sealed { font-family: 'IBM Plex Mono', 'Courier New', monospace; font-size: 10pt; letter-spacing: .05em; color: #7a2b2b; }
 
   /* Formal correspondence (candidate-facing letters) */
   .letter-date { text-align: right; margin: 2px 0 20px; font-size: 11.5pt; }
   .letter-addr { margin: 0 0 20px; line-height: 1.55; font-size: 11.5pt; }
   .letter-addr .la-name { font-weight: 700; }
-  .letter-addr .la-ref { font-family: 'Courier New', monospace; font-size: 10pt; color: #333; }
+  .letter-addr .la-ref { font-family: 'IBM Plex Mono', 'Courier New', monospace; font-size: 10pt; color: #5a5f63; }
   .letter-salut { margin: 0 0 12px; }
   .letter-vale { margin: 26px 0 4px; }
   /* An emphatic determination line, ruled top and bottom. */
-  .determination { text-align: center; font-weight: 700; text-transform: uppercase; letter-spacing: .11em; font-size: 12.5pt; margin: 20px auto; padding: 12px 0; border-top: 1.5px solid #111; border-bottom: 1.5px solid #111; }
-  /* The Committee's creed — a black-ruled seal motto, set at the foot. */
-  .creed { text-align: center; margin: 24px auto 2px; padding: 9px 0; border-top: 1.5px solid #111; border-bottom: 1.5px solid #111; color: #1a1a1a; text-transform: uppercase; font-weight: 700; letter-spacing: .16em; font-size: 9.5pt; }
+  .determination { text-align: center; font-family: 'IBM Plex Sans', Arial, sans-serif; font-weight: 700; text-transform: uppercase; letter-spacing: .11em; font-size: 12.5pt; margin: 20px auto; padding: 12px 0; border-top: 1.5px solid #1a1e21; border-bottom: 1.5px solid #1a1e21; }
+  /* The Committee's creed — a ruled seal motto, set at the foot. */
+  .creed { text-align: center; margin: 24px auto 2px; padding: 9px 0; border-top: 1.5px solid #8a6d2b; border-bottom: 1.5px solid #8a6d2b; color: #8a6d2b; text-transform: uppercase; font-weight: 700; letter-spacing: .16em; font-size: 9.5pt; }
 
   /* Candidate feedback sections — quiet rules, no security accents */
-  .fb-q { padding: 12px 0; border-bottom: 1px solid #ccc; page-break-inside: avoid; }
+  .fb-q { padding: 12px 0; border-bottom: 1px solid #e0d9c9; page-break-inside: avoid; }
   .fb-q:last-of-type { border-bottom: none; }
-  .fb-qhead { font-family: Arial, Helvetica, sans-serif; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .08em; color: #555; margin-bottom: 5px; }
-  .fb-qhead .fb-n { font-weight: 700; color: #111; margin-right: 8px; }
+  .fb-qhead { font-family: 'IBM Plex Sans', Arial, sans-serif; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .08em; color: #5a5f63; margin-bottom: 5px; }
+  .fb-qhead .fb-n { font-weight: 700; color: #1a1e21; margin-right: 8px; }
   .fb-prompt { margin: 0 0 8px; }
-  .fb-label { font-family: Arial, Helvetica, sans-serif; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .08em; color: #555; margin: 6px 0 3px; }
-  .fb-answer { background: #f6f5f1; border: 1px solid #ddd; padding: 7px 10px; font-size: 11pt; white-space: pre-wrap; }
+  .fb-label { font-family: 'IBM Plex Sans', Arial, sans-serif; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .08em; color: #5a5f63; margin: 6px 0 3px; }
+  .fb-answer { background: #f0ece1; border: 1px solid #e0d9c9; padding: 7px 10px; font-size: 11pt; white-space: pre-wrap; }
   .fb-feedback { margin-top: 7px; font-size: 11pt; }
   .fb-feedback .fb-k { font-weight: 700; }
 
   /* Distribution & handling + records footer */
-  .handling { margin-top: 24px; border-top: 1px solid #111; padding-top: 9px; font-family: Arial, Helvetica, sans-serif; font-size: 8.5pt; color: #222; line-height: 1.5; }
+  .handling { margin-top: 24px; border-top: 1px solid #1a1e21; padding-top: 9px; font-family: 'IBM Plex Sans', Arial, sans-serif; font-size: 8.5pt; color: #3a3f43; line-height: 1.5; }
   .handling > div { margin: 3px 0; }
-  .handling .hl { font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding-right: 4px; }
-  .foot { margin-top: 10px; padding-top: 7px; border-top: 1px solid #999; display: flex; justify-content: space-between; align-items: center; gap: 12px; font-family: 'Courier New', monospace; font-size: 8pt; color: #333; text-transform: uppercase; }
+  .handling .hl { font-family: 'IBM Plex Mono', 'Courier New', monospace; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; padding-right: 4px; color: #7a2b2b; }
+  .foot { margin-top: 10px; padding-top: 7px; border-top: 1px solid #d8d2c4; display: flex; justify-content: space-between; align-items: center; gap: 12px; font-family: 'IBM Plex Mono', 'Courier New', monospace; font-size: 8pt; color: #5a5f63; text-transform: uppercase; letter-spacing: .04em; }
   .foot__c { text-align: center; letter-spacing: .06em; flex: 1; }
-  .foot--meta { border-top: none; margin-top: 14px; padding-top: 0; color: #555; }
+  .foot--meta { border-top: none; margin-top: 14px; padding-top: 0; color: #7a7f83; }
   .foot--meta + .foot { margin-top: 4px; }
 
   @page { size: A4; margin: 13mm 15mm; }
@@ -435,6 +445,9 @@ function frameDoc({ title, classification, inner, footerRef, actor, org = null, 
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${esc(footerRef)} \u2014 ${esc(title)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap" rel="stylesheet" />
 <style>${CSS}</style>
 </head>
 <body>

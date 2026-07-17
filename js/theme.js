@@ -9,7 +9,7 @@
 // =============================================================================
 
 export const THEMES = [
-  { id: 'graphite', label: 'Graphite' },
+  { id: 'graphite', label: 'Registry' },
   { id: 'amber', label: 'Amber CRT' },
   { id: 'green', label: 'Green CRT' },
   { id: 'nightwatch', label: 'Nightwatch' },
