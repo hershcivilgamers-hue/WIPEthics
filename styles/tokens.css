@@ -1,66 +1,90 @@
 /* ===========================================================================
    tokens.css — The design system.
 
-   One place for every colour, font and spacing value. The look is a cool
-   graphite institutional terminal: near-black surfaces, hairline borders,
-   monospaced identifiers, and clearance colour as the organising signal.
+   One place for every colour, font and spacing value. The look is the Ethics
+   Committee registry language: cold institutional Ink surfaces, hairline
+   borders, IBM Plex type, Classified Gold as the sole warm accent, and
+   clearance colour (L0–L5) as the organising signal. Oxblood is reserved for
+   danger and expunged data. A paired paper palette drives exported documents.
+   Ref: SCP Ethics Committee UMS + Document System design handoff (v0.1).
    =========================================================================== */
 
 :root {
-  /* --- Surfaces (cool graphite, never pure black) --- */
-  --bg:          #0e1014;
-  --surface:     #14171d;
-  --surface-2:   #191d25;
-  --surface-3:   #1f2530;
-  --line:        #2a3039;
-  --line-strong: #3a424f;
+  /* --- Surfaces (Ink family — cold, never pure black) --- */
+  --bg:          #0A0C0D;  /* Ink 900 — app background, inputs */
+  --ink-800:     #0E1113;  /* panel background / main gradient floor */
+  --surface:     #12161A;  /* cards, raised surfaces, sidebar, topbar */
+  --surface-2:   #171B1F;  /* hover / secondary raise, chips, badges */
+  --surface-3:   #1C1F22;  /* Surface Alt — deepest raise */
+  --line:        #2E3439;  /* borders / dividers */
+  --line-strong: #3B4247;  /* stronger border (ghost button, hover) */
+  --line-soft:   #1F2427;  /* inner dividers, table rows */
 
   /* --- Text --- */
-  --text:   #e2e6ec;
-  --text-2: #9aa2b0;
-  --text-3: #69707e;
+  --text:   #E8E4D9;  /* Bone — primary text on dark */
+  --text-2: #8A9198;  /* Muted — secondary text / labels */
+  --text-3: #5C636A;  /* fainter labels (Muted → Faint) */
+  --faint:  #4B5258;  /* disabled / icon idle */
 
-  /* --- System brand --- */
-  --amber:     #d9a441;
-  --amber-2:   #f0bf63;
-  --amber-dim: #6f5a2c;
+  /* --- System brand — Classified Gold --- */
+  --amber:     #C8A24B;  /* primary accent, focus, CTAs */
+  --amber-2:   #D8B45E;  /* hover / brighter gold */
+  --amber-dim: #6B5A2E;  /* muted gold border (active chip, seals) */
+  --gold-glow: 0 6px 20px -8px rgba(200, 162, 75, .6);
 
-  /* --- Clearance signal --- */
-  --cl3: #5f8fd0;
-  --cl4: #d9a441;
-  --cl5: #cf4436;
+  /* --- Clearance signal (L0–L5) — never encode by colour alone --- */
+  --cl0: #6B7075;  /* Unrestricted */
+  --cl1: #5E8C6A;  /* Confidential */
+  --cl2: #4E8A9A;  /* Restricted */
+  --cl3: #4A6FA5;  /* Secret */
+  --cl4: #C8A24B;  /* Top Secret */
+  --cl5: #A63D3D;  /* Cosmic Top Secret */
 
   /* --- Organisation accents --- */
-  --omega:   #c2503f;
-  --ethics:  #5786bd;
-  --command: #d9a441;
+  --omega:   #B0524A;  /* MTF Omega-1 — enforcement / oxblood-leaning */
+  --ethics:  #8FB3C9;  /* Ethics Committee — info blue */
+  --command: #C8A24B;  /* Site Command — gold */
 
   /* --- Semantic status --- */
-  --ok:    #4f9d6b;
-  --warn:  #d9a441;
-  --bad:   #cf4436;
-  --info:  #5f8fd0;
-  --muted: #6b7280;
+  --ok:       #5E8C6A;  /* Verify Green (dark) */
+  --warn:     #C8A24B;
+  --bad:      #A63D3D;  /* danger */
+  --bad-text: #C96A6A;  /* Oxblood text on dark */
+  --info:     #8FB3C9;  /* Info Blue — IDs, system links */
+  --muted:    #6B7075;
+  --slate-ui: #3A3F43;  /* neutral chrome / L3 banners */
+
+  /* --- Paper / archive palette (exported documents & paper surfaces) --- */
+  --paper:         #FBFAF6;  /* document page base */
+  --vellum:        #F0ECE1;  /* table fills, reference blocks */
+  --manila:        #EFE7D3;  /* alt paper tone */
+  --rule:          #D8D2C4;  /* paper borders / rules */
+  --doc-ink:       #1A1E21;  /* document body text */
+  --doc-body:      #2A2E31;  /* long-form serif body */
+  --registry-gold: #8A6D2B;  /* seals, L4, document accent (paper) */
+  --oxblood:       #7A2B2B;  /* L5 banners, expunged (paper) */
+  --verify-paper:  #2F6B4F;  /* approved / active (paper) */
 
   /* --- Geometry --- */
-  --radius:    4px;
-  --radius-lg: 7px;
+  --radius:    3px;  /* buttons / inputs / chips */
+  --radius-lg: 5px;  /* cards */
 
-  /* --- Type --- */
-  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+  /* --- Type — IBM Plex family --- */
+  --serif: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --sans:  "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono:  "IBM Plex Mono", ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
 
-  /* --- Spacing scale --- */
+  /* --- Spacing scale (4px base rhythm) --- */
   --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
   --s5: 24px; --s6: 32px; --s7: 48px;
 
   /* --- Layout --- */
-  --sidebar-w: 244px;
+  --sidebar-w: 210px;
   --classbar-h: 22px;
-  --max-content: 1080px;
+  --max-content: 1180px;
 
-  /* --- Elevation --- */
-  --shadow: 0 12px 40px rgba(0, 0, 0, .45);
+  /* --- Elevation — deep, soft, low-opacity --- */
+  --shadow: 0 26px 50px -30px rgba(0, 0, 0, .9);
 }
 
 /* ===========================================================================
@@ -73,6 +97,8 @@
 /* --- Amber CRT: warm phosphor on near-black ------------------------------- */
 [data-theme="amber"] {
   --bg:          #0a0700;
+  --ink-800:     #0d0901;
+  --line-soft:   #241a06;
   --surface:     #120d02;
   --surface-2:   #1a1304;
   --surface-3:   #241a06;
@@ -94,6 +120,8 @@
 /* --- Green CRT: classic green phosphor ------------------------------------ */
 [data-theme="green"] {
   --bg:          #010a03;
+  --ink-800:     #031007;
+  --line-soft:   #0a2213;
   --surface:     #04120a;
   --surface-2:   #06180d;
   --surface-3:   #0a2213;
@@ -116,6 +144,8 @@
 /* --- Nightwatch: colder blue-tinted command room -------------------------- */
 [data-theme="nightwatch"] {
   --bg:          #080b12;
+  --ink-800:     #0b0f18;
+  --line-soft:   #172035;
   --surface:     #0d1220;
   --surface-2:   #111829;
   --surface-3:   #172035;

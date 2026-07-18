@@ -83,22 +83,10 @@ const banner = (code, category) => {
   return `${m.tier} // ${cls} // ${m.caveat}`;
 };
 
-// Document preview flag — the CL5 UMS preview build renders exported documents
-// in the redesigned paper language; everyone else gets the production document.
-// js/preview.js calls setDocPreview() whenever preview mode toggles.
-let docPreview = false;
-export function setDocPreview(on) { docPreview = !!on; }
-
-// SCP cover-sheet colour band (production): amber/yellow at Level 3, red at 4+.
+// Classification band colour by level, per the Document System design language:
+// L2 teal, L3 slate, L4 registry gold, L5 oxblood. Derived from the marking
+// text so every builder gets it automatically; unlevelled records stay unbanded.
 function classBand(classification) {
-  if (/\bLEVEL 3\b/.test(classification)) return 'classbar--yellow';
-  if (/\bLEVEL [45]\b/.test(classification)) return 'classbar--red';
-  return '';
-}
-
-// Classification band colour by level for the preview paper language:
-// L2 teal, L3 slate, L4 registry gold, L5 oxblood.
-function classBandPreview(classification) {
   if (/\bLEVEL 5\b/.test(classification)) return 'classbar--l5';
   if (/\bLEVEL 4\b/.test(classification)) return 'classbar--l4';
   if (/\bLEVEL 3\b/.test(classification)) return 'classbar--l3';
@@ -256,192 +244,7 @@ function letterhead(orgKey, office) {
   </div>`;
 }
 
-const ORIGINAL_CSS = `
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: #6b6b6b; }
-  body { font-family: 'Times New Roman', Times, Georgia, serif; color: #111; font-size: 12pt; line-height: 1.5; }
-
-  .controls { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; justify-content: center; padding: 10px; background: #2b2b2b; box-shadow: 0 1px 6px rgba(0,0,0,.4); }
-  .controls button { font-family: Arial, Helvetica, sans-serif; font-size: 13px; padding: 7px 16px; border: 1px solid #555; background: #f4f4f2; color: #1b1b1a; border-radius: 3px; cursor: pointer; }
-  .controls button:hover { background: #fff; }
-  .controls .ghost { background: transparent; color: #ddd; }
-
-  .sheet { background: #fff; max-width: 830px; margin: 22px auto; box-shadow: 0 2px 18px rgba(0,0,0,.4); }
-  .pad { padding: 46px 66px 40px; position: relative; }
-  .pad > *:not(.wm) { position: relative; z-index: 1; }
-
-  /* Crest watermark behind the record */
-  .wm { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; opacity: .05; z-index: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .wm img { width: 430px; max-width: 70%; }
-
-  /* Classification markings: plain, bold, black — markings, not decoration */
-  .classbar { text-align: center; font-family: Arial, Helvetica, sans-serif; font-weight: 700; letter-spacing: .12em; font-size: 9pt; color: #111; text-transform: uppercase; padding: 2px 0; }
-  .classbar--top { margin-bottom: 14px; }
-  .classbar--bottom { margin-top: 22px; }
-  .classbar--yellow { background: #e8b100; color: #201a00; border-top: 3px solid #201a00; border-bottom: 3px solid #201a00; padding: 5px 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .classbar--red { background: #8f1515; color: #fff; border-top: 3px solid #3a0808; border-bottom: 3px solid #3a0808; padding: 5px 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-
-  /* Letterhead — thick rule here + the builder's thin hr = double rule */
-  .lh { display: flex; align-items: center; gap: 16px; color: #111; margin-top: 6px; border-bottom: 2.5px solid #111; padding-bottom: 12px; }
-  .lh__seal { flex: 0 0 64px; }
-  .lh__spacer { flex: 0 0 64px; }
-  .lh__stack { flex: 1; text-align: center; min-width: 0; }
-  .lh__org { font-size: 9pt; letter-spacing: .32em; text-transform: uppercase; color: #333; white-space: nowrap; }
-  .lh__body { font-size: 16pt; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; margin-top: 3px; white-space: nowrap; }
-  .lh__office { font-size: 8.5pt; letter-spacing: .16em; text-transform: uppercase; color: #444; margin-top: 4px; white-space: nowrap; }
-
-  hr.rule { border: none; border-top: 1px solid #111; margin: 12px 0; }
-  hr.rule--bold { border: none; border-top: 2.5px solid #111; margin: 5px 0; }
-  /* The thin half of the letterhead's double rule sits close under the thick. */
-  .lh + hr.rule { margin: 3px 0 16px; }
-
-  p { margin: 0 0 11px; text-align: justify; }
-  .muted { color: #666; font-style: italic; }
-
-  /* Court caption (record of proceedings) */
-  .court { text-align: center; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; font-size: 13pt; margin-top: 6px; }
-  .matter { text-align: center; font-style: italic; margin: 10px auto 0; max-width: 86%; font-size: 11.5pt; }
-  .caseno { text-align: center; margin-top: 6px; font-size: 11pt; letter-spacing: .04em; }
-  .parties { margin: 18px auto 6px; max-width: 78%; }
-  .party { display: flex; justify-content: space-between; align-items: baseline; padding: 3px 0; gap: 16px; }
-  .party .pname { font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
-  .party .role { font-style: italic; color: #333; white-space: nowrap; }
-  .vs { text-align: center; font-style: italic; margin: 4px 0; color: #333; }
-  /* One title treatment for every document (memo-title kept as an alias). */
-  .doc-title, .memo-title { text-align: center; font-weight: 700; text-transform: uppercase; letter-spacing: .18em; font-size: 14pt; padding: 8px 0; }
-  .panel-line { text-align: center; font-size: 10.5pt; color: #333; margin-bottom: 4px; }
-
-  /* Numbered record paragraphs */
-  .judgment { counter-reset: para; margin-top: 12px; }
-  .jhead { font-weight: 700; text-transform: uppercase; letter-spacing: .06em; font-size: 11pt; margin: 20px 0 8px; }
-  .para { counter-increment: para; position: relative; padding-left: 2.7em; margin-bottom: 10px; text-align: justify; }
-  .para::before { content: counter(para) "."; position: absolute; left: 0; top: 0; font-variant-numeric: tabular-nums; }
-  .reclist { list-style: none; padding: 0 0 0 2.7em; margin: 0 0 11px; }
-  .reclist li { padding: 2px 0; }
-  .reclist .ref { font-family: 'Courier New', monospace; font-weight: 700; }
-
-  .so { font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin: 20px 0 14px; }
-  .plainlist { margin: 0 0 11px; padding-left: 22px; }
-  .plainlist li { padding: 2px 0; }
-  .docquote { margin: 12px 0 14px; padding: 2px 16px; border-left: 3px solid #333; font-style: italic; }
-  .docquote__att { text-align: right; font-style: normal; font-size: 10.5pt; color: #333; margin-top: 4px; }
-  .votebox { border-collapse: collapse; margin: 2px auto 12px; }
-  .votebox th { font-family: Arial, Helvetica, sans-serif; font-size: 8pt; letter-spacing: .06em; text-transform: uppercase; border-bottom: 2px solid #111; padding: 3px 18px; color: #333; }
-  .votebox td { border: 1px solid #999; padding: 6px 18px; text-align: center; font-size: 14pt; font-weight: 700; }
-  .votemembers { border-collapse: collapse; width: 86%; margin: 0 auto 12px; }
-  .votemembers td { border-bottom: 1px solid #ccc; padding: 4px 8px; font-size: 10.5pt; }
-  .votemembers .vm-pos { text-align: right; color: #333; }
-
-  /* Signature */
-  .sign { margin-top: 10px; }
-  .sign__line { width: 280px; border-bottom: 1px solid #111; height: 30px; }
-  .sign__name { font-weight: 700; margin-top: 4px; }
-  .sign__role, .sign__date { font-size: 10pt; color: #333; }
-  .sig-e { font-family: 'Courier New', monospace; font-size: 7.5pt; letter-spacing: .04em; color: #333; margin-top: 3px; }
-  .attest { font-style: italic; max-width: 470px; margin: 4px 0 12px; font-size: 10.5pt; color: #222; }
-
-  /* Memorandum */
-  .memo-h { width: 100%; border-collapse: collapse; margin: 8px 0 12px; }
-  .memo-h td { padding: 3px 0; vertical-align: top; font-size: 11.5pt; }
-  .memo-h .ml { width: 150px; font-family: Arial, Helvetica, sans-serif; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; font-size: 9pt; padding-top: 5px; color: #333; }
-  .memo-body { margin-top: 6px; }
-  .signoff { margin-top: 24px; }
-  .signoff .sn { font-weight: 700; }
-  .signoff .sr { font-size: 10pt; color: #333; }
-
-  /* Official record (personnel / surveillance) */
-  .doc-sub { text-align: center; font-size: 10pt; letter-spacing: .1em; text-transform: uppercase; color: #444; margin-top: 3px; }
-  .fieldgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 36px; margin: 16px 0 6px; }
-  .field { display: flex; justify-content: space-between; gap: 14px; padding: 6px 0; border-bottom: 1px solid #ccc; font-size: 11pt; }
-  .field .fl { color: #555; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .05em; padding-top: 2px; font-family: Arial, Helvetica, sans-serif; }
-  .field .fv { font-weight: 600; text-align: right; }
-
-  .log { width: 100%; border-collapse: collapse; margin-top: 4px; }
-  .log td { padding: 6px 8px; border-bottom: 1px solid #ddd; vertical-align: top; font-size: 11pt; }
-  .log .ld { width: 130px; color: #555; font-size: 9pt; text-transform: uppercase; letter-spacing: .04em; font-family: Arial, Helvetica, sans-serif; }
-  .log .lby { font-size: 9.5pt; color: #666; font-style: italic; margin-top: 2px; }
-
-  /* Markings */
-  .notice { border: 1px solid #7a1010; color: #7a1010; padding: 9px 12px; margin: 16px 0; font-family: Arial, Helvetica, sans-serif; font-size: 10pt; letter-spacing: .02em; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .notice--soft { border-color: #999; color: #444; }
-  .withheld { text-align: center; border: 1px dashed #7a1010; color: #7a1010; padding: 16px; margin: 16px 0; font-family: 'Courier New', monospace; font-size: 10.5pt; letter-spacing: .08em; }
-  .redacted { font-family: 'Courier New', monospace; background: #111; color: #111; padding: 0 4px; border-radius: 1px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .sealed { font-family: 'Courier New', monospace; font-size: 10pt; letter-spacing: .05em; color: #7a1010; }
-
-  /* Formal correspondence (candidate-facing letters) */
-  .letter-date { text-align: right; margin: 2px 0 20px; font-size: 11.5pt; }
-  .letter-addr { margin: 0 0 20px; line-height: 1.55; font-size: 11.5pt; }
-  .letter-addr .la-name { font-weight: 700; }
-  .letter-addr .la-ref { font-family: 'Courier New', monospace; font-size: 10pt; color: #333; }
-  .letter-salut { margin: 0 0 12px; }
-  .letter-vale { margin: 26px 0 4px; }
-  /* An emphatic determination line, ruled top and bottom. */
-  .determination { text-align: center; font-weight: 700; text-transform: uppercase; letter-spacing: .11em; font-size: 12.5pt; margin: 20px auto; padding: 12px 0; border-top: 1.5px solid #111; border-bottom: 1.5px solid #111; }
-  /* The Committee's creed — a black-ruled seal motto, set at the foot. */
-  .creed { text-align: center; margin: 24px auto 2px; padding: 9px 0; border-top: 1.5px solid #111; border-bottom: 1.5px solid #111; color: #1a1a1a; text-transform: uppercase; font-weight: 700; letter-spacing: .16em; font-size: 9.5pt; }
-
-  /* Candidate feedback sections — quiet rules, no security accents */
-  .fb-q { padding: 12px 0; border-bottom: 1px solid #ccc; page-break-inside: avoid; }
-  .fb-q:last-of-type { border-bottom: none; }
-  .fb-qhead { font-family: Arial, Helvetica, sans-serif; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .08em; color: #555; margin-bottom: 5px; }
-  .fb-qhead .fb-n { font-weight: 700; color: #111; margin-right: 8px; }
-  .fb-prompt { margin: 0 0 8px; }
-  .fb-label { font-family: Arial, Helvetica, sans-serif; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .08em; color: #555; margin: 6px 0 3px; }
-  .fb-answer { background: #f6f5f1; border: 1px solid #ddd; padding: 7px 10px; font-size: 11pt; white-space: pre-wrap; }
-  .fb-feedback { margin-top: 7px; font-size: 11pt; }
-  .fb-feedback .fb-k { font-weight: 700; }
-
-  /* Distribution & handling + records footer */
-  .handling { margin-top: 24px; border-top: 1px solid #111; padding-top: 9px; font-family: Arial, Helvetica, sans-serif; font-size: 8.5pt; color: #222; line-height: 1.5; }
-  .handling > div { margin: 3px 0; }
-  .handling .hl { font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding-right: 4px; }
-  .foot { margin-top: 10px; padding-top: 7px; border-top: 1px solid #999; display: flex; justify-content: space-between; align-items: center; gap: 12px; font-family: 'Courier New', monospace; font-size: 8pt; color: #333; text-transform: uppercase; }
-  .foot__c { text-align: center; letter-spacing: .06em; flex: 1; }
-  .foot--meta { border-top: none; margin-top: 14px; padding-top: 0; color: #555; }
-  .foot--meta + .foot { margin-top: 4px; }
-
-  @page { size: A4; margin: 13mm 15mm; }
-  @media print {
-    html, body { background: #fff; }
-    .controls { display: none; }
-    .sheet { box-shadow: none; margin: 0; max-width: none; }
-    .pad { padding: 0; }
-    .para, .log tr, .sign, .field { page-break-inside: avoid; }
-    .jhead, .memo-title, .doc-title { page-break-after: avoid; }
-    /* Candidate letters onto one A4: densified type/spacing and the records-only
-       boilerplate (handling paragraph, control-number meta row) dropped. Scoped to
-       .pad--letter, measured to ~25px headroom on the longest (the invitation);
-       records and the interviewer's script are untouched. */
-    .pad--letter .handling, .pad--letter .foot--meta { display: none; }
-    .pad--letter .memo-body { font-size: 10pt; line-height: 1.3; }
-    .pad--letter .memo-body p { margin-bottom: 4px; }
-    .pad--letter .lh { padding-bottom: 6px; }
-    .pad--letter .lh + hr.rule { margin: 2px 0 6px; }
-    .pad--letter .doc-title { padding: 3px 0; font-size: 13pt; }
-    .pad--letter .doc-sub { margin-top: 1px; }
-    .pad--letter .letter-date { margin: 2px 0 7px; }
-    .pad--letter .letter-addr { margin: 0 0 7px; line-height: 1.35; }
-    .pad--letter .letter-salut { margin: 0 0 4px; }
-    .pad--letter .letter-vale { margin: 9px 0 2px; }
-    .pad--letter .determination { margin: 8px auto; padding: 5px 0; font-size: 11pt; }
-    .pad--letter .judgment { margin-top: 4px; }
-    .pad--letter .judgment .para { margin-bottom: 2px; }
-    .pad--letter .fb-q { padding: 7px 0; }
-    .pad--letter .sign { margin-top: 1px; }
-    .pad--letter .sign__line { height: 15px; }
-    .pad--letter .sig-e { font-size: 7pt; }
-    .pad--letter .creed { margin: 9px auto 4px; padding: 4px 0; font-size: 9pt; }
-    .pad--letter .foot { margin-top: 5px; }
-  }
-`;
-
-// Production document stylesheet (Times New Roman on white, black markings).
-const CSS = ORIGINAL_CSS;
-
-// Preview document stylesheet — the redesigned paper language (IBM Plex Serif
-// on bone-white, per-level classification banners, vellum tables, crest
-// letterhead + watermark). Used only when docPreview is on (CL5 preview build).
-const CSS_PREVIEW = `
+const CSS = `
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: #2a2d30; }
   body { font-family: 'IBM Plex Serif', Georgia, 'Times New Roman', serif; color: #1a1e21; font-size: 12pt; line-height: 1.6; }
@@ -635,17 +438,17 @@ function frameDoc({ title, classification, inner, footerRef, actor, org = null, 
   const logo = org ? orgLogo(org) : null;
   const wm = logo ? `<div class="wm" aria-hidden="true"><img src="${logo}" alt="" /></div>` : '';
   const dist = distribution || defaultDistribution(org);
-  const band = docPreview ? classBandPreview(classification) : classBand(classification);
+  const band = classBand(classification);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${esc(footerRef)} \u2014 ${esc(title)}</title>
-${docPreview ? `<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap" rel="stylesheet" />` : ''}
-<style>${docPreview ? CSS_PREVIEW : CSS}</style>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap" rel="stylesheet" />
+<style>${CSS}</style>
 </head>
 <body>
   <div class="controls">

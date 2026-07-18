@@ -14,7 +14,6 @@ import { currentUser, endSession, setServerUser } from './state.js';
 import { logAction } from './audit.js';
 import { NAV, parseHash, isRouteAllowed } from './router.js';
 import { THEMES, getTheme, setTheme } from './theme.js';
-import { previewAllowed, previewOn, setPreviewPref, applyPreview } from './preview.js';
 import { getUser, getSubject, getCase, getRecruit, applyServerSnapshot } from './storage.js';
 import { esc, clearanceBadge, toast } from './ui.js';
 import * as api from './api.js';
@@ -133,11 +132,6 @@ function renderShell(user, route) {
 
   const banner = `CLASSIFIED \u00b7 ${esc(CONFIG.facility)} \u00b7 OPERATOR CLEARANCE ${esc(clearanceWord(user))} \u00b7 ACCESS LOGGED`;
 
-  // Redesign preview (CL5 only). data-preview is applied in renderApp; here we
-  // surface the topbar on/off toggle for Command operators.
-  const canPreview = previewAllowed(user);
-  const pvOn = previewOn(user);
-
   root.innerHTML = `
     <div class="shell">
       <div class="classbar classbar--top">${banner}</div>
@@ -155,7 +149,6 @@ function renderShell(user, route) {
                 <span class="op-chip__name">${esc(user.codename)}</span>
                 ${clearanceBadge(user.clearance)}
               </div>
-              ${canPreview ? `<button class="preview-toggle ${pvOn ? 'preview-toggle--on' : ''}" id="preview-toggle" title="Toggle the Ethics UMS redesign preview (Command / CL5 only)">Preview: ${pvOn ? 'On' : 'Off'}</button>` : ''}
               <select id="theme-select" class="theme-select" aria-label="Display theme" title="Display theme">
                 ${THEMES.map((t) => `<option value="${t.id}" ${t.id === getTheme() ? 'selected' : ''}>${t.label}</option>`).join('')}
               </select>
@@ -176,8 +169,6 @@ function renderShell(user, route) {
   if (tourBtn) tourBtn.addEventListener('click', () => startTutorial(app));
   const themeSel = root.querySelector('#theme-select');
   if (themeSel) themeSel.addEventListener('change', (e) => setTheme(e.target.value));
-  const previewToggle = root.querySelector('#preview-toggle');
-  if (previewToggle) previewToggle.addEventListener('click', () => { setPreviewPref(!previewOn(user)); renderApp(); });
 
   root.querySelector('#logout').addEventListener('click', () => {
     logAction(user, 'LOGOUT', `${user.designation} signed out.`);
@@ -269,7 +260,6 @@ function updateNavBadge(user) {
 
 function renderApp() {
   const user = app.user;
-  applyPreview(user); // set/clear data-preview + document-export mode for this operator
   if (!user) {
     loginView.render(root, app);
     return;

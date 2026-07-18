@@ -20,8 +20,8 @@
   border: 1px solid var(--line-strong);
   color: var(--text-2);
 }
-.subj-kind--info { color: #9cc0ec; border-color: rgba(95, 143, 208, .5); background: rgba(95, 143, 208, .1); }
-.subj-kind--bad  { color: #f0a59b; border-color: rgba(207, 68, 54, .55); background: rgba(207, 68, 54, .12); }
+.subj-kind--info { color: var(--info); border-color: rgba(143, 179, 201, .5); background: rgba(143, 179, 201, .1); }
+.subj-kind--bad  { color: var(--bad-text); border-color: rgba(166, 61, 61, .55); background: rgba(166, 61, 61, .12); }
 .subj-kind--muted { color: var(--text-2); background: var(--surface-3); }
 
 /* --- Critical threat gets a solid, unmissable treatment --- */
