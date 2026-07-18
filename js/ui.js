@@ -20,6 +20,26 @@ export function esc(value) {
     .replace(/'/g, '&#39;');
 }
 
+// Escape text for HTML AND turn bare http(s) URLs into clickable links. Safe by
+// construction: every segment is escaped; only well-formed URLs become anchors.
+// Used to render free-text log / report / docket entries that may carry a pasted
+// link (e.g. a clip or screenshot cited as engagement evidence).
+export function linkify(value) {
+  const s = value === null || value === undefined ? '' : String(value);
+  const re = /(https?:\/\/[^\s<>"'()]+)/g;
+  let out = '';
+  let last = 0;
+  let m;
+  while ((m = re.exec(s)) !== null) {
+    out += esc(s.slice(last, m.index));
+    const url = m[1];
+    out += `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a>`;
+    last = m.index + url.length;
+  }
+  out += esc(s.slice(last));
+  return out;
+}
+
 // Build a DOM node from an HTML string (returns the first element).
 export function el(html) {
   const tpl = document.createElement('template');

@@ -21,7 +21,7 @@ import {
 import { logAction } from '../audit.js';
 import { exportSubject } from '../export.js';
 import {
-  esc, fmtDate, fmtDateTime, relTime, clearanceBadge, orgTag,
+  esc, linkify, fmtDate, fmtDateTime, relTime, clearanceBadge, orgTag,
   monogram, toast, openModal, confirmDialog,
 } from '../ui.js';
 
@@ -267,7 +267,7 @@ export function renderSubject(host, app, id) {
     <li class="tl__item">
       <span class="tl__dot tl__dot--${esc(l.type)}"></span>
       <div class="tl__body">
-        <div class="tl__text">${esc(l.text)}</div>
+        <div class="tl__text">${linkify(l.text)}</div>
         <div class="tl__meta"><span class="tl__type">${esc(l.type)}</span> \u00b7 <span class="mono">${esc(l.by)}</span> \u00b7 ${fmtDate(l.ts)}</div>
       </div>
     </li>`).join('') : '<div class="empty">No surveillance entries recorded.</div>';

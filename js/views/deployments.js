@@ -24,7 +24,7 @@ import {
 import { logAction } from '../audit.js';
 import { exportAfterAction } from '../export.js';
 import {
-  esc, fmtDate, fmtDateTime, relTime, clearanceBadge, orgTag, monogram,
+  esc, linkify, fmtDate, fmtDateTime, relTime, clearanceBadge, orgTag, monogram,
   toast, openModal, confirmDialog,
 } from '../ui.js';
 
@@ -145,7 +145,7 @@ export function renderOperation(host, app, id) {
     <li class="tl__item">
       <span class="tl__dot tl__dot--${esc(logTone(e.type))}"></span>
       <div class="tl__body">
-        <div class="tl__text"><span class="badge badge--${esc(logTone(e.type))}" style="margin-right:6px">${esc(logLabel(e.type))}</span>${esc(e.text)}</div>
+        <div class="tl__text"><span class="badge badge--${esc(logTone(e.type))}" style="margin-right:6px">${esc(logLabel(e.type))}</span>${linkify(e.text)}</div>
         <div class="tl__meta"><span class="mono">${esc(e.by || '')}</span> \u00b7 ${fmtDateTime(new Date(e.at).toISOString())}</div>
       </div>
     </li>`).join('') : '<div class="empty">No entries logged.</div>';

@@ -232,7 +232,7 @@ function submit(app, targetUser, { title, link, note, ref }) {
     createdAt: nowIso, updatedAt: nowIso, version: 1, deleted: false, deletedAt: null,
   });
   logAction(app.user, 'SUBMIT_EVIDENCE', `Evidence filed for ${targetUser.designation}: ${title}.`);
-  if (ref) crossPost(app, ref, title);
+  if (ref) crossPost(app, ref, { title, note, link });
   app.refresh();
 }
 
@@ -243,11 +243,17 @@ function submit(app, targetUser, { title, link, note, ref }) {
 // docket entry (only where the submitter can run that case). Standing Orders
 // are immutable and have no thread, so an Order stays a one-way link.
 // Compartmented records are skipped to avoid the need-to-know write block.
-function crossPost(app, ref, evTitle) {
+function crossPost(app, ref, ev) {
   if (!ref || !ref.id) return;
   const actor = app.user;
   const nowIso = new Date().toISOString();
-  const cite = `Cited as engagement evidence by ${actor.designation}: ${evTitle}`;
+  // Copy the evidence itself onto the thread: the title, the operator's note,
+  // and any link (clip / screenshot / video URL). Threads render entry text with
+  // linkify(), so a pasted URL becomes clickable where the reader is cleared.
+  const bits = [`Cited as engagement evidence by ${actor.designation}: ${ev.title}`];
+  if (ev.note) bits.push(ev.note);
+  if (ev.link) bits.push(ev.link);
+  const cite = bits.join(' — ');
   if (ref.kind === 'subject') {
     const s = getSubject(ref.id);
     if (!s || s.deleted || s.compartment || !canManageSubject(actor, s)) return;

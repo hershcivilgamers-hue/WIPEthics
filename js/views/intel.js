@@ -24,7 +24,7 @@ import {
 import { logAction } from '../audit.js';
 import { exportSourceFile } from '../export.js';
 import {
-  esc, fmtDate, fmtDateTime, relTime, clearanceBadge, toast, openModal, confirmDialog,
+  esc, linkify, fmtDate, fmtDateTime, relTime, clearanceBadge, toast, openModal, confirmDialog,
 } from '../ui.js';
 
 const ORG = 'omega-1';
@@ -142,7 +142,7 @@ export function renderSource(host, app, id) {
     <li class="tl__item">
       <span class="tl__dot tl__dot--${esc(credTone(e.credibility))}"></span>
       <div class="tl__body">
-        <div class="tl__text">${credBadge(e.credibility)} <span style="margin-left:6px">${esc(e.text)}</span></div>
+        <div class="tl__text">${credBadge(e.credibility)} <span style="margin-left:6px">${linkify(e.text)}</span></div>
         <div class="tl__meta"><span class="mono">${esc(e.by || '')}</span> \u00b7 ${fmtDateTime(new Date(e.at).toISOString())}</div>
       </div>
     </li>`).join('') : '<div class="empty">No reports filed.</div>';
