@@ -643,6 +643,17 @@ export const RECRUIT_PIPELINE_ETHICS = ['application', 'interview'];
 export function recruitPipeline(org) { return org === 'ethics-committee' ? RECRUIT_PIPELINE_ETHICS : RECRUIT_PIPELINE_OMEGA; }
 export function recruitFirstStage(org) { return org === 'ethics-committee' ? 'application' : 'scouting'; }
 
+// Ethics candidate tracks. 'assistant' is the default, CL4-cadre pipeline;
+// 'member' onboards Committee Members and is CL5-only (see permissions.js).
+// Both share the Application → Interview → Archived stages.
+export const RECRUIT_TRACK = {
+  assistant: { code: 'assistant', label: 'Assistant', candidateRank: 'Assistant Candidate', role: 'an Assistant to the Ethics Committee' },
+  member:    { code: 'member',    label: 'Member',    candidateRank: 'Member Candidate',    role: 'a Member of the Ethics Committee' },
+};
+export function recruitTrack(record) {
+  return record && record.track === 'member' ? 'member' : 'assistant';
+}
+
 // Archive outcomes.
 export const RECRUIT_ARCHIVE = {
   approved: { code: 'approved', label: 'Approved', tone: 'ok' },

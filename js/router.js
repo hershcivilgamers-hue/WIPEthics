@@ -14,6 +14,9 @@ import { canViewCommandRoster, canAccessAdmin, canManageOrg, canParticipateRecru
 // Each recruitment feed is for the unit's CL4 cadre (a stake in that org), or CL5.
 const canSeeOmegaRecruitment = (u) => isCL5(u) || canParticipateRecruitment(u, 'omega-1');
 const canSeeEthicsRecruitment = (u) => isCL5(u) || canParticipateRecruitment(u, 'ethics-committee');
+// The Ethics Committee Member track onboards Committee Members and is CL5-only —
+// seen and run by Command / CL5 alone, unlike the CL4-cadre Assistant track.
+const canSeeMemberRecruitment = (u) => isCL5(u);
 const canSeeDocket = (u) => isCL5(u) || u.org === 'ethics-committee' || u.org === 'command';
 const canSeeAnyRecruitment = (u) => canSeeOmegaRecruitment(u) || canSeeEthicsRecruitment(u);
 const canSeeDeployments = (u) => isCL5(u) || u.org === 'omega-1' || u.org === 'command';
@@ -63,6 +66,7 @@ export const NAV = [
       { name: 'ethics',         hash: '#/ethics',             label: 'Personnel Files' },
       { name: 'tribunals',      hash: '#/tribunals',          label: 'Case Docket', feature: 'tribunals' },
       { name: 'recruit-ethics', hash: '#/ethics/recruitment', label: 'Assistant Applications', feature: 'recruitment', guard: canSeeEthicsRecruitment },
+      { name: 'recruit-ethics-member', hash: '#/ethics/recruitment/member', label: 'Member Applications', feature: 'recruitment', guard: canSeeMemberRecruitment },
     ],
   },
   {
@@ -87,6 +91,7 @@ const GUARDS = {
   engagement: canSeeEngagement,
   evidence: canSeeEvidence,
   'recruit-ethics': canSeeEthicsRecruitment,
+  'recruit-ethics-member': canSeeMemberRecruitment,
   docket: canSeeDocket,
   recruit: canSeeAnyRecruitment,
 };
@@ -101,7 +106,7 @@ function featureBlocked(name) {
   if (name === 'tribunals' || name === 'case') return !CONFIG.features.tribunals;
   if (name === 'compartments' || name === 'compartment') return !CONFIG.features.compartments;
   if (name === 'operations') return !CONFIG.features.operations;
-  if (name === 'recruit-omega' || name === 'recruit-ethics' || name === 'recruit') return !CONFIG.features.recruitment;
+  if (name === 'recruit-omega' || name === 'recruit-ethics' || name === 'recruit-ethics-member' || name === 'recruit') return !CONFIG.features.recruitment;
   if (name === 'deployments' || name === 'operation') return !CONFIG.features.deployments;
   if (name === 'intel' || name === 'source') return !CONFIG.features.intel;
   if (name === 'trainings') return !CONFIG.features.trainings;
@@ -155,6 +160,9 @@ export function parseHash() {
   }
   if (parts[0] === 'omega-1' && parts[1] === 'recruitment') {
     return { name: 'recruit-omega', params: {} };
+  }
+  if (parts[0] === 'ethics' && parts[1] === 'recruitment' && parts[2] === 'member') {
+    return { name: 'recruit-ethics-member', params: {} };
   }
   if (parts[0] === 'ethics' && parts[1] === 'recruitment') {
     return { name: 'recruit-ethics', params: {} };

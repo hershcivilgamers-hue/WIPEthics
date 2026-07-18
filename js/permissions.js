@@ -350,10 +350,26 @@ export function canParticipateRecruitment(actor, org) {
   if (!actor) return false;
   return w(actor) >= 4 && hasStakeIn(actor, org);
 }
+// A candidate's track. The Ethics 'member' track onboards Committee Members and
+// is CL5-only — visible to, and actionable by, Command / CL5 alone. Every other
+// track (Omega scouting, Ethics 'assistant') is run by the unit's CL4 cadre.
+export function isMemberTrack(record) {
+  return !!record && record.track === 'member';
+}
 export function canViewRecruitment(actor, record) {
   if (!actor || !record) return false;
+  if (isMemberTrack(record)) return isCL5(actor); // Member track: CL5 only
   if (isCL5(actor)) return true;
   return canParticipateRecruitment(actor, record.org);
+}
+// Whether this actor may ACT on a candidate — open it, comment, vote, advance,
+// run the interview, archive, induct. The Member track is CL5-only; other tracks
+// are the CL4 cadre (or CL5). The client and the Worker share this so the buttons
+// and the writes never disagree. See [[permissions-gate-split]].
+export function canActOnRecruit(actor, record) {
+  if (!actor || !record) return false;
+  if (isMemberTrack(record)) return isCL5(actor);
+  return isCL5(actor) || canParticipateRecruitment(actor, record.org);
 }
 // Whether this actor can be the one to open a candidate's personnel file on a
 // tryout approval (creating personnel needs the org-management right).

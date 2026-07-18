@@ -629,6 +629,13 @@ const RECRUIT_SPECS = [
     comments: [['EC-5', 20, 'application', 'Strong application; majority support.'], ['EC-1', 9, 'interview', 'Advanced to interview. Scheduling pending.']],
     votes: { EC_1: 'yes', EC_3: 'yes', EC_5: 'yes' },
   },
+  // Ethics Committee Member track (CL5-only onboarding of Committee Members)
+  {
+    ref: 'APP-ECM-002', name: 'Sarratt, V.', steamId: 'STEAM_0:1:90114276', department: 'Ethics Committee', rank: 'Member Candidate',
+    org: 'ethics-committee', track: 'member', stage: 'application', tag: 'in-progress',
+    comments: [['EC-1', 10, 'application', 'Nominated for the Committee — a decade of sound rulings as an Assistant.'], ['EC-3', 4, 'application', 'Concur; the nomination should proceed to interview.']],
+    votes: { EC_1: 'yes', EC_3: 'yes' },
+  },
 ];
 export function buildSeedRecruits(userList) {
   const idOf = (d) => (userList.find((u) => u.designation === d) || {}).id || null;
@@ -646,6 +653,7 @@ export function buildSeedRecruits(userList) {
     return {
       id: newId('rec'), ref: r.ref, name: r.name, steamId: r.steamId,
       department: r.department, rank: r.rank, org: r.org,
+      ...(r.track ? { track: r.track } : {}),
       stage: r.stage, archiveStatus: r.archiveStatus ?? null, archiveReason: r.archiveReason ?? null,
       applicationLink: r.applicationLink ?? '', tag: r.tag ?? null,
       comments: (r.comments || []).map(([by, daysAgo, stage, text]) => ({ id: newId('rc'), by, ts: iso(daysAgo), stage, text })),

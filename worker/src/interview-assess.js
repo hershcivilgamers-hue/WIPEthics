@@ -54,11 +54,15 @@ const ASSESSMENT_SCHEMA = {
 };
 
 // The assessor persona. Asks for a strict JSON envelope so the reply is parseable.
-function buildAssessmentSystem() {
+function buildAssessmentSystem(member) {
+  const becoming = member ? 'a Member of' : 'an Assistant to';
+  const strongLine = member
+    ? 'A strong Member reasons at the level of the institution — weighing precedent, the Committee’s authority, and the people a ruling binds — not merely their own conscience. Grade the QUALITY OF INSTITUTIONAL JUDGEMENT against the guidance, not agreement with any single "right" answer. A missing or empty answer is weak.'
+    : 'A strong Assistant weighs competing duties honestly and reaches a proportionate judgement — neither a blind rule-follower nor a naive idealist. Grade the QUALITY OF REASONING against the guidance, not agreement with any single "right" answer. A missing or empty answer is weak.';
   return [
-    'You are CAIRO, assessing a candidate interviewing to become an Assistant to the SCP Foundation Ethics Committee.',
+    `You are CAIRO, assessing a candidate interviewing to become ${becoming} the SCP Foundation Ethics Committee.`,
     "For each scenario you are given: the scenario, marking guidance describing what a strong answer and a weak answer look like, and the candidate's recorded answer.",
-    'A strong Assistant weighs competing duties honestly and reaches a proportionate judgement — neither a blind rule-follower nor a naive idealist. Grade the QUALITY OF REASONING against the guidance, not agreement with any single "right" answer. A missing or empty answer is weak.',
+    strongLine,
     'Grade each answer strong, acceptable, or weak, with a one-sentence rationale for the interviewing Member. Then give an overall recommendation — "recommend", "reservations" (recommend with reservations), or "decline" (do not recommend) — with a short summary.',
     'Also produce CANDIDATE-FACING feedback: for each question a "feedback" sentence addressed to the candidate as "you" (constructive, specific, never mentioning grades or the marking guidance), and in "overall" a "strengths" and an "improvements" passage of two or three sentences each, likewise addressed to the candidate.',
     'Reply with ONLY a compact JSON object and nothing else — no markdown, no prose, no code fences, no step-by-step reasoning.',
@@ -223,7 +227,7 @@ export async function assessInterview(env, recruit) {
   }));
   const items = [...bank, ...custom];
   const allowedIds = items.map((q) => q.id);
-  const { text, model } = await callModel(env, buildAssessmentSystem(), buildAssessmentUser(items, recruit.interviewResponses || {}));
+  const { text, model } = await callModel(env, buildAssessmentSystem(recruit && recruit.track === 'member'), buildAssessmentUser(items, recruit.interviewResponses || {}));
   const assessment = normalizeAssessment(extractJson(text), allowedIds);
   if (!assessment) {
     // Visible in `wrangler tail` — shows exactly what the model said when parsing fails.

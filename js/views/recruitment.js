@@ -16,13 +16,14 @@ import {
   RECRUIT_STAGE, recruitPipeline, recruitFirstStage, RECRUIT_ARCHIVE, tallyVotes,
   OMEGA_DEPARTMENTS, ETHICS_APP_TAG, ETHICS_APP_TAG_ORDER,
   TRYOUT_STRIKE_HALF, TRYOUT_STRIKE_FULL, tryoutStrikeTotal,
-  ORGS, RANKS, clearanceForRank,
+  ORGS, RANKS, clearanceForRank, RECRUIT_TRACK, recruitTrack,
 } from '../constants.js';
 import {
   recruits, getRecruit, upsertRecruit, getUser, users, upsertUser, newId, applyServerSnapshot,
 } from '../storage.js';
 import {
   canParticipateRecruitment, canManageOrg, canInductRecruit, isCL5,
+  canViewRecruitment, canActOnRecruit, isMemberTrack,
 } from '../permissions.js';
 import { makeCredential } from '../crypto.js';
 import { interviewSetFor, INTERVIEW_BANK_DRAW, INTERVIEW_GRADE, INTERVIEW_RECOMMENDATION } from '../interview-bank.js';
@@ -35,6 +36,17 @@ import {
 } from '../ui.js';
 
 const ORG_LABEL = { 'omega-1': 'Recruitment', 'ethics-committee': 'Assistant Applications' };
+
+// The Ethics pipeline runs two tracks (Assistant / Member); Omega has one.
+// These derive the list's title and hash from org + track.
+function listLabel(org, track) {
+  if (org !== 'ethics-committee') return 'Recruitment';
+  return track === 'member' ? 'Member Applications' : 'Assistant Applications';
+}
+function listHash(org, track) {
+  if (org !== 'ethics-committee') return '#/omega-1/recruitment';
+  return track === 'member' ? '#/ethics/recruitment/member' : '#/ethics/recruitment';
+}
 
 const stageBadge = (s) => {
   const m = RECRUIT_STAGE[s] || { label: s, tone: 'muted' };
@@ -49,9 +61,13 @@ const tagBadge = (t) => {
   return m ? `<span class="badge badge--${m.tone}">${esc(m.label)}</span>` : '';
 };
 
-function visibleRecruits(actor, org) {
+// `track` filters the Ethics pipeline to one lane (assistant | member); pass
+// null (Omega) to skip the filter. canViewRecruitment enforces the CL5-only
+// gate on member-track records regardless.
+function visibleRecruits(actor, org, track) {
   return recruits().filter((r) => !r.deleted && r.org === org
-    && (isCL5(actor) || canParticipateRecruitment(actor, r.org)));
+    && (track == null || recruitTrack(r) === track)
+    && canViewRecruitment(actor, r));
 }
 
 // --- Shared mutation helper -------------------------------------------------
@@ -77,13 +93,15 @@ function addComment(rec, by, stage, text) {
 // ===========================================================================
 // PIPELINE LIST (per organisation)
 // ===========================================================================
-export function renderList(host, app, org) {
+export function renderList(host, app, org, trackArg) {
   const actor = app.user;
-  const mine = visibleRecruits(actor, org);
+  const isEthics = org === 'ethics-committee';
+  const track = isEthics ? (trackArg || 'assistant') : null;
+  const isMember = track === 'member';
+  const mine = visibleRecruits(actor, org, track);
   const live = mine.filter((r) => r.stage !== 'archived');
   const archived = mine.filter((r) => r.stage === 'archived');
   const pipeline = recruitPipeline(org);
-  const isEthics = org === 'ethics-committee';
 
   const card = (r) => {
     const t = tallyVotes(r.votes);
@@ -124,16 +142,18 @@ export function renderList(host, app, org) {
         <td class="cell-right"><span class="row-go">Open \u2192</span></td>
       </tr>`).join('') : '';
 
-  const canCreate = isCL5(actor) || canParticipateRecruitment(actor, org);
+  const canCreate = isMember ? isCL5(actor) : (isCL5(actor) || canParticipateRecruitment(actor, org));
   const eyebrow = isEthics ? 'CAIRO \u00b7 Ethics Committee' : 'CAIRO \u00b7 Omega-1';
-  const newLabel = isEthics ? '+ New application' : '+ New scouting target';
-  const sub = isEthics ? 'Assistant applications \u2014 cadre review and vote; CL5 interviews' : 'Scouting pipeline \u2014 run by the unit\u2019s CL4 cadre';
+  const newLabel = isMember ? '+ Nominate Member candidate' : isEthics ? '+ New application' : '+ New scouting target';
+  const sub = isMember ? 'Member onboarding \u2014 Command (CL5) nominates, votes and interviews'
+    : isEthics ? 'Assistant applications \u2014 cadre review and vote; CL5 interviews'
+    : 'Scouting pipeline \u2014 run by the unit\u2019s CL4 cadre';
 
   host.innerHTML = `
     <div class="page-head">
       <div>
         <div class="eyebrow">${eyebrow}</div>
-        <h1 class="page-title">${esc(ORG_LABEL[org] || 'Recruitment')}</h1>
+        <h1 class="page-title">${esc(listLabel(org, track))}</h1>
         <div class="page-sub">${sub}</div>
       </div>
       ${canCreate ? `<button class="btn btn--primary" id="add-recruit">${newLabel}</button>` : ''}
@@ -156,7 +176,7 @@ export function renderList(host, app, org) {
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(el.dataset.id); });
   });
   const addBtn = host.querySelector('#add-recruit');
-  if (addBtn) addBtn.addEventListener('click', () => openCreate(app, org));
+  if (addBtn) addBtn.addEventListener('click', () => openCreate(app, org, track));
 }
 
 // ===========================================================================
@@ -166,7 +186,7 @@ export function renderRecruit(host, app, id) {
   const actor = app.user;
   const r = getRecruit(id);
 
-  if (!r || r.deleted || !(isCL5(actor) || canParticipateRecruitment(actor, r.org))) {
+  if (!r || r.deleted || !canViewRecruitment(actor, r)) {
     host.innerHTML = `
       <div class="page-head"><div><h1 class="page-title">Candidate not found</h1>
       <div class="page-sub">This candidate does not exist, has been removed, or is outside your remit.</div></div></div>
@@ -176,8 +196,9 @@ export function renderRecruit(host, app, id) {
   }
 
   const isEthics = r.org === 'ethics-committee';
+  const isMember = isMemberTrack(r);
   const cl5 = isCL5(actor);
-  const canAct = cl5 || canParticipateRecruitment(actor, r.org);
+  const canAct = canActOnRecruit(actor, r);
   const t = tallyVotes(r.votes);
   const myVote = (r.votes || {})[actor.id] || null;
   const stage = r.stage;
@@ -344,7 +365,7 @@ export function renderRecruit(host, app, id) {
 
   host.innerHTML = `
     <div class="file-actions">
-      <button class="btn btn--ghost btn--sm" id="back">\u2190 ${esc(ORG_LABEL[r.org] || 'Recruitment')}</button>
+      <button class="btn btn--ghost btn--sm" id="back">\u2190 ${esc(listLabel(r.org, recruitTrack(r)))}</button>
       ${showInvite ? '<button class="btn btn--sm" data-act="export-invite">\u23ce Invitation to Interview</button>' : ''}
       ${showFeedback ? '<button class="btn btn--sm" data-act="export-feedback">\u23ce Candidate Feedback Sheet</button>' : ''}
       ${showAccept ? '<button class="btn btn--sm" data-act="export-accept">\u23ce Appointment Notice</button>' : ''}
@@ -469,7 +490,7 @@ function voteButtons(myVote) {
     <button class="btn btn--sm ${myVote === 'no' ? 'btn--danger' : ''}" data-act="vote-no">Vote No${myVote === 'no' ? ' \u2713' : ''}</button>`;
 }
 function backHash(r) {
-  return r && r.org === 'ethics-committee' ? '#/ethics/recruitment' : '#/omega-1/recruitment';
+  return r ? listHash(r.org, recruitTrack(r)) : '#/overview';
 }
 
 // --- Actions ----------------------------------------------------------------
@@ -567,15 +588,18 @@ async function approveTryout(app, r) {
 
 async function passInterview(app, r) {
   const actor = app.user;
-  const choice = await promptInductFile({ title: 'Pass interview', message: `Pass ${r.name} and open their Ethics Assistant personnel file? Choose "Without file" to record a pass and open the file later.`, confirmLabel: 'Pass & open file' });
+  // The Member track opens a Committee Member file (CL5); the Assistant track an
+  // Assistant file (CL4·J). openPersonnelFile maps the rank to its clearance.
+  const roleLabel = isMemberTrack(r) ? 'Member' : 'Assistant';
+  const choice = await promptInductFile({ title: 'Pass interview', message: `Pass ${r.name} and open their Ethics ${roleLabel} personnel file? Choose "Without file" to record a pass and open the file later.`, confirmLabel: 'Pass & open file' });
   let newUserId = null;
-  if (choice.open) { try { newUserId = await openPersonnelFile(app, r, 'Assistant', choice.passphrase); } catch (e) { toast('Could not open the personnel file; pass recorded without one.', 'warn'); } }
+  if (choice.open) { try { newUserId = await openPersonnelFile(app, r, roleLabel, choice.passphrase); } catch (e) { toast('Could not open the personnel file; pass recorded without one.', 'warn'); } }
   mutate(app, r.id, r.version, (rec) => {
     rec.stage = 'archived'; rec.archiveStatus = 'approved'; rec.tag = 'accepted';
     if (newUserId) rec.personnelFileId = newUserId;
-    addComment(rec, actor.designation, 'archived', newUserId ? 'Passed interview; Assistant file opened.' : 'Passed interview.');
+    addComment(rec, actor.designation, 'archived', newUserId ? `Passed interview; ${roleLabel} file opened.` : 'Passed interview.');
   }, { action: 'INDUCT_RECRUIT', detail: `${r.ref} passed interview.` });
-  toast(newUserId ? 'Passed; Assistant file opened.' : 'Pass recorded.', 'success');
+  toast(newUserId ? `Passed; ${roleLabel} file opened.` : 'Pass recorded.', 'success');
 }
 
 async function failInterview(app, r) {
@@ -622,8 +646,12 @@ function removeCustomQuestion(app, r, id) {
 function openInterviewers(app, r) {
   const actor = app.user;
   if (!isCL5(actor)) { toast('Only CL5 may assign interviewers.', 'error'); return; }
+  // The Member track seats Committee Members (CL5) only; the Assistant track may
+  // seat any Committee member (or Command) as an interviewer.
+  const memberTrack = isMemberTrack(r);
   const people = users().filter((u) => !u.deleted && u.accountStatus === 'active'
-    && (u.org === 'ethics-committee' || u.org === 'command'));
+    && (u.org === 'ethics-committee' || u.org === 'command')
+    && (!memberTrack || isCL5(u)));
   const seated = new Set(r.interviewers || []);
   const list = people.length ? people.map((u) => `
     <label class="check">
@@ -714,32 +742,41 @@ async function openPersonnelFile(app, r, forceRank, initialPassphrase) {
 }
 
 // --- Create candidate -------------------------------------------------------
-function openCreate(app, org) {
+function openCreate(app, org, trackArg) {
   const actor = app.user;
-  if (!(isCL5(actor) || canParticipateRecruitment(actor, org))) { toast('You cannot open candidates here.', 'error'); return; }
   const isEthics = org === 'ethics-committee';
+  const track = isEthics ? (trackArg || 'assistant') : null;
+  const isMember = track === 'member';
+  const allowed = isMember ? isCL5(actor) : (isCL5(actor) || canParticipateRecruitment(actor, org));
+  if (!allowed) { toast('You cannot open candidates here.', 'error'); return; }
 
   const deptField = isEthics
-    ? '<div class="field"><label>Department</label><input id="rc-dept" type="text" placeholder="e.g. Ethics Committee" /></div>'
+    ? '<div class="field"><label>Department</label><input id="rc-dept" type="text" placeholder="e.g. Ethics Committee" value="Ethics Committee" /></div>'
     : `<div class="field"><label>Department</label><select id="rc-dept">${OMEGA_DEPARTMENTS.map((d) => `<option value="${esc(d)}">${esc(d)}</option>`).join('')}</select></div>`;
 
+  const candidateRank = isEthics ? RECRUIT_TRACK[track].candidateRank : '';
+  const message = isMember
+    ? 'Nominate a candidate for appointment to the Ethics Committee. It enters at Application for the Committee (CL5) to review, vote and interview. Visible to CL5 only.'
+    : isEthics ? 'Open an Assistant application. It enters at Application for the cadre to review and vote.'
+    : 'Open a scouting target. It enters at Scouting for the unit\u2019s CL4 cadre to review.';
+
   const body = `
-    <p class="modal__message">${isEthics ? 'Open an Assistant application. It enters at Application for the cadre to review and vote.' : 'Open a scouting target. It enters at Scouting for the unit\u2019s CL4 cadre to review.'}</p>
+    <p class="modal__message">${message}</p>
     <div class="field"><label>Name</label><input id="rc-name" type="text" placeholder="${isEthics ? 'Candidate name' : 'e.g. Rourke, T.'}" /></div>
     <div class="field"><label>SteamID</label><input id="rc-steam" type="text" placeholder="STEAM_0:1:..." /></div>
     ${deptField}
-    <div class="field"><label>Rank sought</label><input id="rc-rank" type="text" placeholder="Free text \u2014 e.g. Trooper / Assistant Candidate" /></div>
+    <div class="field"><label>Rank sought</label><input id="rc-rank" type="text" placeholder="Free text" value="${esc(candidateRank)}" /></div>
     ${isEthics ? '<div class="field"><label>Link to application</label><input id="rc-link" type="text" placeholder="https://\u2026" /></div>' : ''}
     <div id="rc-err" class="auth__error" hidden></div>
   `;
 
   openModal({
-    title: isEthics ? 'New application' : 'New scouting target',
+    title: isMember ? 'Nominate Member candidate' : isEthics ? 'New application' : 'New scouting target',
     wide: true,
     body,
     actions: [
       { label: 'Cancel', tone: 'ghost', onClick: (close) => close() },
-      { label: isEthics ? 'Open application' : 'Open target', tone: 'primary', onClick: (close, d) => {
+      { label: isMember ? 'Nominate candidate' : isEthics ? 'Open application' : 'Open target', tone: 'primary', onClick: (close, d) => {
           const name = d.querySelector('#rc-name').value.trim();
           const steamId = d.querySelector('#rc-steam').value.trim();
           const department = d.querySelector('#rc-dept').value.trim();
@@ -748,24 +785,27 @@ function openCreate(app, org) {
           const err = d.querySelector('#rc-err');
           err.hidden = true;
           if (!name) { err.textContent = 'A name is required.'; err.hidden = false; return; }
-          const prefix = isEthics ? 'APP-EC' : 'SCT';
+          const prefix = isMember ? 'APP-ECM' : isEthics ? 'APP-EC' : 'SCT';
           const count = recruits().filter((x) => (x.ref || '').startsWith(prefix)).length + (isEthics ? 15 : 43);
           const ref = isEthics ? `${prefix}-${String(count).padStart(3, '0')}` : `${prefix}-${String(count).padStart(4, '0')}`;
           const now = new Date().toISOString();
           const firstStage = recruitFirstStage(org);
-          upsertRecruit({
+          const opened = isMember ? 'Nomination' : isEthics ? 'Application' : 'Scouting target';
+          const record = {
             id: newId('rec'), ref, name, steamId, department, rank, org,
             stage: firstStage, archiveStatus: null, archiveReason: null,
             applicationLink: link, tag: isEthics ? 'in-progress' : null,
-            comments: [{ id: newId('rc'), by: actor.designation, ts: now, stage: firstStage, text: `${isEthics ? 'Application' : 'Scouting target'} opened by ${actor.designation}.` }],
+            comments: [{ id: newId('rc'), by: actor.designation, ts: now, stage: firstStage, text: `${opened} opened by ${actor.designation}.` }],
             votes: {}, tryoutStrikes: [], personnelFileId: null,
             createdBy: actor.designation, createdAt: now, updatedAt: now,
             version: 1, deleted: false, deletedAt: null,
-          });
+          };
+          if (isEthics) record.track = track;
+          upsertRecruit(record);
           logAction(actor, 'OPEN_RECRUIT', `Opened ${ref} (${name}).`);
           close();
-          toast(`${isEthics ? 'Application' : 'Scouting target'} ${ref} opened.`, 'success');
-          app.navigate(org === 'ethics-committee' ? '#/ethics/recruitment' : '#/omega-1/recruitment');
+          toast(`${opened} ${ref} opened.`, 'success');
+          app.navigate(listHash(org, track));
         } },
     ],
   });

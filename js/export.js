@@ -1003,6 +1003,8 @@ const IV_STYLE = `<style>
 </style>`;
 
 export function buildInterviewScriptHTML(recruit, actor) {
+  const member = recruit && recruit.track === 'member';
+  const roleLabel = member ? 'Member' : 'Assistant';
   const bank = interviewSetFor(recruit).map((q) => ({ ...q, custom: false }));
   const custom = (recruit.customQuestions || []).map((q) => ({
     id: q.id, category: 'Committee-added', prompt: q.prompt,
@@ -1069,7 +1071,7 @@ export function buildInterviewScriptHTML(recruit, actor) {
   const inner = `
     ${letterhead('ethics-committee', 'Office of the Ethics Committee')}
     <hr class="rule" />
-    <div class="memo-title">Interview Assessment \u2014 Ethics Assistant</div>
+    <div class="memo-title">Interview Assessment \u2014 Ethics ${roleLabel}</div>
     <hr class="rule" />
     ${IV_STYLE}
     ${candTable}
@@ -1078,8 +1080,10 @@ export function buildInterviewScriptHTML(recruit, actor) {
       <p><span class="iv-warn">INTERVIEWER\u2019S COPY \u2014 DO NOT DISCLOSE TO CANDIDATE.</span>
       This script carries the assessment guidance and is for the interviewing Member only.</p>
       <p>Read each scenario to the candidate and allow them to reason it through. There is no single correct answer;
-      assess the quality of their reasoning against the guidance \u2014 a strong Assistant is neither a blind rule-follower
-      nor a naive idealist. Mark each response, then record an overall recommendation.</p>
+      assess the quality of their reasoning against the guidance ${member
+        ? '\u2014 a strong Member reasons at the level of the institution, weighing precedent, the Committee\u2019s authority and the people a ruling binds, not merely their own conscience.'
+        : '\u2014 a strong Assistant is neither a blind rule-follower nor a naive idealist.'}
+      Mark each response, then record an overall recommendation.</p>
     </div>
     ${questionsHtml}
     ${recBlock}
@@ -1106,18 +1110,19 @@ export function buildInterviewScriptHTML(recruit, actor) {
 // ===========================================================================
 export function buildInterviewInviteHTML(recruit, actor, accepted = false) {
   const title = accepted ? 'Notice of Appointment' : 'Invitation to Interview';
+  const member = recruit && recruit.track === 'member';
   const today = longDate(new Date().toISOString());
 
   const ref = esc(recruit.ref || '\u2014');
   const body = accepted
     ? `<p>Following your interview before the Committee, sitting in closed session, a determination has been reached upon your application for reassignment to this body (reference ${ref}).</p>
-       <div class="determination">You are appointed as an Assistant to the Ethics Committee.</div>
+       <div class="determination">${member ? 'You are appointed as a Member of the Ethics Committee.' : 'You are appointed as an Assistant to the Ethics Committee.'}</div>
        <p>The appointment takes effect on issue of your personnel file and credentials, which the Committee will arrange. You are bound from that moment to the standards of conduct, confidentiality and activity the Committee requires of those who serve it, and to the discretion its work demands. You will weigh competing duties honestly, and you will carry what troubles you through the Committee\u2019s proper channels and no others.</p>
-       <p>Understand what you have accepted. You do not now command the departments; you serve the body that holds them to account, and you will be held to account more strictly than they are. The Committee does not reward loyalty. It requires conscience.</p>`
+       <p>Understand what you have accepted. ${member ? 'You now sit upon the body that holds the departments to account, and you will be held to account more strictly than any of them.' : 'You do not now command the departments; you serve the body that holds them to account, and you will be held to account more strictly than they are.'} The Committee does not reward loyalty. It requires conscience.</p>`
     : `<p>The Ethics Committee acknowledges your request for reassignment to this body. Such a request is not made lightly. It requires a willingness to place oneself under a different kind of scrutiny \u2014 one that does not concern containment breaches or operational failure, but the far more uncomfortable question of whether the Foundation is justified in what it does.</p>
        <p>Your application has been reviewed by the Committee sitting in closed session. We have weighed your record of service, the circumstances of your request, and the character of your prior conduct. The following determination has been reached.</p>
        <div class="determination">Your application has been accepted for interview.</div>
-       <p>The Committee finds that you demonstrate the temperament and discretion requisite for consideration as an Assistant to the Ethics Committee. This is not a commendation. It is an invitation to be assessed further, and the interview will determine whether that initial judgement is borne out.</p>
+       <p>The Committee finds that you demonstrate the temperament and discretion requisite for consideration as ${member ? 'a Member of' : 'an Assistant to'} the Ethics Committee. This is not a commendation. It is an invitation to be assessed further, and the interview will determine whether that initial judgement is borne out.</p>
        <p>You will be contacted in due course by a representative of the Committee to arrange the time and manner of your interview. Do not seek us out. The Committee keeps its own schedule, and its own terms. We are aware of your location and your movements; we will make contact when it is appropriate to do so.</p>
        <p>You will be asked to speak to the following:</p>
        <div class="judgment">
@@ -1168,6 +1173,7 @@ export function buildInterviewInviteHTML(recruit, actor, accepted = false) {
 // candidate's growth.
 // ===========================================================================
 export function buildFeedbackSheetHTML(recruit, actor) {
+  const member = recruit && recruit.track === 'member';
   const bank = interviewSetFor(recruit).map((q) => ({ ...q, custom: false }));
   const custom = (recruit.customQuestions || []).map((q) => ({
     id: q.id, category: 'Committee-added', prompt: q.prompt, custom: true,
@@ -1203,7 +1209,7 @@ export function buildFeedbackSheetHTML(recruit, actor) {
     ${letterhead('ethics-committee', 'Office of the Ethics Committee')}
     <hr class="rule" />
     <div class="doc-title">Interview Feedback</div>
-    <div class="doc-sub">Assistant to the Ethics Committee \u2014 Candidate</div>
+    <div class="doc-sub">${member ? 'Member of' : 'Assistant to'} the Ethics Committee \u2014 Candidate</div>
     <hr class="rule" />
     <div class="letter-date">${today}</div>
     <div class="letter-addr">

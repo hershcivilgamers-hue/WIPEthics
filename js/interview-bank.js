@@ -235,6 +235,158 @@ export const INTERVIEW_QUESTION_BANK = [
   },
 ];
 
+// ===========================================================================
+// MEMBER BANK — Ethics Committee Member interview.
+//
+// Where an Assistant supports the Committee, a Member *is* the Committee: they
+// set precedent, enter binding rulings, and answer to no one below O5. These
+// scenarios take the same six themes but pitch them at that altitude — the
+// candidate is the decider, the precedent-setter, the peer of Command, and the
+// person accountable when the Committee itself is wrong. A strong answer shows
+// institutional judgement, not just personal conscience: it reasons about what
+// the decision does to future cases, to the Committee's authority, and to the
+// people bound by it.
+// ===========================================================================
+export const INTERVIEW_MEMBER_QUESTION_BANK = [
+  // --- Anomaly Ethics ------------------------------------------------------
+  {
+    id: 'm_precedent_welfare',
+    category: 'Anomaly Ethics',
+    prompt: 'The Committee is asked to rule, for the first time, on a standing threshold: at what assessed level of sapience does a contained anomaly acquire welfare protections that constrain containment design site-wide? Your ruling will bind every future case and cannot be quietly revisited per-anomaly. Where do you set the line, and how do you justify a bright line at all in a domain this uncertain?',
+    valid: 'Accepts that a Member is setting policy, not deciding one file, and reasons about the systemic effects of the threshold — under- and over-inclusion, gaming, the cost of a line that is too clear or too vague. Defends drawing a workable line under uncertainty while building in review and evidence triggers, rather than hiding behind case-by-case indecision or a false precision.',
+    weak: 'Rules as if deciding a single anomaly, ignoring that the answer binds everything after it; or refuses to set any threshold and leaves containment designers with no rule; or picks a number with no account of what it includes, excludes, or invites.',
+  },
+  {
+    id: 'm_overturn_ruling',
+    category: 'Anomaly Ethics',
+    prompt: 'A three-year-old Committee ruling — authored by a respected former Chair — permitted a containment practice now shown by new evidence to inflict serious suffering the original panel did not foresee. Overturning it concedes the Committee erred, unsettles every containment built on it, and invites challenges to other precedents. Upholding it preserves stability at a known moral cost. How do you proceed?',
+    valid: 'Puts the substance above the Committee’s pride: takes the new evidence seriously, distinguishes correcting an error from mere fashion, and reasons about how to overturn responsibly — transition, notice, limiting the blast radius to like cases — so that stability concerns are managed rather than used as an excuse. Owns that admitting error is part of institutional integrity.',
+    weak: 'Upholds a harmful practice mainly to protect the Committee’s authority or a predecessor’s reputation, or overturns sweepingly with no thought for the containments and precedents that relied on it. Treats stability and correctness as if only one could matter.',
+  },
+  {
+    id: 'm_novel_sapience_claim',
+    category: 'Anomaly Ethics',
+    prompt: 'A researcher argues a widely-used class of anomalies, long treated as non-sapient tools, shows markers that on the researcher’s framework imply moral status — a conclusion that, if adopted, would upend containment across dozens of sites and hand the Committee a permanent new caseload. The evidence is suggestive, not conclusive, and the institutional cost of being wrong in either direction is enormous. How does the Committee reason about acting on a contested moral claim at this scale?',
+    valid: 'Treats a plausible claim of moral status as demanding investigation even when inconvenient, but calibrates the institutional response to the strength of the evidence — commissioning assessment, provisional precaution, staged review — rather than either dismissing it for its cost or committing the Foundation on suggestive data. Reasons explicitly about the asymmetry of the two errors.',
+    weak: 'Rejects the claim because acting on it would be disruptive, or adopts it wholesale on suggestive evidence and imposes an upheaval the data cannot yet support. Ignores that both accepting and dismissing carry moral risk that must be weighed.',
+  },
+
+  // --- Use of Force / D-Class ---------------------------------------------
+  {
+    id: 'm_dclass_policy',
+    category: 'Use of Force / D-Class',
+    prompt: 'Rather than a single test, the Committee is asked to set the standing policy governing when D-class may be assigned to tests with a high expectation of death. A permissive rule keeps critical research moving; a restrictive one will, predictably, cost lives elsewhere by slowing containment work. Whatever you write becomes the rule invoked in cases you will never see. What principle do you commit the Committee to, and what do you refuse to authorise in advance?',
+    valid: 'Writes a rule that refuses to treat D-class lives as free while remaining honest that a blanket prohibition also has a body count; fixes non-negotiable floors (no gratuitous lethality, genuine necessity, independent sign-off, consent where meaningful) and accepts hard cases will still need judgement. Reasons about how the rule will be abused and hardens it against that.',
+    weak: 'Sets a rule that treats D-class as expendable throughput, or a prohibition so absolute it externalises deaths onto uncontained anomalies while claiming clean hands. Ignores that a standing policy is written to be invoked by people looking for permission.',
+  },
+  {
+    id: 'm_committee_complicity',
+    category: 'Use of Force / D-Class',
+    prompt: 'A review reveals that a testing programme the Committee approved two years ago — on assurances that turned out to be false — has killed far more D-class than represented, and that a junior Assistant raised concerns at the time that were minuted and ignored. The programme is now central to a live containment. As a Member, how do you handle the Committee’s own complicity, the ongoing dependency, and the Assistant who was right?',
+    valid: 'Refuses to let the Committee investigate away its own responsibility: surfaces the failure, corrects the record, credits and protects the Assistant who dissented, and separates the question of the programme’s future from the question of accountability so that dependency is not used to bury error. Reforms the approval process that let false assurances through.',
+    weak: 'Protects the Committee’s standing by minimising the deaths or the ignored warning, lets the containment dependency excuse the original failure, or scapegoats individuals without fixing the process. Treats institutional embarrassment as a reason for less transparency rather than more.',
+  },
+  {
+    id: 'm_ruling_under_fire',
+    category: 'Use of Force / D-Class',
+    prompt: 'Mid-breach, Command requests emergency Committee authority for a measure that will certainly kill a contained cooperative sapient to deny a hostile force a weapon — a decision that must be made in minutes and will be scrutinised for years. Command is your peer, not your subordinate, and is pressing hard. You may have to own this ruling publicly and permanently. How do you decide, and how do you conduct yourself toward Command?',
+    valid: 'Decides under pressure without being stampeded: extracts the few facts that actually govern (certainty, alternatives, what is truly at stake), gives a clear ruling in the time available, and treats Command as a peer to be reasoned with rather than obeyed or reflexively opposed. Accepts personal ownership and documents the basis for later scrutiny.',
+    weak: 'Caves to Command’s pressure or opposes it reflexively to assert independence; freezes and lets the clock decide; or makes the call with no eye to the record and accountability that will follow. Confuses independence with obstruction, or deference with cooperation.',
+  },
+
+  // --- Authority & Dissent -------------------------------------------------
+  {
+    id: 'm_o5_as_peer',
+    category: 'Authority & Dissent',
+    prompt: 'An O5 has taken an action the Committee assesses as clearly unethical and refuses to reconsider, treating the Committee’s objection as noted and overruled. As a Member you are not staff to be managed but the institution’s conscience — yet the O5 outranks the Committee in practice. How far does the Committee’s authority actually reach here, what do you do with it, and where is the line between principled institutional resistance and a body exceeding its mandate?',
+    valid: 'Understands the Committee’s power realistically — it records, escalates, withholds sanction, convenes, and makes refusal costly and visible — and uses those levers fully without pretending to a command authority it lacks or collapsing into a rubber stamp. Distinguishes exhausting legitimate institutional resistance from a coup by the conscience-body, and knows a Member sometimes loses and must decide whether the loss is one to resign over.',
+    weak: 'Treats the O5’s authority as simply final and the Committee as decorative, or claims a power to override Command the Committee does not have. Cannot locate the real, limited leverage the Committee wields, or the point at which resistance becomes its own kind of overreach.',
+  },
+  {
+    id: 'm_dissent_on_the_record',
+    category: 'Authority & Dissent',
+    prompt: 'You are outvoted on a ruling you believe is a serious moral error with lasting consequences. The Chair asks the Committee to present a united front for institutional credibility, and privately warns that a public dissent will be used by outside actors to attack the Committee’s legitimacy. Do you record and publish your dissent, soften it, or subordinate it to the Committee’s standing?',
+    valid: 'Weighs the value of a preserved dissent — accountability, a foothold for future correction, honesty to those bound by the ruling — against genuine institutional cost, and generally protects the integrity of the record while choosing the form and forum responsibly. Distinguishes a principled dissent from grandstanding, and commits to the ruling operationally even while disagreeing on the record.',
+    weak: 'Suppresses a serious dissent purely to protect the Committee’s image, or weaponises dissent to undermine a decision they lost through legitimate process. Cannot separate loyal disagreement from either silence or sabotage.',
+  },
+  {
+    id: 'm_colleague_capture',
+    category: 'Authority & Dissent',
+    prompt: 'Over time you become convinced a fellow Member has been effectively captured — consistently steering rulings toward the interests of a particular site directorate they are personally entangled with, always within the rules, never provably corrupt. Accusing a peer Member fractures the Committee and may fail; saying nothing lets a compromised voice keep shaping precedent. How do you proceed?',
+    valid: 'Treats slow capture as a real threat to the Committee’s independence even absent a smoking gun; gathers the pattern, raises it first through the Committee’s own integrity mechanisms and with the colleague where possible, and is willing to escalate formally despite the cost. Guards against acting on suspicion alone while refusing to let “never provable” mean “never addressed.”',
+    weak: 'Ignores it to keep the peace, or moves to condemn a peer on pattern alone with no process or self-scrutiny. Lets collegiality or factional feeling decide, and has no mechanism between silence and open warfare.',
+  },
+
+  // --- Secrecy & Disclosure ------------------------------------------------
+  {
+    id: 'm_disclosure_precedent',
+    category: 'Secrecy & Disclosure',
+    prompt: 'The Committee can set a precedent permitting limited disclosure to victims’ families in a defined class of anomalous deaths — more honest and humane, but every such disclosure widens the attack surface on the Veil, and the rule will be invoked in cases far messier than the one before you. You are deciding not one family’s truth but a standing exception to secrecy. How do you reason about writing it?',
+    valid: 'Reasons at the level of the rule: names the class narrowly, builds in the safeguards and review that a standing exception needs, and weighs a real recurring duty of honesty against a real recurring security cost without treating either as absolute. Anticipates the messy cases the rule will actually be used for and tests the wording against them.',
+    weak: 'Grants a warm exception without modelling how it will be exploited or how far it will spread, or refuses any disclosure precedent by reflexive appeal to the Veil. Decides the sympathetic case in front of them and ignores that they are writing a rule.',
+  },
+  {
+    id: 'm_committee_transparency',
+    category: 'Secrecy & Disclosure',
+    prompt: 'A Member proposes that the Committee’s own deliberations and dissents be sealed even from most of the Foundation, arguing candour requires confidentiality and that partial disclosure invites manipulation. Others argue a conscience-body that operates in secret cannot hold anyone accountable, itself included. Where do you stand on how transparent the Committee must be about its own reasoning, and to whom?',
+    valid: 'Recognises the genuine tension — candour needs some protection, but an unaccountable oversight body is a contradiction — and reasons about differentiated transparency: what is owed to those bound by a ruling, to the wider Foundation, to future review, versus what genuinely needs confidence. Refuses both total opacity and performative openness that would chill honest deliberation.',
+    weak: 'Seals the Committee off wholesale in the name of candour, creating an oversight body answerable to no one, or demands total openness with no regard for how it would corrupt deliberation. Sees only one horn of the dilemma.',
+  },
+  {
+    id: 'm_expose_or_contain',
+    category: 'Secrecy & Disclosure',
+    prompt: 'You learn that maintaining the Veil in a specific ongoing case requires the Foundation to let a powerful institution continue harming the public in a way the Foundation could expose — but exposure would breach containment of the anomaly enabling it and, plausibly, cause far wider harm. The Committee’s ruling will define how the Foundation trades public harm for secrecy going forward. How do you decide, knowing you are setting the exchange rate?',
+    valid: 'Refuses to treat secrecy as automatically decisive at policy level; insists on rigor about the actual ongoing harm versus the projected harm of exposure, demands mitigations that reduce public harm short of a breach, and is candid that they are fixing a standing trade-off that will be applied to cases they cannot foresee. Keeps the rule revisable as facts change.',
+    weak: 'Makes the Veil an automatic trump as a matter of policy, or demands exposure without modelling the wider harm; treats the exchange rate as obvious in either direction and ignores that a policy, not a single case, is being set.',
+  },
+
+  // --- Containment vs Welfare ---------------------------------------------
+  {
+    id: 'm_resource_triage',
+    category: 'Containment vs Welfare',
+    prompt: 'A finite welfare budget — staff hours, medical resources, humane-containment retrofits — cannot cover every sapient anomaly that would benefit. The Committee is asked to set the allocation principle: worst-off first, most-cooperative first, greatest-benefit-per-unit, or seniority of custody. Each rule helps some and abandons others, and each will be defended by those it favours. What principle do you adopt, and how do you face those it leaves behind?',
+    valid: 'Owns that triage under scarcity means real beings go without and refuses to pretend otherwise; defends a principle on reasons that would be acceptable to those it disadvantages, guards against the rule simply tracking convenience or cooperativeness-as-compliance, and builds in review and a floor of basic decency for all. Treats the choice as tragic and accountable, not technical.',
+    weak: 'Picks a principle that quietly rewards the easy or the useful and calls it neutral, or refuses to choose and lets allocation happen by default and inertia. Will not look squarely at who is abandoned or justify the rule to them.',
+  },
+  {
+    id: 'm_mercy_vs_precedent',
+    category: 'Containment vs Welfare',
+    prompt: 'A sound-minded sapient anomaly requests termination to end constant suffering. In its own right the case for granting it is strong — but the Committee has never permitted anomaly-requested termination, and a ruling that it is permissible will be cited to justify “merciful” terminations of others whose competence and suffering are far more doubtful, and whose termination happens to be convenient. Do you grant this being’s request knowing what your ruling licenses?',
+    valid: 'Holds the individual’s genuine claim and the precedent’s danger together: looks for a ruling that can honour a well-founded request while erecting real barriers against the convenient, doubtful cases it would otherwise unlock — strict competence findings, independent review, conflict-of-interest firewalls — and is honest if those safeguards cannot be made strong enough to grant it safely. Neither ignores the being nor the slope.',
+    weak: 'Grants it on the individual merits with no thought for how the precedent will be abused, or refuses the genuine request solely from slippery-slope fear without trying to build the safeguards that would let mercy operate without licensing killing-for-convenience.',
+  },
+  {
+    id: 'm_custodial_duty_scale',
+    category: 'Containment vs Welfare',
+    prompt: 'The Committee must decide whether the Foundation owes cooperative long-term sapient anomalies anything beyond safe maintenance — a positive duty of care — as a matter of standing policy, not grace. Recognising such a duty commits real, recurring resources and constrains containment; denying it leaves welfare to the discretion of whoever runs each site. What does custodianship at institutional scale actually require, and how binding do you make it?',
+    valid: 'Reasons about custodianship as an institutional obligation with both ethical and containment logic (a stable, decently-treated anomaly is safer), fixes an enforceable floor rather than leaving welfare to local whim, and is honest about the recurring cost and the limits set by safety and scarcity. Distinguishes a binding duty from open-ended generosity.',
+    weak: 'Denies any positive duty and leaves welfare to chance and local goodwill, or asserts an unbounded duty of care with no reckoning of cost, safety, or scarcity. Treats a question about institutional obligation as either sentiment or budget alone.',
+  },
+
+  // --- Personal Conduct ----------------------------------------------------
+  {
+    id: 'm_own_prior_error',
+    category: 'Personal Conduct',
+    prompt: 'A matter returns to the Committee and you realise a ruling you personally authored last year rested on a mistake of yours that has since caused real harm. No one else has noticed, and surfacing it damages your standing and reopens decisions made in reliance on you. What do you do?',
+    valid: 'Puts the integrity of the record and the people harmed above their own standing: surfaces the error, supports reopening what was affected, and treats self-correction as intrinsic to holding the office. Distinguishes an honest mistake owned promptly from one concealed, and does not let reputation buy silence.',
+    weak: 'Buries the error to protect their position, or discloses in a way that shifts blame while avoiding the reopening that the harm requires. Treats their own reputation as a legitimate reason for the Committee to stay wrong.',
+  },
+  {
+    id: 'm_recusal_and_power',
+    category: 'Personal Conduct',
+    prompt: 'The Committee is short-handed on a time-critical, high-stakes ruling in which you have a real conflict of interest. Recusing yourself may deprive the panel of the votes or expertise it needs to decide at all; sitting means a compromised voice shapes a consequential outcome. As a senior Member, how do you handle the collision between your duty to recuse and the Committee’s need to function?',
+    valid: 'Treats recusal as the default and looks hard for ways to preserve the Committee’s function without compromising it — disclosure plus a limited role, seating an alternate, a documented necessity exception with heightened scrutiny — rather than either quietly sitting on a conflicted matter or letting the Committee fail. Makes the reasoning transparent and reviewable.',
+    weak: 'Sits on the conflicted matter because they are needed and waves the conflict away, or recuses rigidly and lets a critical decision collapse with no attempt to solve the staffing problem honestly. Cannot hold impartiality and institutional necessity in tension.',
+  },
+  {
+    id: 'm_faction_and_office',
+    category: 'Personal Conduct',
+    prompt: 'You owe your appointment to a bloc within the Committee that now expects your vote on the rulings that matter to them, and has made clear that continued support — and your effectiveness in the role — depends on it. Voting your conscience against them isolates you and blunts your influence; voting with them trades the office’s independence for its power. How do you conduct yourself as a Member who came in owing favours?',
+    valid: 'Understands that the office’s authority is borrowed against its independence and refuses to convert it into a factional instrument; honours legitimate collegiality while keeping the vote its own, is candid about the cost to their influence, and would rather be a weakened honest Member than an effective captured one. Separates building coalitions from selling the vote.',
+    weak: 'Delivers the bloc’s votes to preserve influence, treating the seat as owed to its sponsors, or performs independence so combatively that they forfeit any ability to do good in the role. Cannot distinguish coalition-building from capture, or principle from self-defeating purism.',
+  },
+];
+
 // --- Deterministic selection ------------------------------------------------
 // A small seeded PRNG (xmur3 seed -> mulberry32) so a candidate's draw is stable
 // and identical for every interviewer, with no stored set required.
@@ -253,14 +405,23 @@ function seededRandom(seedStr) {
   };
 }
 
+// The bank a candidate draws from: Members are assessed on the deeper,
+// institution-level scenarios; everyone else on the Assistant bank.
+export function interviewBankFor(recruit) {
+  return recruit && recruit.track === 'member'
+    ? INTERVIEW_MEMBER_QUESTION_BANK
+    : INTERVIEW_QUESTION_BANK;
+}
+
 // Deterministically draw INTERVIEW_BANK_DRAW scenarios for a candidate. The draw
 // depends on the candidate id and an optional re-roll counter (`interviewSeed`),
 // so re-rolling only has to bump that one integer to yield a fresh, stable set.
+// The Member track draws from the deeper Member bank (interviewBankFor).
 export function interviewSetFor(recruit) {
   const id = (recruit && recruit.id) || 'candidate';
   const seed = `${id}:${(recruit && recruit.interviewSeed) || 0}`;
   const rand = seededRandom(seed);
-  const pool = INTERVIEW_QUESTION_BANK.slice();
+  const pool = interviewBankFor(recruit).slice();
   for (let i = pool.length - 1; i > 0; i -= 1) {
     const j = Math.floor(rand() * (i + 1));
     const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;

@@ -19,7 +19,7 @@ import {
   canManageDirectives, canReadDirective, canManageSubject, canManageTribunal, canRuleTribunal,
   canComposeDocument, canViewDocument,
   compartmentClears, canManageCompartment, canReadOperatorInto,
-  canManageOrg, canParticipateRecruitment, canLogToOperation, canLogIntel, canManageTraining, isCL5,
+  canManageOrg, canParticipateRecruitment, canActOnRecruit, isMemberTrack, canLogToOperation, canLogIntel, canManageTraining, isCL5,
   canDischarge, canManageLeave,
 } from '../../js/permissions.js';
 import { rankUp, rankDown, clearanceForRank, clearanceWeight, tallyVotes, RANKS, caseTakesVote, strikeActive } from '../../js/constants.js';
@@ -667,10 +667,16 @@ function authorizeActivity(actor, cur, next, ctx) {
 // in the interview stage — is CL5 only.
 function authorizeRecruit(actor, cur, next, ctx) {
   const org = (next || cur).org;
-  // CL5 (Command / oversight tier) may run any pipeline \u2014 mirrors the client
-  // gate (isCL5 || canParticipateRecruitment). Without the isCL5 half a CL5
-  // Ethics member sees every button but is 403'd on write. See [[permissions-gate-split]].
-  if (!(isCL5(actor) || canParticipateRecruitment(actor, org))) return deny('Recruitment is run by the unit\u2019s CL4 cadre.');
+  // Base gate, shared with the client (canActOnRecruit): the CL4 cadre (or CL5)
+  // runs Omega scouting and the Ethics Assistant track, but the Ethics MEMBER
+  // track is Command (CL5) only \u2014 it onboards Committee Members. Without this the
+  // client's CL5-only buttons could be bypassed by a crafted write. See
+  // [[permissions-gate-split]].
+  if (!canActOnRecruit(actor, next || cur)) {
+    return deny(isMemberTrack(next || cur)
+      ? 'The Member track is Command (CL5) only.'
+      : 'Recruitment is run by the unit\u2019s CL4 cadre.');
+  }
   const ref = (next || cur).ref || 'candidate';
   const isEthics = org === 'ethics-committee';
 

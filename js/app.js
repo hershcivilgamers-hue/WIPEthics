@@ -117,7 +117,11 @@ function renderShell(user, route) {
     activeName = 'compartments';
   } else if (route.name === 'recruit') {
     const rec = getRecruit(route.params.id);
-    activeName = rec && rec.org === 'ethics-committee' ? 'recruit-ethics' : 'recruit-omega';
+    if (rec && rec.org === 'ethics-committee') {
+      activeName = rec.track === 'member' ? 'recruit-ethics-member' : 'recruit-ethics';
+    } else {
+      activeName = 'recruit-omega';
+    }
   } else if (route.name === 'case') {
     activeName = 'tribunals';
   } else if (route.name === 'directive') {
@@ -221,7 +225,8 @@ function dispatch(route, user) {
     case 'docket':       docketView.render(view, app); break;
     case 'notifications': notificationsView.render(view, app); break;
     case 'recruit-omega':  recruitmentView.renderList(view, app, 'omega-1'); break;
-    case 'recruit-ethics': recruitmentView.renderList(view, app, 'ethics-committee'); break;
+    case 'recruit-ethics': recruitmentView.renderList(view, app, 'ethics-committee', 'assistant'); break;
+    case 'recruit-ethics-member': recruitmentView.renderList(view, app, 'ethics-committee', 'member'); break;
     case 'recruit':        recruitmentView.renderRecruit(view, app, route.params.id); break;
     case 'tribunals':    tribunalsView.renderList(view, app); break;
     case 'case':         tribunalsView.renderCase(view, app, route.params.id); break;
