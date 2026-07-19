@@ -24,6 +24,7 @@ import {
   canReadDirective, canManageOrg, canParticipateRecruitment, canRuleTribunal,
   canManageDirectives, isCL5, canIssueStrike, canManageLeave, canPromote } from '../permissions.js';
 import { esc, relTime } from '../ui.js';
+import { partitionNotes, markSeen, markDone, snooze, restore } from '../inbox.js';
 
 const SEVEN_DAYS = 7 * 24 * 3600000;
 const FOURTEEN_DAYS = 14 * 24 * 3600000;
@@ -242,29 +243,77 @@ export function buildNotifications(actor, now = Date.now()) {
 }
 
 export function render(host, app) {
+  const userId = app.user.id;
   const items = buildNotifications(app.user);
+  const { active, snoozed, cleared } = partitionNotes(userId, items);
+  const unread = active.filter((n) => n._unread).length;
 
-  const rows = items.length ? items.map((n) => `
-    <div class="note-row note-row--${esc(n.tone)}" data-go="${esc(n.hash)}" tabindex="0">
+  const activeRow = (n) => `
+    <div class="note-row note-row--${esc(n.tone)} ${n._unread ? 'note-row--unread' : ''}" data-go="${esc(n.hash)}" tabindex="0">
+      <span class="note-row__dot" aria-hidden="true"></span>
       <span class="note-row__icon">${n.icon}</span>
       <span class="note-row__text">${esc(n.text)}</span>
       ${n.at ? `<span class="note-row__at muted-text">${esc(relTime(new Date(n.at).toISOString()))}</span>` : ''}
-    </div>`).join('') : '<div class="empty">Nothing needs your attention right now.</div>';
+      <span class="note-row__actions">
+        <button class="note-act" data-snooze="${esc(n._key)}" title="Snooze for a day" aria-label="Snooze for a day">⏰</button>
+        <button class="note-act" data-done="${esc(n._key)}" title="Mark done" aria-label="Mark done">✓</button>
+      </span>
+    </div>`;
+
+  const parkedRow = (n, kind) => `
+    <div class="note-row note-row--muted note-row--parked" data-go="${esc(n.hash)}" tabindex="0">
+      <span class="note-row__dot" aria-hidden="true"></span>
+      <span class="note-row__icon">${n.icon}</span>
+      <span class="note-row__text">${esc(n.text)}</span>
+      <span class="note-row__at muted-text">${kind === 'snoozed' && n._snoozeUntil ? `snoozed · back ${esc(relTime(new Date(n._snoozeUntil).toISOString()))}` : 'cleared'}</span>
+      <span class="note-row__actions">
+        <button class="note-act" data-restore="${esc(n._key)}" title="Bring back to the list" aria-label="Restore">↺</button>
+      </span>
+    </div>`;
+
+  const activeHTML = active.length
+    ? active.map(activeRow).join('')
+    : '<div class="empty">Nothing needs your attention right now.</div>';
+
+  const parkedCount = snoozed.length + cleared.length;
+  const moreHTML = parkedCount ? `
+    <details class="note-more">
+      <summary>${snoozed.length ? `${snoozed.length} snoozed` : ''}${snoozed.length && cleared.length ? ' · ' : ''}${cleared.length ? `${cleared.length} cleared` : ''}</summary>
+      <div class="note-list">
+        ${snoozed.map((n) => parkedRow(n, 'snoozed')).join('')}
+        ${cleared.map((n) => parkedRow(n, 'done')).join('')}
+      </div>
+    </details>` : '';
+
+  const sub = active.length
+    ? `${unread ? `${unread} new · ` : ''}${active.length} item${active.length > 1 ? 's' : ''}`
+    : (parkedCount ? 'All clear — nothing active' : 'All clear');
 
   host.innerHTML = `
     <div class="page-head">
       <div>
         <div class="eyebrow">CAIRO</div>
         <h1 class="page-title">For Your Attention</h1>
-        <div class="page-sub">${items.length ? `${items.length} item${items.length > 1 ? 's' : ''}` : 'All clear'}</div>
+        <div class="page-sub">${sub}</div>
       </div>
     </div>
-    <div class="card"><div class="card__body"><div class="note-list">${rows}</div></div></div>
+    <div class="card"><div class="card__body">
+      <div class="note-list">${activeHTML}</div>
+      ${moreHTML}
+    </div></div>
   `;
 
+  // Row navigation — but never when a per-row action button was the target.
   host.querySelectorAll('[data-go]').forEach((el) => {
-    const go = () => app.navigate(el.dataset.go);
+    const go = (e) => { if (e && e.target.closest('.note-act')) return; app.navigate(el.dataset.go); };
     el.addEventListener('click', go);
-    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(e); });
   });
+  const refresh = () => app.refresh();
+  host.querySelectorAll('[data-done]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); markDone(userId, b.dataset.done); refresh(); }));
+  host.querySelectorAll('[data-snooze]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); snooze(userId, b.dataset.snooze); refresh(); }));
+  host.querySelectorAll('[data-restore]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); restore(userId, b.dataset.restore); refresh(); }));
+
+  // Opening the feed clears the unread badge; items stay in the list until acted on.
+  markSeen(userId, active.map((n) => n._key));
 }

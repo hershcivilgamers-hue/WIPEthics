@@ -25,6 +25,7 @@ import * as overviewView from './views/overview.js';
 import * as searchView from './views/search.js';
 import { maybeOfferTutorial, startTutorial } from './tutorial.js';
 import { buildNotifications } from './views/notifications.js';
+import { unreadCount } from './inbox.js';
 import * as personnelView from './views/personnel.js';
 import * as surveillanceView from './views/surveillance.js';
 import * as compartmentsView from './views/compartments.js';
@@ -284,7 +285,7 @@ function updateNavBadge(user) {
   const link = document.querySelector('.sidebar a[href="#/notifications"]');
   if (!link) return;
   let n = 0;
-  try { n = buildNotifications(user).length; } catch (_) { n = 0; }
+  try { n = unreadCount(user.id, buildNotifications(user)); } catch (_) { n = 0; }
   const existing = link.querySelector('.nav__badge');
   if (existing) existing.remove();
   if (n > 0) {

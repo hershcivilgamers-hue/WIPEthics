@@ -704,3 +704,42 @@
   .cmdk-backdrop { padding: 8vh var(--s3) var(--s3); }
   .modal-backdrop { padding: var(--s3); align-items: flex-start; }
 }
+
+/* ===========================================================================
+   For Your Attention — the inbox feed (REC-05). Rows were previously unstyled.
+   =========================================================================== */
+.note-list { display: flex; flex-direction: column; gap: 6px; }
+.note-row {
+  display: flex; align-items: center; gap: var(--s3);
+  padding: 10px 12px; border: 1px solid var(--line-soft); border-left-width: 2px;
+  border-radius: var(--radius); background: var(--surface-2);
+  cursor: pointer; transition: border-color .14s, background .14s;
+}
+.note-row:hover { background: var(--surface-3); border-color: var(--line); }
+.note-row:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+.note-row--bad  { border-left-color: var(--bad); }
+.note-row--warn { border-left-color: var(--amber); }
+.note-row--info { border-left-color: var(--slate-ui); }
+.note-row--ok   { border-left-color: var(--ok); }
+.note-row--muted, .note-row--parked { border-left-color: var(--line); opacity: .72; }
+.note-row__dot { width: 7px; height: 7px; border-radius: 50%; background: transparent; flex: none; }
+.note-row--unread { background: var(--surface-3); }
+.note-row--unread .note-row__dot { background: var(--amber); box-shadow: 0 0 0 3px rgba(200, 162, 75, .14); }
+.note-row--unread .note-row__text { color: var(--text); font-weight: 500; }
+.note-row__icon { flex: none; width: 18px; text-align: center; color: var(--text-2); font-size: 14px; }
+.note-row__text { flex: 1; min-width: 0; color: var(--text-2); font-size: 13.5px; }
+.note-row__at { flex: none; font-size: 11px; white-space: nowrap; }
+.note-row__actions { flex: none; display: flex; gap: 2px; }
+.note-act {
+  background: none; border: 1px solid transparent; border-radius: var(--radius);
+  color: var(--text-3); cursor: pointer; width: 26px; height: 26px; line-height: 1;
+  font-size: 13px; display: inline-flex; align-items: center; justify-content: center;
+}
+.note-act:hover { background: var(--surface); border-color: var(--line); color: var(--amber); }
+.note-more { margin-top: var(--s3); }
+.note-more > summary {
+  cursor: pointer; font-family: var(--mono); font-size: 11px; text-transform: uppercase;
+  letter-spacing: .1em; color: var(--text-3); padding: var(--s2) 0; user-select: none;
+}
+.note-more > summary:hover { color: var(--text-2); }
+.note-more[open] > summary { margin-bottom: var(--s2); }
