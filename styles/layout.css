@@ -310,3 +310,6 @@
   .page-head { flex-direction: column; align-items: flex-start; gap: var(--s2); }
   .page-title { font-size: 22px; }
 }
+
+/* Right-aligned action cluster in a page header (CSV export + primary action). */
+.page-head__actions { display: flex; gap: var(--s3); align-items: center; flex-wrap: wrap; }

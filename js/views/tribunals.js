@@ -25,6 +25,7 @@ import {
 import { logAction } from '../audit.js';
 import { exportCase, exportSummons } from '../export.js';
 import { stalenessBadge } from '../staleness.js';
+import { exportCSV } from '../csv.js';
 import {
   esc, linkify, fmtDate, fmtDateTime, clearanceBadge, orgTag, monogram,
   toast, openModal, confirmDialog,
@@ -179,6 +180,7 @@ export function renderList(host, app) {
       <input id="flt-q" class="toolbar__search" type="search" placeholder="Search reference or title\u2026" value="${esc(filter.q)}" />
       <select id="flt-kind" class="toolbar__select">${kindOpts}</select>
       <select id="flt-status" class="toolbar__select">${statusOpts}</select>
+      <button class="btn btn--ghost btn--sm" id="export-csv" title="Export the filtered docket to CSV">⤓ CSV</button>
     </div>
 
     <div class="card">
@@ -190,6 +192,20 @@ export function renderList(host, app) {
       </table>
     </div>
   `;
+
+  host.querySelector('#export-csv')?.addEventListener('click', () => {
+    const respondent = (c) => (c.respondentId ? personName(c.respondentId)
+      : (c.respondentName && c.respondentName !== '[UNNAMED]' ? c.respondentName : (c.respondentDept || '')));
+    exportCSV('case-docket.csv', [
+      { header: 'Reference', value: (c) => c.ref },
+      { header: 'Matter', value: (c) => c.title },
+      { header: 'Type', value: (c) => c.kind },
+      { header: 'Respondent', value: respondent },
+      { header: 'Status', value: (c) => (CASE_STATUS[c.status] || {}).label || c.status },
+      { header: 'Sensitivity', value: (c) => c.clearance },
+      { header: 'Opened', value: (c) => fmtDate(c.createdAt) },
+    ], shown);
+  });
 
   const go = (id) => app.navigate(`#/case/${id}`);
   host.querySelectorAll('tr[data-id]').forEach((tr) => {

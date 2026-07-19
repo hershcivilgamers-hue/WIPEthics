@@ -22,6 +22,7 @@ import {
 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { exportPersonnel, exportIdCard, exportMedalCertificate } from '../export.js';
+import { exportCSV } from '../csv.js';
 import {
   esc, fmtDate, fmtDateTime, clearanceBadge, statusBadge, accountBadge,
   orgTag, monogram, redacted, toast, openModal, confirmDialog,
@@ -137,6 +138,7 @@ export function renderList(host, app, org) {
       <input id="flt-q" class="toolbar__search" type="search" placeholder="Search designation or codename\u2026" value="${esc(filter.q)}" />
       <select id="flt-status" class="toolbar__select">${statusOpts}</select>
       <select id="flt-clr" class="toolbar__select">${clrOpts}</select>
+      <button class="btn btn--ghost btn--sm" id="export-csv" title="Export the filtered roster to CSV">⤓ CSV</button>
     </div>
 
     ${canManage ? `<div class="bulk-bar ${rosterSel.size ? 'is-active' : ''}">
@@ -161,6 +163,17 @@ export function renderList(host, app, org) {
       </table>
     </div>
   `;
+
+  host.querySelector('#export-csv')?.addEventListener('click', () => {
+    exportCSV(`${org}-roster.csv`, [
+      { header: 'Designation', value: (u) => u.designation },
+      { header: 'Codename', value: (u) => u.codename },
+      { header: 'Rank', value: (u) => u.rank || '' },
+      { header: 'Clearance', value: (u) => u.clearance || '' },
+      { header: 'Status', value: (u) => u.status || '' },
+      { header: 'Account', value: (u) => u.accountStatus || '' },
+    ], roster);
+  });
 
   const go = (id) => app.navigate(`#/personnel/${id}`);
   host.querySelectorAll('tr[data-id]').forEach((tr) => {

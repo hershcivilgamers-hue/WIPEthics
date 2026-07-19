@@ -28,6 +28,7 @@ import {
 import { makeCredential } from '../crypto.js';
 import { interviewSetFor, INTERVIEW_BANK_DRAW, INTERVIEW_GRADE, INTERVIEW_RECOMMENDATION } from '../interview-bank.js';
 import { stalenessBadge } from '../staleness.js';
+import { exportCSV } from '../csv.js';
 import { exportInterviewScript, exportInterviewInvite, exportFeedbackSheet } from '../export.js';
 import * as api from '../api.js';
 import { logAction } from '../audit.js';
@@ -158,7 +159,10 @@ export function renderList(host, app, org, trackArg) {
         <h1 class="page-title">${esc(listLabel(org, track))}</h1>
         <div class="page-sub">${sub}</div>
       </div>
-      ${canCreate ? `<button class="btn btn--primary" id="add-recruit">${newLabel}</button>` : ''}
+      <div class="page-head__actions">
+        <button class="btn btn--ghost btn--sm" id="export-csv" title="Export the visible candidates to CSV">⤓ CSV</button>
+        ${canCreate ? `<button class="btn btn--primary" id="add-recruit">${newLabel}</button>` : ''}
+      </div>
     </div>
 
     <div class="pipeline pipeline--${pipeline.length}">${columns}</div>
@@ -179,6 +183,20 @@ export function renderList(host, app, org, trackArg) {
   });
   const addBtn = host.querySelector('#add-recruit');
   if (addBtn) addBtn.addEventListener('click', () => openCreate(app, org, track));
+
+  host.querySelector('#export-csv')?.addEventListener('click', () => {
+    exportCSV(`${org}-${track || 'recruitment'}.csv`, [
+      { header: 'Reference', value: (r) => r.ref },
+      { header: 'Name', value: (r) => r.name },
+      { header: 'Department', value: (r) => r.department || '' },
+      { header: 'Rank sought', value: (r) => r.rank || '' },
+      { header: 'Track', value: (r) => recruitTrack(r) },
+      { header: 'Stage', value: (r) => (RECRUIT_STAGE[r.stage] || {}).label || r.stage },
+      { header: 'Tag', value: (r) => (r.tag ? ((ETHICS_APP_TAG[r.tag] || {}).label || r.tag) : '') },
+      { header: 'Yes', value: (r) => tallyVotes(r.votes).yes },
+      { header: 'No', value: (r) => tallyVotes(r.votes).no },
+    ], mine);
+  });
 }
 
 // ===========================================================================
