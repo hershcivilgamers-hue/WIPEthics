@@ -669,13 +669,18 @@ function authorizeRecruit(actor, cur, next, ctx) {
   const org = (next || cur).org;
   // Base gate, shared with the client (canActOnRecruit): the CL4 cadre (or CL5)
   // runs Omega scouting and the Ethics Assistant track, but the Ethics MEMBER
-  // track is Command (CL5) only \u2014 it onboards Committee Members. Without this the
-  // client's CL5-only buttons could be bypassed by a crafted write. See
-  // [[permissions-gate-split]].
-  if (!canActOnRecruit(actor, next || cur)) {
-    return deny(isMemberTrack(next || cur)
-      ? 'The Member track is Command (CL5) only.'
-      : 'Recruitment is run by the unit\u2019s CL4 cadre.');
+  // track is Command (CL5) only \u2014 it onboards Committee Members.
+  //
+  // Member-ness is judged against the STORED record (cur) as well as the incoming
+  // one, so a crafted write cannot escape the gate by stripping or flipping
+  // `track` on an existing Member candidate. `track` is additionally frozen from
+  // cur on update (see writeRecord in index.js), so it cannot actually change.
+  // See [[permissions-gate-split]].
+  const memberTrack = isMemberTrack(cur) || isMemberTrack(next);
+  if (memberTrack) {
+    if (!isCL5(actor)) return deny('The Member track is Command (CL5) only.');
+  } else if (!canActOnRecruit(actor, next || cur)) {
+    return deny('Recruitment is run by the unit\u2019s CL4 cadre.');
   }
   const ref = (next || cur).ref || 'candidate';
   const isEthics = org === 'ethics-committee';

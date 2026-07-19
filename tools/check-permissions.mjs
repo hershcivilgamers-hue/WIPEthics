@@ -72,4 +72,22 @@ assert.equal(rec(member, omegaRec, omegaVote).action, 'VOTE_RECRUIT', 'CL5 Ethic
 assert.equal(rec(omegaMgr, omegaRec, { ...omegaRec, votes: { o1: 'yes' } }).action, 'VOTE_RECRUIT', 'Omega CL4 cadre may act on an Omega candidate');
 assert.equal(rec(assistant, omegaRec, { ...omegaRec, votes: { a1: 'yes' } }).ok, false, 'CL4·J Ethics Assistant may NOT touch an Omega candidate');
 
+// 8. The Ethics MEMBER track onboards Committee Members and is Command (CL5)
+//    only. The gate judges Member-ness against the STORED record too, so a
+//    crafted write cannot escape it by stripping or flipping `track`.
+const memberRec = { id: 'r2', ref: 'APP-ECM-016', org: 'ethics-committee', track: 'member',    stage: 'application', votes: {}, version: 1, deleted: false };
+const asstRec   = { id: 'r3', ref: 'APP-EC-016',  org: 'ethics-committee', track: 'assistant', stage: 'application', votes: {}, version: 1, deleted: false };
+// A CL5 member runs the Member track.
+assert.equal(rec(member, memberRec, { ...memberRec, votes: { m1: 'yes' } }).action, 'VOTE_RECRUIT', 'CL5 runs the Member track');
+// A CL4·J Assistant cannot — not even by sending a write with `track` flipped to
+// 'assistant' or omitted entirely (Member-ness is read from the stored record).
+assert.equal(rec(assistant, memberRec, { ...memberRec, track: 'assistant', votes: { a1: 'yes' } }).ok, false, 'CL4 cannot escape the Member gate by flipping track');
+assert.equal(rec(assistant, memberRec, { id: 'r2', ref: 'APP-ECM-016', org: 'ethics-committee', stage: 'application', votes: { a1: 'yes' }, version: 1 }).ok, false, 'CL4 cannot escape the Member gate by omitting track');
+// Creation is CL5-only, and an Assistant record cannot be flipped into the track.
+assert.equal(rec(assistant, null, memberRec).ok, false, 'CL4 cannot open a Member candidate');
+assert.equal(rec(member, null, memberRec).action, 'OPEN_RECRUIT', 'CL5 may open a Member candidate');
+assert.equal(rec(assistant, asstRec, { ...asstRec, track: 'member' }).ok, false, 'CL4 cannot flip an Assistant into the Member track');
+// No regression: a CL4·J Assistant still runs the Assistant track.
+assert.equal(rec(assistant, asstRec, { ...asstRec, votes: { a1: 'yes' } }).action, 'VOTE_RECRUIT', 'CL4 Assistant still runs the Assistant track');
+
 console.log('OK — surveillance / Target-authorisation gate holds.');

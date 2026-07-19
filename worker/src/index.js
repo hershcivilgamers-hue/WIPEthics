@@ -285,6 +285,11 @@ async function writeRecord(collection, id, actor, request, repo, env) {
   // CAIRO's interview verdict is authored only by the dedicated /assess endpoint.
   // Freeze it from `cur` so an ordinary sync write can neither forge nor blank it.
   if (collection === 'recruits' && cur) incoming.interviewAssessment = cur.interviewAssessment ?? null;
+  // A candidate's track is set once at creation (opening a Member candidate needs
+  // CL5) and is immutable thereafter. Freeze it from `cur` so no sync write can
+  // flip a Member candidate onto the Assistant track (or vice versa) to slip past
+  // the CL5-only Member gate. See authorizeRecruit in gate.js.
+  if (collection === 'recruits' && cur) incoming.track = cur.track ?? null;
   // Evidence: the status a NEW self-submission lands with follows the operator's
   // review flag — the client cannot choose it, so nobody self-approves an item
   // that was meant for review. A manager may file with any valid status.

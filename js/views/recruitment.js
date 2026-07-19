@@ -786,7 +786,11 @@ function openCreate(app, org, trackArg) {
           err.hidden = true;
           if (!name) { err.textContent = 'A name is required.'; err.hidden = false; return; }
           const prefix = isMember ? 'APP-ECM' : isEthics ? 'APP-EC' : 'SCT';
-          const count = recruits().filter((x) => (x.ref || '').startsWith(prefix)).length + (isEthics ? 15 : 43);
+          // Count only refs on THIS track. 'APP-EC' is itself a prefix of the
+          // Member stem 'APP-ECM', so match on the full stem + separator to keep
+          // the Assistant and Member sequences from bleeding into each other.
+          const stem = `${prefix}-`;
+          const count = recruits().filter((x) => (x.ref || '').startsWith(stem)).length + (isEthics ? 15 : 43);
           const ref = isEthics ? `${prefix}-${String(count).padStart(3, '0')}` : `${prefix}-${String(count).padStart(4, '0')}`;
           const now = new Date().toISOString();
           const firstStage = recruitFirstStage(org);
