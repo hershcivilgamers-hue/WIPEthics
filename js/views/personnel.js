@@ -487,6 +487,7 @@ export function renderDossier(host, app, id) {
   host.innerHTML = `
     <div class="file-actions">
       <button class="btn btn--ghost btn--sm" id="back">\u2190 ${esc(ORGS[u.org].short)} roster</button>
+      <button class="btn btn--sm" id="print-record">⎙ Print</button>
       <button class="btn btn--sm" id="export-personnel">\u2913 Export record</button>
       ${full && u.accountStatus === 'active' ? '<button class="btn btn--sm" id="export-idcard">\u2913 ID card</button>' : ''}
     </div>
@@ -553,6 +554,7 @@ export function renderDossier(host, app, id) {
 
   host.querySelector('#back').addEventListener('click', () => app.navigate(`#/${u.org === 'ethics-committee' ? 'ethics' : u.org}`));
   host.querySelector('#export-personnel').addEventListener('click', () => exportPersonnel(app, u));
+  host.querySelector('#print-record')?.addEventListener('click', () => window.print());
   const idBtn = host.querySelector('#export-idcard');
   if (idBtn) idBtn.addEventListener('click', () => exportIdCard(app, u));
 

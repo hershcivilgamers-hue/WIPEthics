@@ -751,3 +751,52 @@
 .insignia { display: inline-flex; align-items: center; vertical-align: middle; color: var(--amber); flex: none; }
 .insignia svg, .insignia img { display: block; }
 .insignia img { object-fit: contain; }
+
+/* ===========================================================================
+   Print (REC-02) — any record prints as a clean paper document: the classified
+   banner is kept (and restyled), all other chrome and controls are stripped.
+   =========================================================================== */
+@media print {
+  /* Redefine the palette for paper: white surfaces, dark ink, light rules.
+     The app is token-driven, so this recolours every component at once — cards,
+     metric tiles, timelines and chips all follow, with no per-element chasing. */
+  :root {
+    --bg: #fff; --surface: #fff; --surface-2: #fff; --surface-3: #f3f3f3; --ink-800: #fff;
+    --text: #111; --text-2: #333; --text-3: #555; --muted: #444; --faint: #777;
+    --line: #cfcfcf; --line-soft: #dedede; --line-strong: #bcbcbc;
+  }
+
+  /* Interactive chrome is not part of the record. */
+  .sidebar, .nav-toggle, .nav-backdrop, .topbar, .cmdk-backdrop, .cmdk-launch,
+  .toolbar, .bulk-bar, .file-actions, .page-head__actions, .actionbar, .tag-row,
+  .comment-box, .note-row__actions, .iv-actions, .row-go, #export-csv,
+  .modal-backdrop, .tour-backdrop, button, .btn { display: none !important; }
+
+  html, body { background: #fff !important; color: #111 !important; }
+  .shell, .shell__body, .shell__main {
+    display: block !important; min-height: 0 !important; background: #fff !important;
+  }
+  .view { overflow: visible !important; height: auto !important; padding: 0 !important; }
+  .view > * { max-width: none !important; margin: 0 !important; }
+
+  /* Keep the classification marking, on paper. */
+  .classbar {
+    height: auto !important; padding: 6px 0 !important; font-size: 9px !important;
+    letter-spacing: .16em; background: #fff !important; color: #000 !important; border: none !important;
+  }
+  .classbar--top { border-bottom: 1px solid #000 !important; }
+  .classbar--bottom { border-top: 1px solid #000 !important; }
+
+  /* Blocks don't split across pages; no shadows on paper. */
+  .card, section, .dossier-head, .kv, .timeline li, .metric, .award, .strike, .note, .recruit-card {
+    break-inside: avoid;
+  }
+  .card, .metric { box-shadow: none !important; }
+  a { color: #111 !important; text-decoration: none !important; }
+
+  /* Insignia print in black; clearance/status chips keep their colour coding. */
+  .insignia { color: #000 !important; }
+  .badge, .org-tag { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  @page { margin: 1.5cm; }
+}

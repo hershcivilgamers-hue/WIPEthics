@@ -347,6 +347,7 @@ export function renderCase(host, app, id) {
   host.innerHTML = `
     <div class="file-actions">
       <button class="btn btn--ghost btn--sm" id="back">\u2190 Docket</button>
+      <button class="btn btn--sm" id="print-record">⎙ Print</button>
       <button class="btn btn--sm" id="export-case">\u2913 Export record</button>
     </div>
 
@@ -415,6 +416,7 @@ export function renderCase(host, app, id) {
 
   host.querySelector('#back').addEventListener('click', () => app.navigate('#/tribunals'));
   host.querySelector('#export-case').addEventListener('click', () => exportCase(app, c));
+  host.querySelector('#print-record')?.addEventListener('click', () => window.print());
 
   const dispatch = {
     entry: () => openEntry(app, c),
