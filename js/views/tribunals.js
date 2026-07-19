@@ -24,6 +24,7 @@ import {
 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { exportCase, exportSummons } from '../export.js';
+import { stalenessBadge } from '../staleness.js';
 import {
   esc, linkify, fmtDate, fmtDateTime, clearanceBadge, orgTag, monogram,
   toast, openModal, confirmDialog,
@@ -152,7 +153,7 @@ export function renderList(host, app) {
       <td class="cell-name">${esc(c.title)}</td>
       <td>${kindTag(c.kind)}</td>
       <td>${respondentLabel(c)}</td>
-      <td>${caseStatusBadge(c.status)}</td>
+      <td>${caseStatusBadge(c.status)} ${stalenessBadge(c, 'case')}</td>
       <td>${clearanceBadge(c.clearance)}</td>
       <td class="cell-right"><span class="row-go">Open \u2192</span></td>
     </tr>`).join('') : `

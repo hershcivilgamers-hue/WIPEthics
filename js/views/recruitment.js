@@ -27,6 +27,7 @@ import {
 } from '../permissions.js';
 import { makeCredential } from '../crypto.js';
 import { interviewSetFor, INTERVIEW_BANK_DRAW, INTERVIEW_GRADE, INTERVIEW_RECOMMENDATION } from '../interview-bank.js';
+import { stalenessBadge } from '../staleness.js';
 import { exportInterviewScript, exportInterviewInvite, exportFeedbackSheet } from '../export.js';
 import * as api from '../api.js';
 import { logAction } from '../audit.js';
@@ -111,6 +112,7 @@ export function renderList(host, app, org, trackArg) {
         <div class="recruit-card__top">
           <span class="mono">${esc(r.ref)}</span>
           ${isEthics && r.tag ? tagBadge(r.tag) : ''}
+          ${stalenessBadge(r, 'recruit')}
         </div>
         <div class="recruit-card__name">${esc(r.name)}</div>
         <div class="recruit-card__meta">${esc(r.rank || '\u2014')} \u00b7 ${esc(r.department || '\u2014')}</div>

@@ -743,3 +743,6 @@
 }
 .note-more > summary:hover { color: var(--text-2); }
 .note-more[open] > summary { margin-bottom: var(--s2); }
+
+/* Staleness / SLA chip (REC-07) — reuses the warn/bad badge tones. */
+.stale-badge { margin-left: 4px; letter-spacing: .02em; }
