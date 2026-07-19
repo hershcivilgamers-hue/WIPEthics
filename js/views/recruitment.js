@@ -263,13 +263,22 @@ export function renderRecruit(host, app, id) {
       </div>
     </section>` : '';
 
-  // --- Interview panel (Ethics interview stage) ---
-  // Visible to every viewer of the candidate; CL5 assigns interviewers and manages
-  // the question set, assigned interviewers (and CL5) record responses, CAIRO
-  // offers an advisory grade, and CL5 still enters the pass/fail.
+  // --- Interview panel (Ethics) ---
+  // At the interview stage this is the interviewer's working surface: CL5 assigns
+  // interviewers and manages the question set, assigned interviewers (and CL5)
+  // record responses, CAIRO offers an advisory grade, and CL5 enters the pass/fail.
+  // Once the candidate is ARCHIVED the same panel stays available as a read-only
+  // record: the drawn questions and the answers recorded, with no editing and no
+  // management controls, so a failed (or passed) candidate can be reviewed later.
   const assigned = (r.interviewers || []).includes(actor.id);
-  const interviewPanel = (isEthics && stage === 'interview') ? (() => {
-    const canRespond = cl5 || assigned;
+  const reachedInterview = stage === 'interview'
+    || (stage === 'archived' && (Object.keys(r.interviewResponses || {}).length > 0
+      || (r.interviewers || []).length > 0 || !!r.interviewAssessment));
+  const interviewPanel = (isEthics && reachedInterview) ? (() => {
+    const archivedView = stage === 'archived';
+    const editable = !archivedView && (cl5 || assigned);   // record answers / run assess
+    const manageCL5 = !archivedView && cl5;                // assign, re-roll, add/remove questions
+    const showCriteria = cl5 || assigned;                  // interviewer's marking guide (never the candidate)
     const items = [
       ...interviewSetFor(r),
       ...(r.customQuestions || []).map((q) => ({ ...q, category: 'Committee-added', custom: true })),
@@ -300,11 +309,11 @@ export function renderRecruit(host, app, id) {
       const gm = g ? (INTERVIEW_GRADE[g.grade] || { label: g.grade, tone: 'muted' }) : null;
       const gradeBadge = gm ? `<span class="badge badge--${gm.tone}">${esc(gm.label)}</span>` : '';
       const rationale = (g && g.rationale) ? `<div class="iv-q2__rationale">${esc(g.rationale)}</div>` : '';
-      const criteria = canRespond ? `<div class="iv-guide2">
+      const criteria = showCriteria ? `<div class="iv-guide2">
           <div><span class="iv-guide2__k">Strong</span> ${esc(q.valid || '\u2014')}</div>
           <div><span class="iv-guide2__k iv-guide2__k--weak">Weak</span> ${esc(q.weak || '\u2014')}</div>
         </div>` : '';
-      const respField = canRespond
+      const respField = editable
         ? `<textarea class="iv-resp" data-iv-resp="${esc(q.id)}" rows="3" placeholder="Record the candidate\u2019s answer / your notes\u2026">${esc(answer)}</textarea>`
         : `<div class="iv-resp-ro">${answer ? esc(answer) : '<span class="muted-text">No answer recorded.</span>'}</div>`;
       return `<div class="iv-q2 ${q.custom ? 'iv-q2--custom' : ''}">
@@ -312,7 +321,7 @@ export function renderRecruit(host, app, id) {
           <span class="iv-q2__n">${i + 1}</span>
           <span class="iv-pick__cat">${esc(q.category)}</span>
           ${gradeBadge}
-          ${q.custom && cl5 ? `<button class="btn btn--xs btn--danger" data-iv-remove="${esc(q.id)}" style="margin-left:auto">Remove</button>` : ''}
+          ${q.custom && manageCL5 ? `<button class="btn btn--xs btn--danger" data-iv-remove="${esc(q.id)}" style="margin-left:auto">Remove</button>` : ''}
         </div>
         <div class="iv-q2__prompt">${esc(q.prompt)}</div>
         ${criteria}
@@ -323,21 +332,22 @@ export function renderRecruit(host, app, id) {
 
     return `
       <section class="card">
-        <div class="card__title">Interview Assessment</div>
+        <div class="card__title">${archivedView ? 'Interview Record' : 'Interview Assessment'}</div>
         <div class="card__body">
+          ${archivedView ? '<p class="field__hint" style="margin-bottom:8px">Read-only record. The questions and the recorded answers are shown below and cannot be edited.</p>' : ''}
           <p class="muted-text">${INTERVIEW_BANK_DRAW} scenarios are drawn for this candidate and stay fixed until re-rolled. CL5 assigns interviewers, who record the candidate\u2019s answers; CAIRO offers an advisory grade, and CL5 enters the pass/fail. Interviewer\u2019s copy \u2014 do not show it to the candidate.</p>
           <div class="kv"><span class="kv__k">Interviewers</span><span class="kv__v">${rosterLine}</span></div>
           ${recBlock}
           <div class="iv-actions">
-            ${canRespond ? '<button class="btn btn--sm btn--primary" data-act="iv-assess">\u25c8 Ask CAIRO to assess</button>' : ''}
-            ${canRespond ? '<button class="btn btn--sm" data-act="iv-export">\u23ce Export Interviewer\u2019s Script</button>' : ''}
-            ${cl5 ? '<button class="btn btn--sm" data-act="iv-assign">Assign interviewers</button>' : ''}
-            ${cl5 ? '<button class="btn btn--sm" data-act="iv-reroll">\u27f3 Re-roll Question Set</button>' : ''}
+            ${editable ? '<button class="btn btn--sm btn--primary" data-act="iv-assess">\u25c8 Ask CAIRO to assess</button>' : ''}
+            ${editable ? '<button class="btn btn--sm" data-act="iv-export">\u23ce Export Interviewer\u2019s Script</button>' : ''}
+            ${manageCL5 ? '<button class="btn btn--sm" data-act="iv-assign">Assign interviewers</button>' : ''}
+            ${manageCL5 ? '<button class="btn btn--sm" data-act="iv-reroll">\u27f3 Re-roll Question Set</button>' : ''}
           </div>
-          ${!canRespond ? '<p class="field__hint">You are not assigned to this interview \u2014 responses are read-only.</p>' : ''}
+          ${(!editable && !archivedView) ? '<p class="field__hint">You are not assigned to this interview \u2014 responses are read-only.</p>' : ''}
           <div class="iv-qs">${qBlocks}</div>
-          ${canRespond ? '<div class="iv-actions"><button class="btn btn--sm btn--primary" id="iv-save-responses">Save responses</button></div>' : ''}
-          ${cl5 ? `<button class="btn btn--sm" id="iv-add-toggle" style="margin-top:8px">+ Add a question to this interview</button>
+          ${editable ? '<div class="iv-actions"><button class="btn btn--sm btn--primary" id="iv-save-responses">Save responses</button></div>' : ''}
+          ${manageCL5 ? `<button class="btn btn--sm" id="iv-add-toggle" style="margin-top:8px">+ Add a question to this interview</button>
           <div class="iv-form" id="iv-form" style="display:none;">
             <textarea id="iv-q-prompt" rows="3" placeholder="Scenario / question the candidate will be asked\u2026"></textarea>
             <input id="iv-q-valid" type="text" placeholder="What a valid response demonstrates (optional)" />
