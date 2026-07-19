@@ -231,7 +231,7 @@
 }
 
 /* --- Global search box in the topbar --- */
-.topbar__search-wrap { flex: 1; display: flex; justify-content: center; padding: 0 var(--s4); }
+.topbar__search-wrap { flex: 1; display: flex; justify-content: center; align-items: center; gap: var(--s2); padding: 0 var(--s4); }
 .topbar__search {
   width: 100%;
   max-width: 440px;

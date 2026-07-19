@@ -18,6 +18,7 @@ import { getUser, getSubject, getCase, getRecruit, applyServerSnapshot } from '.
 import { esc, clearanceBadge, toast } from './ui.js';
 import * as api from './api.js';
 import * as sync from './sync.js';
+import { installPaletteShortcut, openPalette } from './command-palette.js';
 
 import * as loginView from './views/login.js';
 import * as overviewView from './views/overview.js';
@@ -146,6 +147,7 @@ function renderShell(user, route) {
             <div class="topbar__title">${esc(CONFIG.systemName)} <span class="topbar__sub">${esc(CONFIG.systemSubtitle)}</span></div>
             <div class="topbar__search-wrap">
               <input id="topbar-search" class="topbar__search" type="search" placeholder="Search records\u2026" value="${esc(searchView.getQuery())}" autocomplete="off" aria-label="Search records" />
+              <button id="cmdk-launch" class="cmdk-launch" type="button" title="Command palette \u2014 \u2318K / Ctrl-K" aria-label="Open command palette"><kbd>\u2318K</kbd></button>
             </div>
             <div class="topbar__op">
               <div class="op-chip">
@@ -192,6 +194,9 @@ function renderShell(user, route) {
     topbarSearch.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
     topbarSearch.addEventListener('search', submit);
   }
+
+  const cmdkLaunch = root.querySelector('#cmdk-launch');
+  if (cmdkLaunch) cmdkLaunch.addEventListener('click', () => openPalette(app));
 
   dispatch(route, user);
 }
@@ -310,6 +315,7 @@ async function boot() {
     runMigrations();
   }
   window.addEventListener('hashchange', renderApp);
+  installPaletteShortcut(app); // global ⌘K / Ctrl-K quick switcher
   renderApp();
 }
 
