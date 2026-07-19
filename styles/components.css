@@ -752,6 +752,20 @@
 .insignia svg, .insignia img { display: block; }
 .insignia img { object-fit: contain; }
 
+/* Record History (REC-09) — the slice of the audit log that names this record,
+   shown on the dossier / case / subject file. Reads like a compact ledger:
+   action + timestamp on the top line, the audit detail spanning below. */
+.rh-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.rh-row {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px var(--s3);
+  padding: var(--s2) 0; border-bottom: 1px solid var(--line-soft);
+}
+.rh-row:last-child { border-bottom: 0; padding-bottom: 0; }
+.rh-row:first-child { padding-top: 0; }
+.rh-row__action { font-weight: 600; color: var(--amber); font-size: 13px; letter-spacing: .01em; }
+.rh-row__detail { grid-column: 1 / -1; color: var(--text-2); font-size: 13px; line-height: 1.45; }
+.rh-row__meta { text-align: right; color: var(--faint); font-size: 12px; white-space: nowrap; }
+
 /* ===========================================================================
    Print (REC-02) — any record prints as a clean paper document: the classified
    banner is kept (and restyled), all other chrome and controls are stripped.

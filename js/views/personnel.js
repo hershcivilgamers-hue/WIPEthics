@@ -24,6 +24,7 @@ import { logAction } from '../audit.js';
 import { exportPersonnel, exportIdCard, exportMedalCertificate } from '../export.js';
 import { exportCSV } from '../csv.js';
 import { rankInsignia } from '../insignia.js';
+import { renderHistory } from '../record-history.js';
 import {
   esc, fmtDate, fmtDateTime, clearanceBadge, statusBadge, accountBadge,
   orgTag, monogram, redacted, toast, openModal, confirmDialog,
@@ -548,6 +549,7 @@ export function renderDossier(host, app, id) {
         ${trainingBlock}
         ${serviceRecord}
         ${notesBlock}
+        ${renderHistory(actor, u, 'personnel')}
       </div>
     </div>
   `;

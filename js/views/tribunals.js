@@ -26,6 +26,7 @@ import { logAction } from '../audit.js';
 import { exportCase, exportSummons } from '../export.js';
 import { stalenessBadge } from '../staleness.js';
 import { exportCSV } from '../csv.js';
+import { renderHistory } from '../record-history.js';
 import {
   esc, linkify, fmtDate, fmtDateTime, clearanceBadge, orgTag, monogram,
   toast, openModal, confirmDialog,
@@ -410,6 +411,7 @@ export function renderCase(host, app, id) {
         </section>
         ${voteBlock}
         ${rulingBlock}
+        ${renderHistory(actor, c, 'case')}
       </div>
     </div>
   `;

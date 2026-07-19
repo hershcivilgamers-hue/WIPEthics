@@ -21,6 +21,7 @@ import {
 import { logAction } from '../audit.js';
 import { exportSubject } from '../export.js';
 import { stalenessBadge } from '../staleness.js';
+import { renderHistory } from '../record-history.js';
 import {
   esc, linkify, fmtDate, fmtDateTime, relTime, clearanceBadge, orgTag,
   monogram, toast, openModal, confirmDialog,
@@ -343,6 +344,7 @@ export function renderSubject(host, app, id) {
             ${logs.length ? `<ul class="timeline">${logItems}</ul>` : logItems}
           </div>
         </section>
+        ${renderHistory(actor, s, 'subject')}
       </div>
     </div>
   `;
