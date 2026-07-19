@@ -23,6 +23,7 @@ import {
 import { logAction } from '../audit.js';
 import { exportPersonnel, exportIdCard, exportMedalCertificate } from '../export.js';
 import { exportCSV } from '../csv.js';
+import { rankInsignia } from '../insignia.js';
 import {
   esc, fmtDate, fmtDateTime, clearanceBadge, statusBadge, accountBadge,
   orgTag, monogram, redacted, toast, openModal, confirmDialog,
@@ -112,7 +113,7 @@ export function renderList(host, app, org) {
       ${canManage ? `<td class="cell-check"><input type="checkbox" data-row-check="${esc(u.id)}" ${rosterSel.has(u.id) ? 'checked' : ''} /></td>` : ''}
       <td class="mono">${esc(u.designation)}</td>
       <td class="cell-name">${esc(u.codename)}${u.accountStatus === 'suspended' ? ' <span class="badge badge--bad">Suspended</span>' : ''}${tagChips(u, { compact: true })}</td>
-      <td>${esc(u.rank || '\u2014')}</td>
+      <td>${rankInsignia(u.org, u.rank)} ${esc(u.rank || '\u2014')}</td>
       <td>${clearanceBadge(u.clearance)}</td>
       <td>${statusBadge(u.status)}</td>
       <td class="cell-right"><span class="row-go">Open \u2192</span></td>
@@ -377,7 +378,7 @@ export function renderDossier(host, app, id) {
     <div class="kv"><span class="kv__k">Designation</span><span class="kv__v mono">${esc(u.designation)}</span></div>
     <div class="kv"><span class="kv__k">Codename</span><span class="kv__v">${esc(u.codename)}</span></div>
     <div class="kv"><span class="kv__k">Organisation</span><span class="kv__v">${orgTag(u.org)} ${esc(ORGS[u.org].name)}</span></div>
-    <div class="kv"><span class="kv__k">Rank</span><span class="kv__v">${esc(u.rank || '\u2014')}</span></div>
+    <div class="kv"><span class="kv__k">Rank</span><span class="kv__v">${rankInsignia(u.org, u.rank, { size: 18 })} ${esc(u.rank || '\u2014')}</span></div>
     <div class="kv"><span class="kv__k">Legal name</span><span class="kv__v">${full ? esc(u.realName) : redacted(14)}</span></div>
     <div class="kv"><span class="kv__k">Operator ID</span><span class="kv__v mono">${full ? esc(u.username) : redacted(8)}</span></div>
     <div class="kv"><span class="kv__k">Account</span><span class="kv__v">${accountBadge(u.accountStatus)}</span></div>

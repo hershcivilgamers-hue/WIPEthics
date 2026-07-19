@@ -746,3 +746,8 @@
 
 /* Staleness / SLA chip (REC-07) — reuses the warn/bad badge tones. */
 .stale-badge { margin-left: 4px; letter-spacing: .02em; }
+
+/* Rank insignia (original SVG devices; real-image backup via insignia.js IMG). */
+.insignia { display: inline-flex; align-items: center; vertical-align: middle; color: var(--amber); flex: none; }
+.insignia svg, .insignia img { display: block; }
+.insignia img { object-fit: contain; }
