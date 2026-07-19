@@ -245,3 +245,68 @@
 }
 .topbar__search:focus { outline: none; border-color: var(--amber); box-shadow: 0 0 0 3px rgba(200, 162, 75, .15); }
 .topbar__search::placeholder { color: var(--text-3); }
+
+/* ===========================================================================
+   Responsive — tablet/phone: the sidebar collapses to a drawer (REC-01).
+   Desktop is untouched; everything below only applies at <= 900px.
+   =========================================================================== */
+.nav-toggle { display: none; }
+.nav-backdrop { display: none; }
+.sidebar__account { display: none; }
+
+@media (max-width: 900px) {
+  .nav-toggle {
+    display: inline-flex; align-items: center; justify-content: center; flex: none;
+    width: 34px; height: 32px; padding: 0; font-size: 17px; line-height: 1;
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius);
+    color: var(--text); cursor: pointer;
+  }
+  .nav-toggle:hover { border-color: var(--amber-dim); color: var(--amber); }
+
+  /* Sidebar becomes an off-canvas drawer */
+  .sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 60;
+    width: min(84vw, 300px);
+    transform: translateX(-100%);
+    transition: transform .22s ease;
+    box-shadow: 2px 0 28px rgba(0, 0, 0, .45);
+  }
+  .shell--nav-open .sidebar { transform: translateX(0); }
+
+  .nav-backdrop {
+    display: block; position: fixed; inset: 0; z-index: 55;
+    background: rgba(6, 8, 12, .55);
+    opacity: 0; pointer-events: none; transition: opacity .2s ease;
+  }
+  .shell--nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
+
+  /* Topbar reflow */
+  .topbar { padding: var(--s2) var(--s3); gap: var(--s2); }
+  .topbar__title { font-size: 14px; }
+  .topbar__sub { display: none; }
+  .topbar__search-wrap { flex: 1; justify-content: flex-end; padding: 0; }
+  .topbar__search { display: none; }              /* the palette is mobile search */
+  .op-chip { padding: var(--s1) var(--s2); }
+  .op-chip__id, .op-chip__name { display: none; } /* keep just the clearance badge */
+  .topbar__op .theme-select,
+  .topbar__op #tour-btn,
+  .topbar__op #change-pass,
+  .topbar__op #logout { display: none; }           /* relocated into the drawer */
+
+  /* Account controls, surfaced inside the drawer on mobile */
+  .sidebar__account {
+    display: flex; flex-direction: column; gap: var(--s2);
+    padding: var(--s3) var(--s4); border-top: 1px solid var(--line-soft);
+  }
+  .sidebar__account-op { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; margin-bottom: var(--s1); }
+  .sidebar__account-op .op-chip__id, .sidebar__account-op .op-chip__name { display: inline; }
+  .sidebar__account-theme { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); font-size: 12px; color: var(--text-2); }
+  .sidebar__account-theme .theme-select { flex: none; }
+  .sidebar__account-btns { display: flex; flex-direction: column; gap: var(--s2); }
+  .sidebar__account-btns .btn { width: 100%; }
+
+  /* Content breathing room */
+  .view { padding: var(--s4) var(--s3); }
+  .page-head { flex-direction: column; align-items: flex-start; gap: var(--s2); }
+  .page-title { font-size: 22px; }
+}

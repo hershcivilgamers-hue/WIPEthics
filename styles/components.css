@@ -695,3 +695,12 @@
 @media (prefers-reduced-motion: reduce) {
   .cmdk-backdrop, .cmdk { animation: none; }
 }
+
+/* Responsive (REC-01): wide tables scroll instead of blowing out the viewport;
+   the palette sits a little higher on small screens. Desktop untouched. */
+@media (max-width: 900px) {
+  .table, .data-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table thead th, .table tbody td, .data-table th, .data-table td { white-space: nowrap; }
+  .cmdk-backdrop { padding: 8vh var(--s3) var(--s3); }
+  .modal-backdrop { padding: var(--s3); align-items: flex-start; }
+}

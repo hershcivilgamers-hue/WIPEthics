@@ -95,6 +95,21 @@ function buildSidebar(user, activeName) {
         </span>
       </div>
       <nav class="nav">${groups}</nav>
+      <div class="sidebar__account">
+        <div class="sidebar__account-op">
+          <span class="op-chip__id mono">${esc(user.designation)}</span>
+          <span class="op-chip__name">${esc(user.codename)}</span>
+          ${clearanceBadge(user.clearance)}
+        </div>
+        <label class="sidebar__account-theme">Theme
+          <select class="theme-select js-theme-select" aria-label="Display theme">${THEMES.map((t) => `<option value="${t.id}" ${t.id === getTheme() ? 'selected' : ''}>${t.label}</option>`).join('')}</select>
+        </label>
+        <div class="sidebar__account-btns">
+          <button class="btn btn--ghost btn--sm" data-act="tour">Tour</button>
+          <button class="btn btn--ghost btn--sm" data-act="change-pass">Change passphrase</button>
+          <button class="btn btn--ghost btn--sm" data-act="logout">Sign out</button>
+        </div>
+      </div>
       <div class="sidebar__foot">v${esc(CONFIG.version)}</div>
     </aside>`;
 }
@@ -142,8 +157,10 @@ function renderShell(user, route) {
       <div class="classbar classbar--top">${banner}</div>
       <div class="shell__body">
         ${buildSidebar(user, activeName)}
+        <div class="nav-backdrop" id="nav-backdrop"></div>
         <div class="shell__main">
           <header class="topbar">
+            <button class="nav-toggle" id="nav-toggle" type="button" aria-label="Open navigation menu" aria-expanded="false">☰</button>
             <div class="topbar__title">${esc(CONFIG.systemName)} <span class="topbar__sub">${esc(CONFIG.systemSubtitle)}</span></div>
             <div class="topbar__search-wrap">
               <input id="topbar-search" class="topbar__search" type="search" placeholder="Search records\u2026" value="${esc(searchView.getQuery())}" autocomplete="off" aria-label="Search records" />
@@ -155,12 +172,12 @@ function renderShell(user, route) {
                 <span class="op-chip__name">${esc(user.codename)}</span>
                 ${clearanceBadge(user.clearance)}
               </div>
-              <select id="theme-select" class="theme-select" aria-label="Display theme" title="Display theme">
+              <select id="theme-select" class="theme-select js-theme-select" aria-label="Display theme" title="Display theme">
                 ${THEMES.map((t) => `<option value="${t.id}" ${t.id === getTheme() ? 'selected' : ''}>${t.label}</option>`).join('')}
               </select>
-              <button class="btn btn--ghost btn--sm" id="tour-btn" title="Re-run the system tour">Tour</button>
-              <button class="btn btn--ghost btn--sm" id="change-pass">Change passphrase</button>
-              <button class="btn btn--ghost btn--sm" id="logout">Sign out</button>
+              <button class="btn btn--ghost btn--sm" id="tour-btn" data-act="tour" title="Re-run the system tour">Tour</button>
+              <button class="btn btn--ghost btn--sm" id="change-pass" data-act="change-pass">Change passphrase</button>
+              <button class="btn btn--ghost btn--sm" id="logout" data-act="logout">Sign out</button>
             </div>
           </header>
           <main class="view" id="view"></main>
@@ -169,20 +186,30 @@ function renderShell(user, route) {
       <div class="classbar classbar--bottom">${banner}</div>
     </div>`;
 
-  const changePass = root.querySelector('#change-pass');
-  if (changePass) changePass.addEventListener('click', () => personnelView.openChangePassphrase(app));
-  const tourBtn = root.querySelector('#tour-btn');
-  if (tourBtn) tourBtn.addEventListener('click', () => startTutorial(app));
-  const themeSel = root.querySelector('#theme-select');
-  if (themeSel) themeSel.addEventListener('change', (e) => setTheme(e.target.value));
-
-  root.querySelector('#logout').addEventListener('click', () => {
+  // Account controls appear in the topbar on desktop and in the drawer on mobile;
+  // wire both copies in one pass by class / data-act.
+  root.querySelectorAll('.js-theme-select').forEach((sel) => sel.addEventListener('change', (e) => setTheme(e.target.value)));
+  root.querySelectorAll('[data-act="tour"]').forEach((b) => b.addEventListener('click', () => startTutorial(app)));
+  root.querySelectorAll('[data-act="change-pass"]').forEach((b) => b.addEventListener('click', () => personnelView.openChangePassphrase(app)));
+  root.querySelectorAll('[data-act="logout"]').forEach((b) => b.addEventListener('click', () => {
     logAction(user, 'LOGOUT', `${user.designation} signed out.`);
     if (api.serverMode()) api.logout();
     endSession();
     app.navigate('#/overview');
     renderApp();
-  });
+  }));
+
+  // Mobile drawer: the hamburger toggles the off-canvas sidebar; the backdrop
+  // closes it. Navigating re-renders the shell, which resets to closed.
+  const shellEl = root.querySelector('.shell');
+  const navToggle = root.querySelector('#nav-toggle');
+  const navBackdrop = root.querySelector('#nav-backdrop');
+  const setNav = (open) => {
+    shellEl.classList.toggle('shell--nav-open', open);
+    if (navToggle) navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  if (navToggle) navToggle.addEventListener('click', () => setNav(!shellEl.classList.contains('shell--nav-open')));
+  if (navBackdrop) navBackdrop.addEventListener('click', () => setNav(false));
 
   const topbarSearch = root.querySelector('#topbar-search');
   if (topbarSearch) {
