@@ -17,7 +17,7 @@ import {
   CASE_KIND, CASE_KIND_ORDER,
 } from '../constants.js';
 import { recruits, cases } from '../storage.js';
-import { esc, fmtDate } from '../ui.js';
+import { esc, fmtDate, helpNote } from '../ui.js';
 
 const DAY = 86400000;
 const LIVE_STAGES = RECRUIT_STAGE_ORDER.filter((s) => s !== 'archived');
@@ -200,9 +200,11 @@ export function render(host, app) {
     <div class="page-head">
       <div>
         <h1 class="page-title">Insight</h1>
-        <div class="page-sub">Command analytics — recruitment and the docket, at a glance. Oversight view, CL5.</div>
+        <div class="page-sub">Command analytics — recruitment and the docket, at a glance.</div>
       </div>
     </div>
+
+    ${helpNote('This view aggregates records across every organisation, so it is limited to Command (CL5). Figures respect the same redaction rules as the records they summarise.')}
 
     <div class="ins-grid">
       <section class="card">

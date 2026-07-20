@@ -116,6 +116,18 @@ export function redacted(approxChars = 12) {
   return `<span class="redacted" style="--rw:${w}ch" aria-label="redacted">REDACTED</span>`;
 }
 
+// --- Teaching help note -----------------------------------------------------
+// A quiet, non-blocking line that explains the rule in play — why a file is
+// redacted, an action gated, or a panel empty — at the point of confusion,
+// instead of leaving the operator to infer the permission model. Not a warning;
+// it teaches. `text` is trusted caller copy but escaped for safety.
+export function helpNote(text, { tone = 'info' } = {}) {
+  if (!text) return '';
+  return `<div class="help-note help-note--${esc(tone)}">`
+    + `<span class="help-note__mark" aria-hidden="true">ⓘ</span>`
+    + `<span class="help-note__text">${esc(text)}</span></div>`;
+}
+
 // --- Toasts -----------------------------------------------------------------
 function toastRoot() {
   let root = document.getElementById('toast-root');

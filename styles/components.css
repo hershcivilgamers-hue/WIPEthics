@@ -806,6 +806,20 @@
 .ins-col__fill { width: 100%; background: var(--amber); border-radius: 3px 3px 0 0; }
 .ins-tp__axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); margin: 2px 0 0 calc(5.5rem + var(--s3)); }
 
+/* Teaching help note (REC-12) — explains the rule in play (redaction, a gated
+   action, an empty panel) in context. Quiet and informational, not an alert. */
+.help-note {
+  display: flex; gap: var(--s2); align-items: flex-start;
+  padding: var(--s2) var(--s3); margin: 0 0 var(--s3);
+  background: var(--surface-2); border: 1px solid var(--line-soft);
+  border-left: 2px solid var(--info); border-radius: var(--radius);
+  font-size: 13px; line-height: 1.5; color: var(--text-2);
+}
+.help-note__mark { color: var(--info); flex: none; font-size: 14px; line-height: 1.45; }
+.help-note--warn { border-left-color: var(--warn); }
+.help-note--warn .help-note__mark { color: var(--warn); }
+.help-note__text { min-width: 0; }
+
 /* ===========================================================================
    Print (REC-02) — any record prints as a clean paper document: the classified
    banner is kept (and restyled), all other chrome and controls are stripped.

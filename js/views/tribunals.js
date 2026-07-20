@@ -29,7 +29,7 @@ import { exportCSV } from '../csv.js';
 import { renderHistory } from '../record-history.js';
 import {
   esc, linkify, fmtDate, fmtDateTime, clearanceBadge, orgTag, monogram,
-  toast, openModal, confirmDialog,
+  toast, openModal, confirmDialog, helpNote,
 } from '../ui.js';
 
 const filter = { q: '', kind: '', status: '' };
@@ -342,7 +342,10 @@ export function renderCase(host, app, id) {
     </section>` : `
     <section class="card">
       <div class="card__title">Ruling</div>
-      <div class="card__body"><div class="empty">No ruling entered.</div></div>
+      <div class="card__body">
+        <div class="empty">No ruling entered.</div>
+        ${!canRule ? helpNote('A ruling is entered by Command (CL5). You can add docket entries and seat a panel, but the finding is sealed until Command enters it.') : ''}
+      </div>
     </section>`;
 
   host.innerHTML = `

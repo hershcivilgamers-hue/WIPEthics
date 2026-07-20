@@ -478,11 +478,11 @@ export function renderDossier(host, app, id) {
   const redactBanner = nameOnly ? `
     <div class="redact-banner">
       <strong>Access restricted.</strong> Your clearance permits identity confirmation only.
-      The full service record for this operator is withheld.
+      The full service record opens at CL4 with a role in this operator's organisation, or at CL5.
     </div>` : (partial ? `
     <div class="redact-banner redact-banner--soft">
-      Partial access. Disciplinary record, leave details and command notes are
-      restricted at your clearance.
+      <strong>Partial access.</strong> The disciplinary record, leave details and command notes are
+      sealed at your clearance. They open at CL4&middot;S within this operator's chain of command, or at CL5.
     </div>` : '');
 
   host.innerHTML = `
