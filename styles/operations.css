@@ -228,7 +228,8 @@
 .dash-list { display: flex; flex-direction: column; }
 .dash-row { display: flex; align-items: baseline; gap: var(--s3); padding: var(--s3) var(--s2); border-bottom: 1px solid var(--line); cursor: pointer; line-height: 1.45; }
 .dash-row:last-child { border-bottom: none; }
-.dash-row:hover, .dash-row:focus-visible { background: var(--surface-2); outline: none; }
+.dash-row:hover { background: var(--surface-2); }
+.dash-row:focus-visible { background: var(--surface-2); outline: 2px solid var(--amber); outline-offset: -2px; }
 .dash-row__grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dash-row .badge { flex: 0 0 auto; }
 .tl__item.dash-go { cursor: pointer; }

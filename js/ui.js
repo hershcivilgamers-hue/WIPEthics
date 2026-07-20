@@ -139,11 +139,30 @@ export function toast(message, tone = 'info', ms = 3200) {
 // --- Modal dialog -----------------------------------------------------------
 let activeModal = null;
 
+// Everything a keyboard user can land on inside the dialog.
+const MODAL_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+// Keep Tab inside the open dialog — a modal that leaks focus to the page behind
+// it is unusable by keyboard and confusing under a screen reader.
+function trapTab(e, dialog) {
+  if (e.key !== 'Tab') return;
+  const items = [...dialog.querySelectorAll(MODAL_FOCUSABLE)].filter((n) => n.offsetParent !== null);
+  if (!items.length) return;
+  const first = items[0];
+  const last = items[items.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+
 function teardownModal() {
   if (!activeModal) return;
   document.removeEventListener('keydown', activeModal.onKey);
   activeModal.backdrop.remove();
+  // Return focus to whatever opened the dialog, so keyboard users aren't
+  // dumped at the top of the document.
+  const opener = activeModal.opener;
   activeModal = null;
+  if (opener && typeof opener.focus === 'function' && document.contains(opener)) opener.focus();
 }
 
 // Open a modal. `body` may be an HTML string or a DOM node. `actions` is an
@@ -174,17 +193,25 @@ export function openModal({ title, body, actions = [], wide = false }) {
     foot.appendChild(btn);
   });
 
-  const onKey = (e) => { if (e.key === 'Escape') closeModal(); };
+  const onKey = (e) => {
+    if (e.key === 'Escape') { closeModal(); return; }
+    trapTab(e, dialog);
+  };
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeModal(); });
   dialog.querySelector('[data-close]').addEventListener('click', closeModal);
   document.addEventListener('keydown', onKey);
 
+  // Remember what had focus so we can hand it back when the dialog closes.
+  const opener = document.activeElement;
   backdrop.appendChild(dialog);
   document.body.appendChild(backdrop);
-  activeModal = { backdrop, onKey };
+  activeModal = { backdrop, onKey, opener };
 
-  // Focus the first focusable control for keyboard users.
-  const focusable = dialog.querySelector('input, select, textarea, button');
+  // Focus the first real input for keyboard users — but skip the close button so
+  // opening a form doesn't land the caret on "×".
+  const focusable = dialog.querySelector('.modal__body input, .modal__body select, .modal__body textarea, .modal__body button')
+    || dialog.querySelector('.modal__foot button')
+    || dialog.querySelector('[data-close]');
   if (focusable) focusable.focus();
 
   return dialog;

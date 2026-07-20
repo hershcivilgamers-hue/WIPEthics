@@ -64,6 +64,31 @@ textarea { resize: vertical; }
   outline-offset: 2px;
 }
 
+/* The view heading is focused programmatically on route change (to move screen
+   readers to the new content). That is not a keyboard interaction, so it must
+   not paint a focus ring — :focus-visible handles genuine keyboard focus. */
+#view:focus,
+#view > .page-title:focus,
+#view .dossier-codename:focus { outline: none; }
+
+/* Skip link — the first thing a keyboard user reaches; hidden until focused,
+   then it drops in over the classified banner to jump past the nav. */
+.skip-link {
+  position: fixed;
+  top: -3rem;
+  left: 0.75rem;
+  z-index: 200;
+  padding: 0.5rem 0.9rem;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--amber);
+  border-radius: var(--radius);
+  font: 500 13px/1 var(--sans);
+  text-decoration: none;
+  transition: top 0.12s ease;
+}
+.skip-link:focus { top: 0.5rem; outline: 2px solid var(--amber); outline-offset: 2px; }
+
 /* ===========================================================================
    Motion — procedural and weighted, never bouncy. 120–200ms for UI,
    ~400ms for stamps/seals. Every consequential state change is confirmed.

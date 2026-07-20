@@ -57,6 +57,19 @@ const app = {
   toast,
 };
 
+// Accessibility: the shell is rebuilt on every navigation, which drops focus to
+// <body>. On a genuine route change we move focus into the new view so keyboard
+// and screen-reader users start at the new content (a heading when there is
+// one). `lastRouteKey` lets in-view refreshes — same route — leave focus alone.
+let lastRouteKey = null;
+function focusView() {
+  const view = document.getElementById('view');
+  if (!view) return;
+  const target = view.querySelector('.page-title, .dossier-codename') || view;
+  target.setAttribute('tabindex', '-1');
+  target.focus();
+}
+
 // Map a nav name to the org it lists (for active-state highlighting).
 function navNameForOrg(org) {
   return org === 'ethics-committee' ? 'ethics' : org; // 'omega-1' | 'command'
@@ -155,6 +168,7 @@ function renderShell(user, route) {
 
   root.innerHTML = `
     <div class="shell">
+      <a class="skip-link" href="#view" id="skip-link">Skip to main content</a>
       <div class="classbar classbar--top">${banner}</div>
       <div class="shell__body">
         ${buildSidebar(user, activeName)}
@@ -226,7 +240,20 @@ function renderShell(user, route) {
   const cmdkLaunch = root.querySelector('#cmdk-launch');
   if (cmdkLaunch) cmdkLaunch.addEventListener('click', () => openPalette(app));
 
+  // Skip link: jump keyboard users past the nav to the view (JS, not a hash
+  // jump — the app uses hash routing, so "#view" must not reach the router).
+  const skip = root.querySelector('#skip-link');
+  if (skip) skip.addEventListener('click', (e) => { e.preventDefault(); focusView(); });
+
   dispatch(route, user);
+
+  // Move focus into the view only when the route actually changed, and never
+  // while a dialog is open (the dialog owns focus).
+  const routeKey = `${route.name}:${route.params?.id || ''}`;
+  if (routeKey !== lastRouteKey) {
+    lastRouteKey = routeKey;
+    if (!document.querySelector('.modal-backdrop')) focusView();
+  }
 }
 
 function dispatch(route, user) {

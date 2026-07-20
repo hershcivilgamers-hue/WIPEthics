@@ -501,7 +501,9 @@
 .trn-row__name { flex: 1; min-width: 0; }
 .trn-row__exp { flex: 0 0 auto; font-size: 12px; }
 .row-click { cursor: pointer; }
-.row-click:hover, .row-click:focus-visible { background: var(--surface-2); outline: none; }
+.row-click:hover { background: var(--surface-2); }
+/* Keyboard focus needs a visible indicator; an inset ring reads cleanly on a row. */
+.row-click:focus-visible { background: var(--surface-2); outline: 2px solid var(--amber); outline-offset: -2px; }
 
 /* --- Split field row (two inputs side by side) ------------------------------ */
 .field--split { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }

@@ -180,7 +180,7 @@ export function renderList(host, app, org) {
   const go = (id) => app.navigate(`#/personnel/${id}`);
   host.querySelectorAll('tr[data-id]').forEach((tr) => {
     tr.addEventListener('click', (e) => { if (e.target.closest('.cell-check')) return; go(tr.dataset.id); });
-    tr.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(tr.dataset.id); });
+    tr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(tr.dataset.id); } });
   });
 
   // Bulk selection.

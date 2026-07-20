@@ -49,7 +49,7 @@
   --ok:       #5E8C6A;  /* Verify Green (dark) */
   --warn:     #C8A24B;
   --bad:      #A63D3D;  /* danger */
-  --bad-text: #C96A6A;  /* Oxblood text on dark */
+  --bad-text: #CE7272;  /* Oxblood text on dark (AA: clears 4.5:1 on CL5/danger chips) */
   --info:     #8FB3C9;  /* Info Blue — IDs, system links */
   --muted:    #6B7075;
   --slate-ui: #3A3F43;  /* neutral chrome / L3 banners */

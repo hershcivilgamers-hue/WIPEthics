@@ -185,7 +185,7 @@ export function renderList(host, app) {
   const go = (id) => app.navigate(`#/subject/${id}`);
   host.querySelectorAll('tr[data-id]').forEach((tr) => {
     tr.addEventListener('click', () => go(tr.dataset.id));
-    tr.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(tr.dataset.id); });
+    tr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(tr.dataset.id); } });
   });
 
   const q = host.querySelector('#flt-q');
