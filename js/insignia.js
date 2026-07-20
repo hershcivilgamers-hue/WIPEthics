@@ -26,10 +26,17 @@ export const IMG = {
 };
 
 // --- SVG primitives (100×100 viewBox, gold via currentColor) -----------------
+// An eight-pointed "pip" — the Star of the Order of the Bath that British Army
+// officer rank insignia depict, rendered as our own device (sharp points from
+// alternating long/short radii).
 function pipAt(cx, cy, r) {
-  const i = r * 0.36;
-  const pts = `${cx},${cy - r} ${cx + i},${cy - i} ${cx + r},${cy} ${cx + i},${cy + i} ${cx},${cy + r} ${cx - i},${cy + i} ${cx - r},${cy} ${cx - i},${cy - i}`;
-  return `<polygon points="${pts}" fill="currentColor"/>`;
+  let pts = '';
+  for (let k = 0; k < 16; k += 1) {
+    const a = -Math.PI / 2 + (k * Math.PI) / 8;
+    const rr = k % 2 ? r * 0.4 : r;
+    pts += `${(cx + rr * Math.cos(a)).toFixed(1)},${(cy + rr * Math.sin(a)).toFixed(1)} `;
+  }
+  return `<polygon points="${pts.trim()}" fill="currentColor"/>`;
 }
 function pipsRow(n, y = 52, r = 15) {
   const gap = 30;
@@ -54,10 +61,14 @@ function chevrons(n) {
   }
   return out;
 }
+// A King's Crown: jewelled base, three raised points capped with pearls, and a
+// monde-and-cross rising from the centre. Original device, not a traced file.
 function crown(cy = 40) {
   return `<path d="M27,${cy} L30,${cy - 16} L40,${cy - 6} L50,${cy - 20} L60,${cy - 6} L70,${cy - 16} L73,${cy} Z" fill="currentColor"/>`
     + `<rect x="27" y="${cy + 2}" width="46" height="8" rx="2" fill="currentColor"/>`
-    + `<circle cx="30" cy="${cy - 16}" r="3.5" fill="currentColor"/><circle cx="50" cy="${cy - 20}" r="3.5" fill="currentColor"/><circle cx="70" cy="${cy - 16}" r="3.5" fill="currentColor"/>`;
+    + `<circle cx="30" cy="${cy - 16}" r="3.5" fill="currentColor"/><circle cx="50" cy="${cy - 20}" r="3.5" fill="currentColor"/><circle cx="70" cy="${cy - 16}" r="3.5" fill="currentColor"/>`
+    + `<circle cx="50" cy="${cy - 23}" r="2.6" fill="currentColor"/>`
+    + `<rect x="48.7" y="${cy - 30}" width="2.6" height="8" rx="1" fill="currentColor"/><rect x="46" y="${cy - 27.7}" width="8" height="2.6" rx="1" fill="currentColor"/>`;
 }
 function star(cx = 50, cy = 50, r = 30) {
   let pts = '';
