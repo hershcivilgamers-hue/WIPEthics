@@ -26,6 +26,8 @@ const canSeeDashboard = (u) => isCL5(u) || u.org === 'omega-1' || u.org === 'com
 const canSeeEngagement = (u) => isCL5(u) || canManageOrg(u, 'omega-1');
 // Evidence is self-service for Omega personnel (submit their own), plus managers/CL5 (review).
 const canSeeEvidence = (u) => isCL5(u) || u.org === 'omega-1' || canManageOrg(u, 'omega-1');
+// Insight aggregates across organisations — Command oversight only.
+const canSeeInsight = (u) => isCL5(u);
 
 // Sidebar structure, grouped by organisation. `feature` ties an item to a
 // CONFIG feature flag; `guard` ties it to a permission check.
@@ -73,6 +75,7 @@ export const NAV = [
     group: 'Site Command',
     items: [
       { name: 'command', hash: '#/command', label: 'Personnel Files', guard: canViewCommandRoster },
+      { name: 'insight', hash: '#/insight', label: 'Insight',         guard: canSeeInsight },
       { name: 'admin',   hash: '#/admin',   label: 'Administration',  guard: canAccessAdmin },
     ],
   },
@@ -94,6 +97,7 @@ const GUARDS = {
   'recruit-ethics-member': canSeeMemberRecruitment,
   docket: canSeeDocket,
   recruit: canSeeAnyRecruitment,
+  insight: canSeeInsight,
 };
 
 // Routes disabled by a CONFIG feature flag.
@@ -118,7 +122,7 @@ function featureBlocked(name) {
   return false;
 }
 
-const TOP_LEVEL = ['overview', 'notifications', 'search', 'surveillance', 'compartments', 'operations', 'trainings', 'deployments', 'intel', 'engagement', 'evidence', 'dashboard', 'docket', 'tribunals', 'directives', 'documents', 'terminal', 'activity', 'blacklist', 'recruit-omega', 'recruit-ethics', 'omega-1', 'ethics', 'command', 'admin'];
+const TOP_LEVEL = ['overview', 'notifications', 'search', 'surveillance', 'compartments', 'operations', 'trainings', 'deployments', 'intel', 'engagement', 'evidence', 'dashboard', 'docket', 'tribunals', 'directives', 'documents', 'terminal', 'activity', 'blacklist', 'recruit-omega', 'recruit-ethics', 'omega-1', 'ethics', 'command', 'insight', 'admin'];
 
 // Parse the current location hash into a route { name, params }.
 export function parseHash() {
