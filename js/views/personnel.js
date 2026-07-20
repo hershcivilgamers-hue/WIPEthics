@@ -460,12 +460,38 @@ export function renderDossier(host, app, id) {
     </section>`;
   }
   const leaveBlock = onLeave ? sectionLeave(u, full) : '';
+
+  // Dual control (REC-10): a discharge is FILED by one authority and only takes
+  // effect when a DIFFERENT discharging authority co-signs it. This banner is
+  // the pending state; the co-sign / reject is a second person's action.
+  let dischargeReqBlock = '';
+  if (full && u.pendingDischarge && u.status !== 'discharged') {
+    const pd = u.pendingDischarge;
+    const isRequester = actor.id === pd.requestedBy;
+    const canCosign = canDischarge(actor, u) && !isRequester;
+    const chip = pd.type === 'dishonourable' ? '<span class="badge badge--bad">Dishonourable</span>' : '<span class="badge badge--muted">Honourable</span>';
+    dischargeReqBlock = `<section class="card card--alert">
+      <div class="card__title">Discharge \u2014 Second Signature Required <span class="badge badge--warn">Pending</span></div>
+      <div class="card__body">
+        <div>${chip} discharge</div>
+        <div class="muted-text">\u201c${esc(pd.reason || '')}\u201d</div>
+        <div class="strike__appeal-head" style="margin-top:6px">Filed ${fmtDate(pd.requestedAt)} by <span class="mono">${esc(pd.requestedByLabel || '')}</span></div>
+        ${canCosign
+          ? '<div class="strike__actions"><button class="btn btn--xs btn--danger" data-cosign-discharge>Co-sign &amp; discharge</button><button class="btn btn--xs" data-reject-discharge>Reject</button></div>'
+          : (isRequester
+            ? '<p class="field__hint" style="margin-top:6px">You filed this discharge. A second discharging authority must co-sign before it takes effect \u2014 you cannot co-sign your own request. <button class="btn btn--xs" data-reject-discharge style="margin-left:4px">Withdraw</button></p>'
+            : '')}
+      </div>
+    </section>`;
+  }
+
   const dischargeBlock = (u.status === 'discharged' && u.discharge && full) ? `
     <section class="card card--warn">
       <div class="card__title">Service Termination</div>
       <div class="card__body">
         <div class="kv"><span class="kv__k">Character</span><span class="kv__v">${u.discharge.type === 'dishonourable' ? '<span class="badge badge--bad">Dishonourable</span>' : '<span class="badge badge--muted">Honourable</span>'}</span></div>
-        <div class="kv"><span class="kv__k">Authorised by</span><span class="kv__v mono">${esc(u.discharge.by || '')}</span></div>
+        <div class="kv"><span class="kv__k">Filed by</span><span class="kv__v mono">${esc(u.discharge.by || '')}</span></div>
+        ${u.discharge.cosignedBy ? `<div class="kv"><span class="kv__k">Co-signed by</span><span class="kv__v mono">${esc(u.discharge.cosignedBy)}</span></div>` : ''}
         <div class="kv"><span class="kv__k">Date</span><span class="kv__v">${fmtDate(u.discharge.at)}</span></div>
         <div class="kv kv--stack"><span class="kv__k">Citation</span><span class="kv__v">${esc(u.discharge.reason || '\u2014')}</span></div>
       </div>
@@ -518,7 +544,7 @@ export function renderDossier(host, app, id) {
       ${acts.passphrase ? '<button class="btn btn--sm" data-act="passphrase">Set passphrase</button>' : ''}
       ${acts.strike ? '<button class="btn btn--sm" data-act="strike">Add strike</button>' : ''}
       ${acts.leave ? `<button class="btn btn--sm" data-act="leave">${onLeave ? 'Return from leave' : 'Place on leave'}</button>` : ''}
-      ${acts.discharge ? `<button class="btn btn--sm ${u.status === 'discharged' ? '' : 'btn--danger'}" data-act="discharge">${u.status === 'discharged' ? 'Reinstate' : 'Discharge'}</button>` : ''}
+      ${acts.discharge && !u.pendingDischarge ? `<button class="btn btn--sm ${u.status === 'discharged' ? '' : 'btn--danger'}" data-act="discharge">${u.status === 'discharged' ? 'Reinstate' : 'Request discharge'}</button>` : ''}
       ${acts.note ? '<button class="btn btn--sm" data-act="note">Add note</button>' : ''}
       ${acts.tags ? '<button class="btn btn--sm" data-act="tags">Manage tags</button>' : ''}
       ${acts.medal ? '<button class="btn btn--sm" data-act="medal">Award medal</button>' : ''}
@@ -539,6 +565,7 @@ export function renderDossier(host, app, id) {
         ${myServiceBlock}
         ${promoBlock}
         ${leaveBlock}
+        ${dischargeReqBlock}
         ${dischargeBlock}
         ${leaveReqBlock}
         ${advReqBlock}
@@ -574,7 +601,7 @@ export function renderDossier(host, app, id) {
     strike: () => openStrike(app, u),
     note: () => openNote(app, u),
     leave: () => onLeave ? returnFromLeave(app, u) : openLeave(app, u),
-    discharge: () => u.status === 'discharged' ? reinstate(app, u) : openDischarge(app, u),
+    discharge: () => u.status === 'discharged' ? reinstate(app, u) : openRequestDischarge(app, u),
     delete: () => removeRecord(app, u),
     promote: () => promote(app, u),
     demote: () => demote(app, u),
@@ -585,6 +612,10 @@ export function renderDossier(host, app, id) {
   host.querySelectorAll('[data-lift-strike]').forEach((b) => b.addEventListener('click', () => liftStrike(app, u, b.dataset.liftStrike)));
   host.querySelectorAll('[data-appeal-strike]').forEach((b) => b.addEventListener('click', () => openAppealStrike(app, u, b.dataset.appealStrike)));
   host.querySelectorAll('[data-resolve-appeal]').forEach((b) => b.addEventListener('click', () => openResolveAppeal(app, u, b.dataset.resolveAppeal)));
+  const coD = host.querySelector('[data-cosign-discharge]');
+  if (coD) coD.addEventListener('click', () => coSignDischarge(app, u));
+  const rjD = host.querySelector('[data-reject-discharge]');
+  if (rjD) rjD.addEventListener('click', () => rejectDischarge(app, u));
   const apL = host.querySelector('[data-approve-leave]');
   if (apL) apL.addEventListener('click', () => resolveLeaveRequest(app, u, 'approved'));
   const dcL = host.querySelector('[data-decline-leave]');
@@ -1778,33 +1809,83 @@ async function returnFromLeave(app, u) {
 // Discharge an operator, honourably or dishonourably. The character of the
 // discharge and a citation are recorded; the record stays on file (discharged
 // personnel drop out of active rosters but the dossier is preserved).
-function openDischarge(app, u) {
+// Dual control (REC-10): discharge is a two-signature action. This FILES it;
+// it does not take effect until a different discharging authority co-signs.
+function openRequestDischarge(app, u) {
   const actor = app.user;
+  if (u.pendingDischarge) { toast('A discharge is already filed and awaiting co-signature.', 'error'); return; }
   openModal({
-    title: `Discharge \u2014 ${u.designation}`,
+    title: `Request discharge \u2014 ${u.designation}`,
     wide: true,
     body: `
-      <p class="modal__message">Discharge <strong>${esc(u.designation)} \u00b7 ${esc(u.codename)}</strong> from ${esc(ORGS[u.org].short)}. Their record is retained; they are removed from active rosters and their access is withdrawn.</p>
+      <p class="modal__message">File a discharge for <strong>${esc(u.designation)} \u00b7 ${esc(u.codename)}</strong> from ${esc(ORGS[u.org].short)}. This does <strong>not</strong> take effect immediately \u2014 a second discharging authority must co-sign it, and you cannot co-sign your own request.</p>
       <label class="radio-row"><input type="radio" name="dc-type" value="honourable" checked /> <span><strong>Honourable discharge</strong> \u2014 service concluded in good standing.</span></label>
       <label class="radio-row"><input type="radio" name="dc-type" value="dishonourable" /> <span><strong>Dishonourable discharge</strong> \u2014 service terminated for cause.</span></label>
       <div class="field" style="margin-top:10px"><label>Citation / grounds</label><textarea id="dc-reason" rows="3" placeholder="Reason for discharge (recorded on the service record)\u2026"></textarea></div>`,
     actions: [
       { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
-      { label: 'Discharge', tone: 'danger', onClick: (c, d) => {
+      { label: 'File for co-signature', tone: 'primary', onClick: (c, d) => {
           const type = (d.querySelector('input[name="dc-type"]:checked') || {}).value;
           const reason = d.querySelector('#dc-reason').value.trim();
           if (!reason) { toast('Record the grounds for discharge.', 'error'); return; }
           mutate(app, u.id, u.version, (rec) => {
-            rec.status = 'discharged';
-            rec.discharge = { type, by: actor.designation, at: new Date().toISOString(), reason };
-            rec.leave = null;
-            addEvent(rec, 'edit', `${type === 'honourable' ? 'Honourably' : 'Dishonourably'} discharged: ${reason}`);
-          }, { action: 'DISCHARGE', detail: `${u.designation} discharged (${type}).` });
+            rec.pendingDischarge = { type, reason, requestedBy: actor.id, requestedByLabel: actor.designation, requestedAt: new Date().toISOString(), status: 'pending' };
+            addEvent(rec, 'edit', `Discharge (${type}) filed for co-signature by ${actor.designation}: ${reason}`);
+          }, { action: 'REQUEST_DISCHARGE', detail: `${u.designation} \u2014 discharge filed for second signature.` });
           c();
-          toast(`Operator ${type === 'honourable' ? 'honourably' : 'dishonourably'} discharged.`, 'success');
+          toast('Discharge filed \u2014 awaiting a second signature.', 'success');
         } },
     ],
   });
+}
+
+// The second signature: a DIFFERENT discharging authority enacts the filed
+// discharge. Self-co-signing is refused here and, decisively, in the Worker gate.
+async function coSignDischarge(app, u) {
+  const actor = app.user;
+  const pd = u.pendingDischarge;
+  if (!pd) return;
+  if (actor.id === pd.requestedBy) { toast('You filed this discharge \u2014 a different authority must co-sign it.', 'error'); return; }
+  if (!canDischarge(actor, u)) { toast('You are not a discharging authority for this operator.', 'error'); return; }
+  const ok = await confirmDialog({
+    title: 'Co-sign discharge',
+    message: `Co-sign and enact the ${pd.type} discharge of ${u.designation} \u00b7 ${u.codename}? Filed by ${pd.requestedByLabel}. This takes effect immediately.`,
+    confirmLabel: 'Co-sign & discharge', danger: true,
+  });
+  if (!ok) return;
+  mutate(app, u.id, u.version, (rec) => {
+    rec.status = 'discharged';
+    rec.discharge = { type: pd.type, by: pd.requestedByLabel, cosignedBy: actor.designation, at: new Date().toISOString(), reason: pd.reason };
+    rec.pendingDischarge = null;
+    rec.leave = null;
+    addEvent(rec, 'edit', `${pd.type === 'honourable' ? 'Honourably' : 'Dishonourably'} discharged \u2014 filed by ${pd.requestedByLabel}, co-signed by ${actor.designation}: ${pd.reason}`);
+  }, { action: 'DISCHARGE', detail: `${u.designation} discharged (${pd.type}) \u2014 co-signed.` });
+  toast('Discharge co-signed and enacted.', 'success');
+}
+
+// Reject a pending discharge. A different authority rejects it; the requester
+// may withdraw their own. Either way, no one is discharged.
+async function rejectDischarge(app, u) {
+  const actor = app.user;
+  const pd = u.pendingDischarge;
+  if (!pd) return;
+  const mine = actor.id === pd.requestedBy;
+  if (!mine && !canDischarge(actor, u)) { toast('You cannot act on this pending discharge.', 'error'); return; }
+  const ok = await confirmDialog({
+    title: mine ? 'Withdraw discharge' : 'Reject discharge',
+    message: mine
+      ? `Withdraw your pending ${pd.type} discharge of ${u.designation}?`
+      : `Reject the pending ${pd.type} discharge of ${u.designation} filed by ${pd.requestedByLabel}?`,
+    confirmLabel: mine ? 'Withdraw' : 'Reject discharge',
+  });
+  if (!ok) return;
+  mutate(app, u.id, u.version, (rec) => {
+    rec.pendingDischarge = null;
+    addEvent(rec, 'edit', mine
+      ? `Pending discharge withdrawn by ${actor.designation}.`
+      : `Pending discharge (filed by ${pd.requestedByLabel}) rejected by ${actor.designation}.`);
+  }, { action: 'REJECT_DISCHARGE', detail: `${u.designation} \u2014 pending discharge ${mine ? 'withdrawn' : 'rejected'}.` });
+  toast(mine ? 'Discharge withdrawn.' : 'Pending discharge rejected.', 'success');
 }
 
 async function reinstate(app, u) {

@@ -283,22 +283,68 @@ function authorizeUser(actor, cur, next) {
     return ok('SET_EVIDENCE_REVIEW', `${cur.designation}: evidence review ${next.evidenceReviewRequired ? 'required' : 'cleared'}.`);
   }
 
-  // Discharge (honourable / dishonourable) and reinstatement. Junior command
-  // (CL4·J with a stake, over a subordinate) or CL5. Only the status, the
-  // discharge record and events may change.
+  // Discharge is DUAL CONTROL (REC-10): the status → 'discharged' transition is
+  // valid ONLY as the co-signature on a pending request filed by a DIFFERENT
+  // authority — a lone signer cannot enact it, whatever the client attempts.
+  // Reinstatement stays a single signed action. Junior command (CL4·J with a
+  // stake) or CL5. Only status, the discharge record, the pending request, leave
+  // and events may change.
   if (j(next.status) !== j(cur.status) && (next.status === 'discharged' || cur.status === 'discharged')) {
     if (!canDischarge(actor, cur)) return deny('You cannot discharge or reinstate this operator.');
-    if (changedOutside(cur, next, ['status', 'discharge', 'events', 'version', 'updatedAt'])) {
+    if (changedOutside(cur, next, ['status', 'discharge', 'pendingDischarge', 'leave', 'events', 'version', 'updatedAt'])) {
       return deny('A discharge cannot be combined with other edits.');
     }
     if (next.status === 'discharged') {
+      const pd = cur.pendingDischarge;
+      if (!pd || pd.status !== 'pending') {
+        return deny('A discharge must be filed for a second signature before it can take effect.');
+      }
+      if (pd.requestedBy === actor.id) {
+        return deny('You filed this discharge — a different authority must co-sign it.');
+      }
+      if (next.pendingDischarge != null) {
+        return deny('Enacting a discharge must clear its pending request.');
+      }
       const dc = next.discharge;
       if (!dc || (dc.type !== 'honourable' && dc.type !== 'dishonourable') || !dc.by) {
-        return deny('A discharge must record its character and the discharging authority.');
+        return deny('A discharge must record its character and the filing authority.');
       }
-      return ok('DISCHARGE', `${cur.designation} discharged (${dc.type}).`);
+      if (dc.type !== pd.type || String(dc.reason || '') !== String(pd.reason || '')) {
+        return deny('The enacted discharge must match what was filed.');
+      }
+      return ok('DISCHARGE', `${cur.designation} discharged (${dc.type}) — co-signed.`);
     }
     return ok('REINSTATE', `${cur.designation} reinstated to duty.`);
+  }
+
+  // Filing or clearing a PENDING discharge (status unchanged — enactment is the
+  // branch above). Filing is by a discharging authority under their own name;
+  // clearing (a different authority rejects, or the filer withdraws) enacts
+  // nothing. The two-person rule itself is enforced at enactment, above.
+  if (j(next.status) === j(cur.status)
+      && j(next.pendingDischarge ?? null) !== j(cur.pendingDischarge ?? null)) {
+    const a = cur.pendingDischarge ?? null;
+    const b = next.pendingDischarge ?? null;
+    if ((!a || a.status !== 'pending') && b && b.status === 'pending') {
+      if (!canDischarge(actor, cur)) return deny('You cannot file a discharge for this operator.');
+      if (b.requestedBy !== actor.id) return deny('A discharge is filed under your own authority.');
+      if (b.type !== 'honourable' && b.type !== 'dishonourable') return deny('A filed discharge must record its character.');
+      if (!String(b.reason || '').trim()) return deny('A filed discharge must state its grounds.');
+      if (changedOutside(cur, next, ['pendingDischarge', 'events', 'version', 'updatedAt'])) {
+        return deny('Filing a discharge cannot be combined with other edits.');
+      }
+      return ok('REQUEST_DISCHARGE', `${cur.designation} — discharge filed for second signature.`);
+    }
+    if (a && a.status === 'pending' && !b) {
+      if (actor.id !== a.requestedBy && !canDischarge(actor, cur)) {
+        return deny('You cannot act on this pending discharge.');
+      }
+      if (changedOutside(cur, next, ['pendingDischarge', 'events', 'version', 'updatedAt'])) {
+        return deny('Clearing a discharge cannot be combined with other edits.');
+      }
+      return ok('REJECT_DISCHARGE', `${cur.designation} — pending discharge cleared.`);
+    }
+    return deny('That pending-discharge change is not permitted.');
   }
 
   // Advancement review requests: the operator asks their chain to look at the
