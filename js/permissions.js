@@ -25,7 +25,27 @@ const w = (user) => clearanceWeight(user?.clearance);
 export const isCL5 = (user) => user?.clearance === 'CL5';
 
 // Command personnel act across both operational organisations.
+// Internal Security membership is an orthogonal caveat, NOT an org: an agent's
+// `org` stays their cover post, and `isd` carries the covert identity. Anything
+// that reads this is, by construction, only ever handed the field by redactUser
+// when the viewer is ISD or CL5 — so a non-ISD client literally cannot see it.
+export function isISD(actor) {
+  return !!(actor && actor.isd && actor.isd.standing === 'active');
+}
+
+// ISD authority is judged on the agent's ISD clearance, NEVER their cover one —
+// an Inspector may be a CL3 Private on paper. Commissioner/Director sit at CL4·S
+// on the ISD ladder and run the department; CL5 always overrides. There is no
+// CL5 inside the ISD, so it can never outrank the Committee it answers to.
+export function isdWeight(actor) {
+  return isISD(actor) ? clearanceWeight(actor.isd.clearance) : 0;
+}
+export function canManageISD(actor) {
+  return isCL5(actor) || isdWeight(actor) >= 5;
+}
+
 function hasStakeIn(actor, org) {
+  if (org === 'isd') return isISD(actor); // Command does NOT get a free ISD stake
   return actor.org === org || actor.org === 'command';
 }
 

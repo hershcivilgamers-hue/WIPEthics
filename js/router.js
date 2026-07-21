@@ -9,7 +9,7 @@
 // =============================================================================
 
 import { CONFIG } from './config.js';
-import { canViewCommandRoster, canAccessAdmin, canManageOrg, canParticipateRecruitment, isCL5 } from './permissions.js';
+import { canViewCommandRoster, canAccessAdmin, canManageOrg, canParticipateRecruitment, isCL5, isISD } from './permissions.js';
 
 // Each recruitment feed is for the unit's CL4 cadre (a stake in that org), or CL5.
 const canSeeOmegaRecruitment = (u) => isCL5(u) || canParticipateRecruitment(u, 'omega-1');
@@ -27,6 +27,8 @@ const canSeeEngagement = (u) => isCL5(u) || canManageOrg(u, 'omega-1');
 // Evidence is self-service for Omega personnel (submit their own), plus managers/CL5 (review).
 const canSeeEvidence = (u) => isCL5(u) || u.org === 'omega-1' || canManageOrg(u, 'omega-1');
 // Insight aggregates across organisations — Command oversight only.
+// Internal Security is covert: only its own members (or CL5) see it exists.
+const canSeeISD = (u) => isCL5(u) || isISD(u);
 const canSeeInsight = (u) => isCL5(u);
 
 // Sidebar structure, grouped by organisation. `feature` ties an item to a
@@ -79,6 +81,14 @@ export const NAV = [
       { name: 'admin',   hash: '#/admin',   label: 'Administration',  guard: canAccessAdmin },
     ],
   },
+  {
+    // Covert: the whole group is absent unless the viewer is ISD (or CL5). An
+    // operator who is not read in sees no trace that the department exists.
+    group: 'Internal Security',
+    items: [
+      { name: 'isd', hash: '#/isd', label: 'Personnel Files', feature: 'isd', guard: canSeeISD },
+    ],
+  },
 ];
 
 // Top-level route guards (also applied to direct URL access, not just nav).
@@ -98,6 +108,7 @@ const GUARDS = {
   docket: canSeeDocket,
   recruit: canSeeAnyRecruitment,
   insight: canSeeInsight,
+  isd: canSeeISD,
 };
 
 // Routes disabled by a CONFIG feature flag.
@@ -118,11 +129,12 @@ function featureBlocked(name) {
   if (name === 'dashboard') return !CONFIG.features.dashboard;
   if (name === 'docket') return !CONFIG.features.dashboard;
   if (name === 'engagement') return !CONFIG.features.engagement;
+  if (name === 'isd') return !CONFIG.features.isd;
   if (name === 'evidence') return !CONFIG.features.evidence;
   return false;
 }
 
-const TOP_LEVEL = ['overview', 'notifications', 'search', 'surveillance', 'compartments', 'operations', 'trainings', 'deployments', 'intel', 'engagement', 'evidence', 'dashboard', 'docket', 'tribunals', 'directives', 'documents', 'terminal', 'activity', 'blacklist', 'recruit-omega', 'recruit-ethics', 'omega-1', 'ethics', 'command', 'insight', 'admin'];
+const TOP_LEVEL = ['overview', 'notifications', 'search', 'surveillance', 'compartments', 'operations', 'trainings', 'deployments', 'intel', 'engagement', 'evidence', 'dashboard', 'docket', 'tribunals', 'directives', 'documents', 'terminal', 'activity', 'blacklist', 'recruit-omega', 'recruit-ethics', 'omega-1', 'ethics', 'command', 'isd', 'insight', 'admin'];
 
 // Parse the current location hash into a route { name, params }.
 export function parseHash() {

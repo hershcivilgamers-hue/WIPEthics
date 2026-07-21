@@ -300,6 +300,7 @@ function dispatch(route, user) {
     case 'omega-1':      personnelView.renderList(view, app, 'omega-1'); break;
     case 'ethics':       personnelView.renderList(view, app, 'ethics-committee'); break;
     case 'command':      personnelView.renderList(view, app, 'command'); break;
+    case 'isd':          personnelView.renderList(view, app, 'isd'); break;
     case 'dossier':      personnelView.renderDossier(view, app, route.params.id); break;
     case 'admin':        adminView.render(view, app); break;
     case 'insight':      insightView.render(view, app); break;

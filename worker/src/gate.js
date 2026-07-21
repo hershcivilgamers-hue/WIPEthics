@@ -20,7 +20,7 @@ import {
   canComposeDocument, canViewDocument,
   compartmentClears, canManageCompartment, canReadOperatorInto,
   canManageOrg, canParticipateRecruitment, canActOnRecruit, isMemberTrack, canLogToOperation, canLogIntel, canManageTraining, isCL5,
-  canDischarge, canManageLeave,
+  canDischarge, canManageLeave, isISD, canManageISD,
 } from '../../js/permissions.js';
 import { rankUp, rankDown, clearanceForRank, clearanceWeight, tallyVotes, RANKS, caseTakesVote, strikeActive } from '../../js/constants.js';
 
@@ -40,6 +40,11 @@ const SERVER_OWNED = new Set([
   // CAIRO's interview verdict is authored only by the dedicated /assess endpoint,
   // never through the ordinary sync path — so a client can't forge a verdict.
   'interviewAssessment',
+  // Internal Security membership. redactUser omits it entirely for non-ISD
+  // viewers, so it is absent from most clients' copies of a record — without
+  // this, an ordinary edit by a non-ISD manager would look like it blanked the
+  // field and be refused. Its own writes go through the dedicated branch below.
+  'isd',
 ]);
 
 function changedOutside(cur, next, allowed) {
@@ -281,6 +286,31 @@ function authorizeUser(actor, cur, next) {
       !changedOutside(cur, next, ['evidenceReviewRequired', 'events', 'version', 'updatedAt'])) {
     if (!canManageOrg(actor, cur.org)) return deny('You cannot change the evidence-review setting for this operator.');
     return ok('SET_EVIDENCE_REVIEW', `${cur.designation}: evidence review ${next.evidenceReviewRequired ? 'required' : 'cleared'}.`);
+  }
+
+  // Internal Security membership. `isd` is SERVER_OWNED, so changedOutside
+  // already ignores it — this branch is the ONLY lawful way it moves. Induction,
+  // rank and standing are ISD command's (Commissioner/Director, judged on the
+  // ISD ladder — never the cover clearance) or CL5's. An agent may set only
+  // their OWN badge number. The cover post (org/rank/clearance) is untouched.
+  if (j(next.isd ?? null) !== j(cur.isd ?? null)
+      && !changedOutside(cur, next, ['events', 'version', 'updatedAt'])) {
+    const before = cur.isd ?? null;
+    const after = next.isd ?? null;
+    const badgeOnly = before && after
+      && j({ ...before, badgeNumber: null }) === j({ ...after, badgeNumber: null });
+    if (badgeOnly) {
+      if (actor.id !== cur.id || !isISD(actor)) return deny('An agent records only their own badge number.');
+      return ok('SET_ISD_BADGE', `${cur.designation} recorded their Internal Security badge number.`);
+    }
+    if (!canManageISD(actor)) return deny('Internal Security membership is set by ISD command.');
+    if (after) {
+      if (!(RANKS.isd || []).includes(after.rank)) return deny('That is not a valid Internal Security rank.');
+      const tier = clearanceForRank('isd', after.rank);
+      if (tier && after.clearance !== tier) return deny('Internal Security clearance must match the ISD rank.');
+      return ok('SET_ISD_MEMBERSHIP', `${cur.designation}: Internal Security ${before ? 'record updated' : 'induction'} (${after.rank}).`);
+    }
+    return ok('SET_ISD_MEMBERSHIP', `${cur.designation} removed from Internal Security.`);
   }
 
   // Discharge is DUAL CONTROL (REC-10): the status → 'discharged' transition is

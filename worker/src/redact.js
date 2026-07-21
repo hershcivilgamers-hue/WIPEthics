@@ -18,7 +18,7 @@ import {
   compartmentClears, readIntoCompartment, canManageCompartment,
   canViewActivity, canViewRecruitment, canViewOperation, isAssignedToOperation,
   canViewIntel, isAssignedToIntel, canViewTraining,
-  canViewDocument, canManageOrg,
+  canViewDocument, canManageOrg, isISD,
 } from '../../js/permissions.js';
 import { strikeVoided } from '../../js/constants.js';
 
@@ -45,6 +45,11 @@ export function redactUser(actor, user) {
     accessLevel: level,
     tags: Array.isArray(user.tags) ? user.tags : [],
     evidenceReviewRequired: !!user.evidenceReviewRequired,
+    // Internal Security membership (incl. the badge number) is omitted ENTIRELY
+    // unless the VIEWER is ISD or CL5 — the key is absent, not nulled, so a
+    // non-ISD snapshot is indistinguishable from one where the department does
+    // not exist. The agent still appears normally under their cover post.
+    ...((isCL5(actor) || isISD(actor)) && user.isd ? { isd: user.isd } : {}),
   };
 
   if (level === 'full') {

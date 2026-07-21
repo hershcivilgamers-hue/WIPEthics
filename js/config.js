@@ -46,6 +46,7 @@ export const CONFIG = {
     blacklist: true,
     engagement: true,
     evidence: true,
+    isd: true,
     dashboard: true,
     // Passive tab refresh in server mode (on return-to-tab + a slow interval),
     // so colleagues' changes appear without a manual reload.

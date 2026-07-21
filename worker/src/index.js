@@ -272,6 +272,11 @@ async function writeRecord(collection, id, actor, request, repo, env) {
   // can't blank it.
   if (collection === 'users') {
     if (cur) { incoming.salt = cur.salt; incoming.passwordHash = cur.passwordHash; incoming.mustChangePassphrase = cur.mustChangePassphrase ?? false; }
+    // Covert ISD membership: redactUser never hands `isd` to a non-ISD viewer,
+    // so their write-back cannot carry it — restore it rather than let an
+    // ordinary edit silently erase an agent's record. A payload that DOES carry
+    // the key came from an ISD/CL5 client, and the gate already authorised it.
+    if (cur && !('isd' in incoming) && cur.isd !== undefined) incoming.isd = cur.isd;
     else if (!incoming.salt || !incoming.passwordHash) {
       const { salt, hash } = await makeCredential(randomToken());
       incoming.salt = salt; incoming.passwordHash = hash;

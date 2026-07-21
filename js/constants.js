@@ -46,6 +46,16 @@ export const ORGS = {
     motto: 'CAIRO Administration',
     tone: 'command',
   },
+  // The Committee's covert internal-security arm. An operator's ORG is never
+  // 'isd' — membership is an orthogonal caveat carried on user.isd, so an agent
+  // keeps their cover post. This entry supplies the labels/tone only.
+  'isd': {
+    code: 'isd',
+    name: 'Internal Security Department',
+    short: 'ISD',
+    motto: 'The Foundation Within',
+    tone: 'isd',
+  },
 };
 
 export const ORG_ORDER = ['omega-1', 'ethics-committee', 'command'];
@@ -73,6 +83,16 @@ export const RANKS = {
     'Assistant',         // Jr CL4
   ],
   'command': ['Director', 'Liaison'],
+  // ISD ladder. Tops out at CL4·S — there is deliberately no CL5 in the ISD, so
+  // it can never outrank the Committee it answers to. Used against user.isd.rank
+  // (NOT user.rank, which stays the agent's cover post).
+  'isd': [
+    'Director',          // Sr CL4
+    'Commissioner',      // Sr CL4
+    'Inspector',         // Jr CL4
+    'Investigator',      // CL3
+    'Operative',         // CL3
+  ],
 };
 
 // The clearance tier each rank carries. Promotion/demotion keeps an operator's
@@ -87,6 +107,11 @@ export const RANK_CLEARANCE = {
   },
   'ethics-committee': {
     'Chairman': 'CL5', 'Member': 'CL5', 'Assistant': 'CL4-J',
+  },
+  'isd': {
+    'Director': 'CL4-S', 'Commissioner': 'CL4-S',
+    'Inspector': 'CL4-J',
+    'Investigator': 'CL3', 'Operative': 'CL3',
   },
 };
 

@@ -9,7 +9,7 @@
 
 import {
   ORGS, RANKS, STATUS_ORDER, CLEARANCE_ORDER, CLEARANCES, STRIKE_LIMIT, strikeActive, activeStrikeCount, strikeVoided,
-  rankUp, rankDown, clearanceForRank,
+  rankUp, rankDown, clearanceForRank, rankIndex,
   TRAINING_CATEGORY, TRAINING_CURRENCY, trainingCurrency, trainingExpiry,
   PERSONNEL_TAGS_SETTING_ID, normalizeTagCatalog,
   MEDALS_SETTING_ID, normalizeMedalCatalog,
@@ -19,6 +19,7 @@ import { orgLogo } from '../logos.js';
 import {
   canEditPersonnel, canSetClearance, canSetRank, canIssueStrike,
   canDeletePersonnel, canPromote, canDemote, accessLevel, isCL5, canManageOrg, canManageTraining, canViewCase, canDischarge, canManageLeave,
+  isISD, canManageISD,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { exportPersonnel, exportIdCard, exportMedalCertificate } from '../export.js';
@@ -82,12 +83,15 @@ function addEvent(user, type, text) {
 export function renderList(host, app, org) {
   const meta = ORGS[org];
   const actor = app.user;
-  const canManage = canEditPersonnel(actor, { org });
+  // The ISD roster is not an org roster: membership is the covert `isd` caveat,
+  // and authority is judged on the ISD ladder, not the agent's cover clearance.
+  const isdRoster = org === 'isd';
+  const canManage = isdRoster ? canManageISD(actor) : canEditPersonnel(actor, { org });
   // Bulk selection is scoped to the viewed org.
   if (rosterSelOrg !== org) { rosterSel.clear(); rosterSelOrg = org; }
 
   const roster = users()
-    .filter((u) => u.org === org && !u.deleted && u.accountStatus !== 'pending')
+    .filter((u) => (isdRoster ? isISD(u) : u.org === org) && !u.deleted && u.accountStatus !== 'pending')
     .filter((u) => {
       if (filter.status && u.status !== filter.status) return false;
       if (filter.clearance && u.clearance !== filter.clearance) return false;
@@ -97,8 +101,12 @@ export function renderList(host, app, org) {
       }
       return true;
     })
-    .sort((a, b) => (b.clearance ? CLEARANCES[b.clearance].weight : 0) - (a.clearance ? CLEARANCES[a.clearance].weight : 0)
-      || a.designation.localeCompare(b.designation));
+    .sort(isdRoster
+      // Seniority on the ISD ladder (lower index = more senior), not the cover clearance.
+      ? (a, b) => rankIndex('isd', a.isd?.rank) - rankIndex('isd', b.isd?.rank)
+        || a.designation.localeCompare(b.designation)
+      : (a, b) => (b.clearance ? CLEARANCES[b.clearance].weight : 0) - (a.clearance ? CLEARANCES[a.clearance].weight : 0)
+        || a.designation.localeCompare(b.designation));
 
   const statusOpts = ['', ...STATUS_ORDER]
     .map((s) => `<option value="${s}" ${filter.status === s ? 'selected' : ''}>${s ? esc(s) : 'All statuses'}</option>`).join('');
@@ -316,6 +324,57 @@ async function bulkRecycle(app, list, done) {
 // ===========================================================================
 // DOSSIER DETAIL
 // ===========================================================================
+// The covert Internal Security panel on a personnel file. Renders only when the
+// record actually carries `isd` — which the Worker strips for every viewer who
+// is not ISD or CL5, so this is self-gating. An agent records their OWN badge
+// number; rank and standing move through ISD command (see the gate).
+function sectionISD(u, actor) {
+  if (!u.isd) return '';
+  const m = u.isd;
+  const self = actor.id === u.id;
+  const standing = m.standing === 'active'
+    ? '<span class="badge badge--ok">Active</span>'
+    : `<span class="badge badge--muted">${esc(m.standing || 'inactive')}</span>`;
+  return `<section class="card">
+    <div class="card__title">Internal Security ${standing}</div>
+    <div class="card__body">
+      <div class="kv"><span class="kv__k">ISD rank</span><span class="kv__v">${esc(m.rank || '—')} ${clearanceBadge(m.clearance)}</span></div>
+      <div class="kv"><span class="kv__k">Badge number</span><span class="kv__v mono">${m.badgeNumber ? esc(m.badgeNumber) : '<span class="muted-text">not recorded</span>'}</span></div>
+      <div class="kv"><span class="kv__k">Cover post</span><span class="kv__v">${orgTag(u.org)} ${esc(u.rank || '—')}</span></div>
+      ${self ? '<div class="btn-row" style="margin-top:10px"><button class="btn btn--sm" data-act="isd-badge">Record badge number</button></div>' : ''}
+      <p class="field__hint" style="margin-top:8px">This record is visible only to the Department and CL5. The operator’s file otherwise shows their cover post.</p>
+    </div>
+  </section>`;
+}
+
+// An agent records their own badge number. The gate accepts a badge-only change
+// on your own record (SET_ISD_BADGE) and nothing else through this path.
+function openISDBadge(app, u) {
+  const cur = getUser(u.id);
+  if (!cur || !cur.isd) return;
+  openModal({
+    title: 'Internal Security — badge number',
+    body: `<p class="modal__message">Recorded against your Internal Security file. Visible only to the Department and CL5.</p>
+      <div class="field"><label>Badge number</label><input id="isd-badge" type="text" value="${esc(cur.isd.badgeNumber || '')}" placeholder="e.g. 114" autocomplete="off" /></div>`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Save', tone: 'primary', onClick: (c, d) => {
+          const v = d.querySelector('#isd-badge').value.trim();
+          const fresh = getUser(u.id);
+          if (!fresh || !fresh.isd) { c(); return; }
+          fresh.isd = { ...fresh.isd, badgeNumber: v || null };
+          fresh.updatedAt = new Date().toISOString();
+          fresh.version = (fresh.version || 1) + 1;
+          upsertUser(fresh);
+          logAction(app.user, 'SET_ISD_BADGE', `${fresh.designation} recorded their Internal Security badge number.`);
+          c();
+          toast('Badge number recorded.', 'success');
+          app.refresh();
+        } },
+    ],
+  });
+}
+
 export function renderDossier(host, app, id) {
   const actor = app.user;
   const u = getUser(id);
@@ -497,6 +556,10 @@ export function renderDossier(host, app, id) {
       </div>
     </section>` : '';
   const notesBlock = sectionNotes(u, full);
+  // Internal Security panel. `u.isd` only ever reaches a client whose viewer is
+  // ISD or CL5 (redactUser omits the key otherwise), so its mere presence is the
+  // permission check — nobody else can render this, or know it could exist.
+  const isdBlock = sectionISD(u, actor);
   const promoBlock = nameOnly ? '' : sectionPromotion(u, actor);
   const trainingBlock = nameOnly ? '' : sectionTraining(u, actor);
   const myServiceBlock = full ? sectionMyService(u, actor) : '';
@@ -563,6 +626,7 @@ export function renderDossier(host, app, id) {
       </section>
       <div class="dossier-col">
         ${myServiceBlock}
+        ${isdBlock}
         ${promoBlock}
         ${leaveBlock}
         ${dischargeReqBlock}
@@ -589,6 +653,7 @@ export function renderDossier(host, app, id) {
 
   const dispatch = {
     edit: () => openEdit(app, u),
+    'isd-badge': () => openISDBadge(app, u),
     tags: () => openTags(app, u),
     medal: () => openAward(app, u),
     transfer: () => openTransfer(app, u),
