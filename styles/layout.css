@@ -243,7 +243,34 @@
 .auth__link:hover { color: var(--amber); }
 
 .auth__demo { align-self: center; }
-.auth__demo-head { margin-bottom: var(--s1); }
+/* With no demo column (any real backend) the sign-in panel centres on its own
+   instead of being pushed left by an empty grid track. */
+.auth:not(:has(.auth__demo)) { grid-template-columns: minmax(0, 420px); }
+
+/* Demo credentials stay folded away — native <details>, so it is keyboard and
+   screen-reader accessible without any JS. */
+.auth__demo-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-bottom: var(--s1);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+.auth__demo-head::-webkit-details-marker { display: none; }
+.auth__demo-head::before {
+  content: '';
+  width: 0; height: 0;
+  border-left: 4px solid currentColor;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  opacity: .6;
+  transition: transform .15s ease;
+  flex: 0 0 auto;
+}
+.auth__demo-fold[open] > .auth__demo-head::before { transform: rotate(90deg); }
+.auth__demo-head:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 .auth__demo-hint { font-size: 12px; color: var(--text-3); margin-bottom: var(--s3); }
 .cred-list { display: flex; flex-direction: column; gap: var(--s2); }
 .cred {

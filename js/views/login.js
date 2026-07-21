@@ -18,6 +18,10 @@ function findByUsername(username) {
 }
 
 export function render(host, app) {
+  // Demonstration operators are a LOCAL-DEMO affordance. Against a real backend
+  // these are live accounts (the list includes a CL5), so a public sign-in page
+  // must never advertise them — and even locally they stay folded away.
+  const showDemo = !api.serverMode() && DEMO_LOGINS.length > 0;
   const demoRows = DEMO_LOGINS.map((d) => `
     <button class="cred" data-user="${esc(d.username)}" data-pass="${esc(d.password)}">
       <span class="cred__name">${esc(d.username)}</span>
@@ -69,11 +73,13 @@ export function render(host, app) {
           : ''}
       </div>
 
-      <aside class="auth__demo">
-        <div class="auth__demo-head">Demonstration operators</div>
-        <p class="auth__demo-hint">Tap to fill. Each tier sees the system differently.</p>
-        <div class="cred-list">${demoRows}</div>
-      </aside>
+      ${showDemo ? `<aside class="auth__demo">
+        <details class="auth__demo-fold">
+          <summary class="auth__demo-head">Demonstration operators</summary>
+          <p class="auth__demo-hint">Local demo data only. Tap to fill — each tier sees the system differently.</p>
+          <div class="cred-list">${demoRows}</div>
+        </details>
+      </aside>` : ''}
     </div>
   `;
 
