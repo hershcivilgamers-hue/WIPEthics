@@ -87,6 +87,7 @@ export const NAV = [
     group: 'Internal Security',
     items: [
       { name: 'isd', hash: '#/isd', label: 'Personnel Files', feature: 'isd', guard: canSeeISD },
+      { name: 'investigations', hash: '#/investigations', label: 'Investigations', feature: 'investigations', guard: canSeeISD },
     ],
   },
 ];
@@ -109,6 +110,7 @@ const GUARDS = {
   recruit: canSeeAnyRecruitment,
   insight: canSeeInsight,
   isd: canSeeISD,
+  investigations: canSeeISD,
 };
 
 // Routes disabled by a CONFIG feature flag.
@@ -130,11 +132,12 @@ function featureBlocked(name) {
   if (name === 'docket') return !CONFIG.features.dashboard;
   if (name === 'engagement') return !CONFIG.features.engagement;
   if (name === 'isd') return !CONFIG.features.isd;
+  if (name === 'investigations') return !CONFIG.features.investigations;
   if (name === 'evidence') return !CONFIG.features.evidence;
   return false;
 }
 
-const TOP_LEVEL = ['overview', 'notifications', 'search', 'surveillance', 'compartments', 'operations', 'trainings', 'deployments', 'intel', 'engagement', 'evidence', 'dashboard', 'docket', 'tribunals', 'directives', 'documents', 'terminal', 'activity', 'blacklist', 'recruit-omega', 'recruit-ethics', 'omega-1', 'ethics', 'command', 'isd', 'insight', 'admin'];
+const TOP_LEVEL = ['overview', 'notifications', 'search', 'surveillance', 'compartments', 'operations', 'trainings', 'deployments', 'intel', 'engagement', 'evidence', 'dashboard', 'docket', 'tribunals', 'directives', 'documents', 'terminal', 'activity', 'blacklist', 'recruit-omega', 'recruit-ethics', 'omega-1', 'ethics', 'command', 'isd', 'investigations', 'insight', 'admin'];
 
 // Parse the current location hash into a route { name, params }.
 export function parseHash() {

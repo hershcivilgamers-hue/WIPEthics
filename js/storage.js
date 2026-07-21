@@ -39,6 +39,7 @@ function emptyDb() {
     trainings: [],
     engagement: [],
     evidence: [],
+    investigations: [],
     promoReqs: [],
     settings: [],
     audit: [],
@@ -118,6 +119,7 @@ export function applyServerSnapshot(snap) {
     trainings: snap.trainings || [],
     engagement: snap.engagement || [],
     evidence: snap.evidence || [],
+    investigations: snap.investigations || [],
     blacklist: snap.blacklist || [],
     promoReqs: snap.promoReqs || [],
     settings: snap.settings || [],
@@ -401,6 +403,19 @@ export function upsertEvidence(record) {
   const i = list.findIndex((r) => r.id === record.id);
   if (i >= 0) list[i] = record; else list.push(record);
   afterWrite('evidence', record);
+  return record;
+}
+
+// ISD investigations — covert; the snapshot only carries them for the Department.
+export const investigations = () => loadDb().investigations;
+export function getInvestigation(id) {
+  return investigations().find((r) => r.id === id) || null;
+}
+export function upsertInvestigation(record) {
+  const list = investigations();
+  const i = list.findIndex((r) => r.id === record.id);
+  if (i >= 0) list[i] = record; else list.push(record);
+  afterWrite('investigations', record);
   return record;
 }
 

@@ -47,6 +47,7 @@ import * as terminalView from './views/terminal.js';
 import * as activityView from './views/activity.js';
 import * as adminView from './views/admin.js';
 import * as insightView from './views/insight.js';
+import * as investigationsView from './views/investigations.js';
 
 const root = document.getElementById('app');
 
@@ -325,6 +326,7 @@ function dispatch(route, user) {
     case 'ethics':       personnelView.renderList(view, app, 'ethics-committee'); break;
     case 'command':      personnelView.renderList(view, app, 'command'); break;
     case 'isd':          personnelView.renderList(view, app, 'isd'); break;
+    case 'investigations': investigationsView.render(view, app); break;
     case 'dossier':      personnelView.renderDossier(view, app, route.params.id); break;
     case 'admin':        adminView.render(view, app); break;
     case 'insight':      insightView.render(view, app); break;

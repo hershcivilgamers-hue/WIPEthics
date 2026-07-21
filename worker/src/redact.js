@@ -18,7 +18,7 @@ import {
   compartmentClears, readIntoCompartment, canManageCompartment,
   canViewActivity, canViewRecruitment, canViewOperation, isAssignedToOperation,
   canViewIntel, isAssignedToIntel, canViewTraining,
-  canViewDocument, canManageOrg, isISD,
+  canViewDocument, canManageOrg, isISD, canViewInvestigation,
 } from '../../js/permissions.js';
 import { strikeVoided } from '../../js/constants.js';
 
@@ -225,6 +225,8 @@ export function buildSnapshot(actor, db) {
     // Evidence — a manager of the owning org (or CL5) sees all of it; an operator
     // sees their own submissions (so they can file and track them).
     evidence: (db.evidence || []).filter((e) => !e.deleted && (isCL5(actor) || canManageOrg(actor, e.org || 'omega-1') || e.userId === actor.id)),
+    // ISD investigations are covert: the Department (or CL5) or nothing at all.
+    investigations: (db.investigations || []).filter((i) => !i.deleted && canViewInvestigation(actor)),
     blacklist: (db.blacklist || []).filter((b) => !b.deleted),
     promoReqs: db.promoReqs || [],
     settings: db.settings || [],

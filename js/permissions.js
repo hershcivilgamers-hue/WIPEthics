@@ -44,6 +44,37 @@ export function canManageISD(actor) {
   return isCL5(actor) || isdWeight(actor) >= 5;
 }
 
+// Is the agent at least `rank` on the ISD ladder? Needed because two ranks share
+// a clearance (Operative/Investigator are both CL3), so clearance alone cannot
+// express "Investigator and above". Ranks are ordered high->low, so a LOWER
+// index is more senior. CL5 clears every tier.
+export function isdAtLeast(actor, rank) {
+  if (isCL5(actor)) return true;
+  if (!isISD(actor)) return false;
+  const mine = rankIndex('isd', actor.isd.rank);
+  const need = rankIndex('isd', rank);
+  return mine >= 0 && need >= 0 && mine <= need;
+}
+
+// --- ISD investigations ------------------------------------------------------
+// Reading is for the Department (or CL5) — nobody else knows these exist.
+// Filing and adding entries starts at Investigator; an Operative may read and be
+// assigned but files nothing on their own authority. Opening a preliminary into
+// an ACTIVE investigation is an Inspector's call; adjudication, disposition and
+// closure belong to ISD command.
+export function canViewInvestigation(actor) {
+  return isCL5(actor) || isISD(actor);
+}
+export function canFileInvestigation(actor) {
+  return isdAtLeast(actor, 'Investigator');
+}
+export function canAdvanceInvestigation(actor) {
+  return isdAtLeast(actor, 'Inspector');
+}
+export function canAdjudicateInvestigation(actor) {
+  return canManageISD(actor);
+}
+
 function hasStakeIn(actor, org) {
   if (org === 'isd') return isISD(actor); // Command does NOT get a free ISD stake
   return actor.org === org || actor.org === 'command';

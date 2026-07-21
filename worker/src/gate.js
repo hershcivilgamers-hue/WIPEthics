@@ -21,7 +21,9 @@ import {
   compartmentClears, canManageCompartment, canReadOperatorInto,
   canManageOrg, canParticipateRecruitment, canActOnRecruit, isMemberTrack, canLogToOperation, canLogIntel, canManageTraining, isCL5,
   canDischarge, canManageLeave, isISD, canManageISD,
+  canViewInvestigation, canFileInvestigation, canAdvanceInvestigation, canAdjudicateInvestigation,
 } from '../../js/permissions.js';
+import { investigationNextStage, INVESTIGATION_DISPOSITION } from '../../js/constants.js';
 import { rankUp, rankDown, clearanceForRank, clearanceWeight, tallyVotes, RANKS, caseTakesVote, strikeActive } from '../../js/constants.js';
 
 const deny = (msg) => ({ ok: false, status: 403, error: msg || 'Not permitted.' });
@@ -895,8 +897,69 @@ function authorizeBlacklist(actor, cur, next) {
   return ok('EDIT_BLACKLIST', `Updated blacklist entry for ${ref}.`);
 }
 
+// ISD investigations. Covert and tiered, following the Department's multi-stage
+// protocol: an Investigator files a referral and records to the file; opening a
+// preliminary into an ACTIVE investigation is an Inspector's call; adjudication,
+// disposition and closure belong to ISD command. An Operative may read and be
+// assigned but files nothing on their own authority. Stages move ONE step.
+function authorizeInvestigation(actor, cur, next) {
+  const rec = next || cur;
+  const ref = rec.ref || 'matter';
+  // Covert: to anyone outside the Department these records do not exist, so the
+  // refusal must not confirm otherwise.
+  if (!canViewInvestigation(actor)) return deny('No such record.');
+
+  if (!cur) {
+    if (!canFileInvestigation(actor)) return deny('An Operative may not file an investigation.');
+    if (next.stage !== 'referral') return deny('A matter opens as a referral.');
+    if (next.disposition) return deny('A referral cannot arrive with a disposition.');
+    return ok('OPEN_INVESTIGATION', `Referral ${ref} filed.`);
+  }
+
+  if (!!next.deleted !== !!cur.deleted) {
+    if (!canAdjudicateInvestigation(actor)) return deny('Only ISD command may withdraw an investigation.');
+    return next.deleted ? ok('REMOVE_INVESTIGATION', `Withdrew ${ref}.`) : ok('RESTORE_INVESTIGATION', `Restored ${ref}.`);
+  }
+
+  // Append-only record: any Investigator+ may add an entry to a live matter.
+  if (j(next.entries) !== j(cur.entries) && !changedOutside(cur, next, ['entries', 'version', 'updatedAt'])) {
+    if (!canFileInvestigation(actor)) return deny('An Operative may not add to the investigative record.');
+    if (cur.stage === 'closed') return deny('A closed matter is a record and cannot be added to.');
+    if (len(next.entries) < len(cur.entries)) return deny('The investigative record is append-only.');
+    return ok('LOG_INVESTIGATION', `Entry recorded in ${ref}.`);
+  }
+
+  // Stage transitions — strictly one step along the protocol.
+  if (j(next.stage) !== j(cur.stage)) {
+    if (next.stage !== investigationNextStage(cur.stage)) return deny('That is not a valid stage transition.');
+    if (next.stage === 'active' && !canAdvanceInvestigation(actor)) {
+      return deny('Opening a preliminary into an investigation is an Inspector’s call.');
+    }
+    if ((next.stage === 'adjudication' || next.stage === 'closed') && !canAdjudicateInvestigation(actor)) {
+      return deny('Adjudication and closure belong to ISD command.');
+    }
+    if (next.stage === 'closed') {
+      if (!next.disposition) return deny('A closed matter must record a disposition.');
+      if (!INVESTIGATION_DISPOSITION[next.disposition]) return deny('Unknown disposition.');
+    } else if (j(next.disposition ?? null) !== j(cur.disposition ?? null)) {
+      return deny('A disposition is recorded at closure.');
+    }
+    return ok('ADVANCE_INVESTIGATION', `${ref} → ${next.stage}.`);
+  }
+
+  // A finding is the outcome of closing a matter, never a standalone edit — so a
+  // disposition may only move as part of the closure handled above.
+  if (j(next.disposition ?? null) !== j(cur.disposition ?? null)) {
+    return deny('A disposition is recorded at closure.');
+  }
+
+  if (!canAdjudicateInvestigation(actor)) return deny('Only ISD command may amend an investigation.');
+  return ok('EDIT_INVESTIGATION', `Updated ${ref}.`);
+}
+
 const AUTHORIZERS = {
   users: authorizeUser,
+  investigations: authorizeInvestigation,
   documents: authorizeDocument,
   directives: authorizeDirective,
   subjects: authorizeSubject,

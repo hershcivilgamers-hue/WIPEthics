@@ -569,6 +569,34 @@ export const ENGAGEMENT_WEEK_MS = 7 * 24 * 3600000;
 //   EVIDENCE record: { id, org:'omega-1', userId, weekStart(ms), title, link,
 //     note, status:'counted'|'pending'|'rejected', submittedBy, reviewedBy,
 //     reviewedAt, createdAt, updatedAt, version, deleted, deletedAt }
+// --- ISD investigations ------------------------------------------------------
+// The Department's "stringently defined multi-stage investigative protocol".
+// A matter is REFERRED, given a PRELIMINARY look, opened as ACTIVE, put to
+// ADJUDICATION, then CLOSED with a disposition. Substantiated matters are
+// referred to the Ethics Committee — ISD investigates, the Committee rules.
+//   INVESTIGATION: { id, ref, subjectUserId, openedBy, stage, summary,
+//     entries:[{id,ts,by,type,text}], disposition, caseId, compartment,
+//     createdAt, updatedAt, version, deleted, deletedAt }
+export const INVESTIGATION_STAGE = {
+  referral:     { code: 'referral',     label: 'Referral',     tone: 'muted', blurb: 'Filed for assessment — not yet an investigation.' },
+  preliminary:  { code: 'preliminary',  label: 'Preliminary',  tone: 'info',  blurb: 'Preliminary enquiry — establishing whether there is a case.' },
+  active:       { code: 'active',       label: 'Active',       tone: 'warn',  blurb: 'Open investigation — evidence and interviews in progress.' },
+  adjudication: { code: 'adjudication', label: 'Adjudication', tone: 'warn',  blurb: 'Before ISD command for a disposition.' },
+  closed:       { code: 'closed',       label: 'Closed',       tone: 'muted', blurb: 'Concluded.' },
+};
+export const INVESTIGATION_PIPELINE = ['referral', 'preliminary', 'active', 'adjudication', 'closed'];
+export const INVESTIGATION_DISPOSITION = {
+  unsubstantiated: { code: 'unsubstantiated', label: 'Unsubstantiated', tone: 'ok'   },
+  substantiated:   { code: 'substantiated',   label: 'Substantiated',   tone: 'bad'  },
+  referred:        { code: 'referred',        label: 'Referred to the Committee', tone: 'warn' },
+};
+// A stage may only move one step forward, or be closed from adjudication. The
+// gate enforces this; the view only offers what is lawful.
+export function investigationNextStage(stage) {
+  const i = INVESTIGATION_PIPELINE.indexOf(stage);
+  return i >= 0 && i < INVESTIGATION_PIPELINE.length - 1 ? INVESTIGATION_PIPELINE[i + 1] : null;
+}
+
 export const EVIDENCE_STATUS = {
   counted:  { code: 'counted',  label: 'Counted',  tone: 'ok' },
   pending:  { code: 'pending',  label: 'In review', tone: 'warn' },

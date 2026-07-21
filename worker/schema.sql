@@ -156,6 +156,17 @@ CREATE TABLE IF NOT EXISTS evidence (
 );
 CREATE INDEX IF NOT EXISTS idx_evidence_org ON evidence (org);
 
+-- ISD investigations (covert; shipped only to the Department or CL5).
+CREATE TABLE IF NOT EXISTS investigations (
+  id          TEXT PRIMARY KEY,
+  org         TEXT,
+  deleted     INTEGER NOT NULL DEFAULT 0,
+  version     INTEGER NOT NULL DEFAULT 1,
+  updated_at  TEXT,
+  data        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_investigations_org ON investigations (org);
+
 CREATE TABLE IF NOT EXISTS promo_reqs (
   id          TEXT PRIMARY KEY,
   org         TEXT,
