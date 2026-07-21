@@ -15,11 +15,14 @@
 
 import {
   INVESTIGATION_STAGE, INVESTIGATION_PIPELINE, INVESTIGATION_DISPOSITION,
-  investigationNextStage,
+  investigationNextStage, CASE_KIND,
 } from '../constants.js';
-import { investigations, getInvestigation, upsertInvestigation, users, getUser, newId } from '../storage.js';
 import {
-  canFileInvestigation, canAdvanceInvestigation, canAdjudicateInvestigation,
+  investigations, getInvestigation, upsertInvestigation, users, getUser, newId,
+  cases, getCase, upsertCase,
+} from '../storage.js';
+import {
+  canFileInvestigation, canAdvanceInvestigation, canAdjudicateInvestigation, canManageTribunal,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { esc, fmtDate, fmtDateTime, toast, openModal, confirmDialog } from '../ui.js';
@@ -134,7 +137,21 @@ function openRecord(app, id) {
   const mayAdvance = next && canAdvanceFrom(actor, rec.stage);
   const closing = next === 'closed';
 
-  openModal({
+  // Escalation. The Department refers; the Committee rules — so opening the case
+  // is deliberately NOT an ISD power: canManageTribunal needs an Ethics stake,
+  // which an agent's cover post does not give them. A seated Committee member
+  // (CL5, who can also see these files) picks the referral up from here.
+  const linkedCase = rec.caseId ? getCase(rec.caseId) : null;
+  const referable = rec.stage === 'closed'
+    && (rec.disposition === 'substantiated' || rec.disposition === 'referred')
+    && !linkedCase;
+  // Referring writes TWO records: the case (canManageTribunal) and the link back
+  // onto the investigation (canAdjudicateInvestigation). Both are required here so
+  // the action can never half-succeed — a Command CL4-S has the first but not the
+  // second, and is only kept out today by not seeing investigations at all.
+  const mayRefer = referable && canManageTribunal(actor) && canAdjudicateInvestigation(actor);
+
+  const dialog = openModal({
     title: `${rec.ref} — ${subjectLabel(rec)}`,
     wide: true,
     body: `
@@ -150,6 +167,8 @@ function openRecord(app, id) {
           <input id="inv-entry" type="text" placeholder="Record to the file…" />
           <button class="btn btn--sm" id="inv-add">Record</button>
         </div>` : ''}
+      ${linkedCase ? `<div class="kv" style="margin-top:8px"><span class="kv__k">Committee case</span><span class="kv__v"><a class="rec-link" href="#/case/${esc(linkedCase.id)}">${esc(linkedCase.ref)} — ${esc(linkedCase.title)}</a></span></div>` : ''}
+      ${referable && !mayRefer ? '<p class="field__hint" style="margin-top:8px">Substantiated. Awaiting the Committee to open a case — the Department refers, the Committee rules.</p>' : ''}
       ${rec.stage === 'closed' ? '<p class="field__hint" style="margin-top:8px">This matter is closed; its record is sealed.</p>' : ''}
     `,
     actions: [
@@ -159,19 +178,24 @@ function openRecord(app, id) {
         tone: closing ? 'danger' : 'primary',
         onClick: (c) => { c(); if (closing) openClose(app, rec.id); else advance(app, rec.id, next); },
       }] : []),
+      ...(mayRefer ? [{
+        label: 'Open a Committee case',
+        tone: 'primary',
+        onClick: (c) => { c(); openReferToCommittee(app, rec.id); },
+      }] : []),
     ],
   });
 
-  const addBtn = document.querySelector('#inv-add');
+  const addBtn = dialog.querySelector('#inv-add');
   if (addBtn) {
     const submit = () => {
-      const input = document.querySelector('#inv-entry');
+      const input = dialog.querySelector('#inv-entry');
       const text = input.value.trim();
       if (!text) { toast('Enter something to record.', 'error'); return; }
       addEntry(app, rec.id, text);
     };
     addBtn.addEventListener('click', submit);
-    document.querySelector('#inv-entry').addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+    dialog.querySelector('#inv-entry').addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
   }
 }
 
@@ -295,4 +319,81 @@ function openClose(app, id) {
         } },
     ],
   });
+}
+
+// --- Escalation to the Ethics docket -----------------------------------------
+// Opens a case on the Committee's docket from a substantiated matter and links
+// the two. Guarded by canManageTribunal client-side — the same check
+// authorizeCase runs — so the write never 403s. Linking back onto the
+// investigation is a plain edit, which a CL5 Committee member is cleared for.
+function suggestCaseRef() {
+  const yy = new Date().getFullYear().toString().slice(-2);
+  const n = cases().filter((c) => (c.ref || '').includes(`-${yy}-`)).length + 1;
+  return `EC-CASE-${yy}-${String(n).padStart(3, '0')}`;
+}
+
+function openReferToCommittee(app, id) {
+  const rec = getInvestigation(id);
+  if (!rec) return;
+  const actor = app.user;
+  if (!canManageTribunal(actor) || !canAdjudicateInvestigation(actor)) {
+    toast('Only a seated Committee member may open a case from a referral.', 'error'); return;
+  }
+  const kindOpts = Object.values(CASE_KIND).map((k) => `<option value="${esc(k.code)}">${esc(k.label)}</option>`).join('');
+  openModal({
+    title: `Open a Committee case — ${rec.ref}`,
+    wide: true,
+    body: `
+      <p class="modal__message">The Department has substantiated this matter and referred it. Opening a case puts it on the Committee's docket and links the two records; the investigative file itself stays with the Department.</p>
+      <div class="field"><label>Case reference</label><input id="ref-case-ref" type="text" value="${esc(suggestCaseRef())}" /></div>
+      <div class="field"><label>Title</label><input id="ref-case-title" type="text" value="${esc(`Referred matter — ${subjectLabel(rec)}`)}" /></div>
+      <div class="field"><label>Kind</label><select id="ref-case-kind">${kindOpts}</select></div>
+      <div id="ref-err" class="auth__error" hidden></div>`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Open case', tone: 'primary', onClick: (c, d) => {
+          const ref = d.querySelector('#ref-case-ref').value.trim();
+          const title = d.querySelector('#ref-case-title').value.trim();
+          const kind = d.querySelector('#ref-case-kind').value;
+          if (!ref || !title) { const e = d.querySelector('#ref-err'); e.textContent = 'A reference and title are required.'; e.hidden = false; return; }
+          referToCommittee(app, id, { ref, title, kind });
+          c();
+        } },
+    ],
+  });
+}
+
+function referToCommittee(app, id, { ref, title, kind }) {
+  const rec = getInvestigation(id);
+  if (!rec) return;
+  const actor = app.user;
+  const now = new Date().toISOString();
+  const caseId = newId('case');
+  upsertCase({
+    id: caseId, ref, title, kind, clearance: 'CL4-S', status: 'open',
+    summary: `Referred by the Internal Security Department following ${rec.ref}. ${rec.summary || ''}`.trim(),
+    respondentId: rec.subjectUserId || null,
+    respondentName: rec.subjectUserId ? null : (rec.subjectName || '[UNNAMED]'),
+    respondentDept: null,
+    panelIds: [], votes: {}, linkedSubjectIds: [], summons: [], compartment: null,
+    entries: [{
+      id: newId('ent'), ts: now, by: actor.designation, type: 'filing',
+      text: `Case opened on an Internal Security referral (${rec.ref}), substantiated by the Department.`,
+    }],
+    ruling: null, createdBy: actor.designation, createdAt: now, updatedAt: now,
+    version: 1, deleted: false, deletedAt: null,
+  });
+  logAction(actor, 'OPEN_CASE', `Opened ${ref} on ISD referral ${rec.ref}.`);
+
+  // Link the investigation back to the case it produced.
+  const fresh = getInvestigation(id);
+  if (fresh) {
+    fresh.caseId = caseId;
+    fresh.updatedAt = now;
+    fresh.version = (fresh.version || 1) + 1;
+    upsertInvestigation(fresh);
+    logAction(actor, 'EDIT_INVESTIGATION', `${fresh.ref} linked to ${ref}.`);
+  }
+  toast(`Case ${ref} opened on the docket.`, 'success');
+  app.refresh();
 }

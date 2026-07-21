@@ -18,11 +18,11 @@ import {
   rankUp, promoChecklistComplete } from '../constants.js';
 import {
   users, operations, intel, recruits, directives, cases, compartments, subjects,
-  getActivityForUser, getSetting, blacklist, promoReqs, evidence } from '../storage.js';
+  getActivityForUser, getSetting, blacklist, promoReqs, evidence, investigations } from '../storage.js';
 import {
   isAssignedToOperation, isAssignedToIntel, canViewOperation, canViewIntel,
   canReadDirective, canManageOrg, canParticipateRecruitment, canRuleTribunal,
-  canManageDirectives, isCL5, canIssueStrike, canManageLeave, canPromote } from '../permissions.js';
+  canManageDirectives, isCL5, canIssueStrike, canManageLeave, canPromote, canManageTribunal } from '../permissions.js';
 import { esc, relTime } from '../ui.js';
 import { partitionNotes, markSeen, markDone, snooze, restore } from '../inbox.js';
 
@@ -235,6 +235,19 @@ export function buildNotifications(actor, now = Date.now()) {
     if (e.deleted || e.userId !== actor.id || e.status !== 'rejected') continue;
     const when = e.reviewedAt ? Date.parse(e.reviewedAt) : null;
     if (when && when > now - FOURTEEN_DAYS) add('bad', '✕', `Your evidence “${e.title}” was rejected.`, '#/evidence', when);
+  }
+
+  // 16. Internal Security referrals awaiting a case. Only a seated Committee
+  //     member sees this: the Department substantiates and refers, the Committee
+  //     opens the case. (Investigations reach CL5 anyway, so nothing leaks — a
+  //     viewer who cannot see them cannot satisfy canManageTribunal here either.)
+  if (canManageTribunal(actor)) {
+    const waiting = investigations().filter((i) => !i.deleted && i.stage === 'closed'
+      && (i.disposition === 'substantiated' || i.disposition === 'referred') && !i.caseId);
+    for (const i of waiting) {
+      add('warn', '⚖', `Internal Security referral ${i.ref} is substantiated and awaits a case.`, '#/investigations',
+        i.updatedAt ? new Date(i.updatedAt).getTime() : null);
+    }
   }
 
   // Newest first; undated items sink to the bottom.
