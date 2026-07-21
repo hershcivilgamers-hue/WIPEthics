@@ -79,6 +79,11 @@ assert.equal(usr(cl5, plain, inducted).action, 'SET_ISD_MEMBERSHIP', 'CL5 induct
 assert.equal(usr(omegaMgr, plain, inducted).ok, false, 'an Omega manager cannot induct into the ISD');
 assert.equal(usr(inspector, plain, inducted).ok, false, 'an Inspector cannot induct');
 
+// Reading an agent OUT (isd -> null) is the same authority as reading in.
+const readOut = { ...inducted, isd: null, version: 3 };
+assert.equal(usr(commissioner, inducted, readOut).action, 'SET_ISD_MEMBERSHIP', 'ISD command reads an agent out');
+assert.equal(usr(omegaMgr, inducted, readOut).ok, false, 'an Omega manager cannot read an agent out');
+
 // Rank/clearance integrity.
 assert.equal(usr(commissioner, plain, { ...plain, isd: { rank: 'Overlord', clearance: 'CL4-S', standing: 'active' }, version: 2 }).ok, false, 'invalid ISD rank refused');
 assert.equal(usr(commissioner, plain, { ...plain, isd: { rank: 'Operative', clearance: 'CL5', standing: 'active' }, version: 2 }).ok, false, 'ISD clearance must match the ISD rank');

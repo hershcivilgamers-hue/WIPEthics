@@ -10,7 +10,7 @@
 // =============================================================================
 
 import { loadDb, saveDb, newId } from './storage.js';
-import { ACTIVITY_REQ_SETTING_ID, ACTIVITY_REQ_DEFAULT } from './constants.js';
+import { ACTIVITY_REQ_SETTING_ID, ACTIVITY_REQ_DEFAULT, RANK_CLEARANCE } from './constants.js';
 import { makeCredential } from './crypto.js';
 import { logAction } from './audit.js';
 
@@ -83,12 +83,21 @@ async function buildUser(spec) {
     leave: spec.leave ?? null,
     notes: spec.notes ?? [],
     events: spec.events ?? [],
+    // Covert Internal Security membership rides alongside the cover post.
+    ...(spec.isd ? { isd: spec.isd } : {}),
     createdAt: now,
     updatedAt: now,
     version: 1,
     deleted: false,
     deletedAt: null,
   };
+}
+
+// A ready-made ISD caveat for a seed spec — an agent keeps their cover post and
+// carries this hidden identity. Demo agents so the covert paths are exercisable
+// (and loginable) out of the box.
+function isdCaveat(rank, badge) {
+  return { rank, clearance: RANK_CLEARANCE.isd[rank], standing: 'active', badgeNumber: badge, promoChecks: [] };
 }
 
 const SEED_SPECS = [
@@ -104,7 +113,7 @@ const SEED_SPECS = [
   },
   {
     designation: 'O1-1', codename: 'Vanguard', org: 'omega-1', rank: 'Commander',
-    clearance: 'CL4-S', username: 'vanguard',
+    clearance: 'CL4-S', username: 'vanguard', isd: isdCaveat('Commissioner', '101'),
     awards: [{ id: 'a2', title: 'MTF Command Ribbon', date: iso(300), note: 'Assumed command of Omega-1.' }],
     events: [
       event(600, 'transfer', 'Transferred into MTF Omega-1 from Site security.'),
@@ -114,7 +123,7 @@ const SEED_SPECS = [
   },
   {
     designation: 'O1-3', codename: 'Warrant', org: 'omega-1', rank: 'Lieutenant',
-    clearance: 'CL4-J', username: 'warrant',
+    clearance: 'CL4-J', username: 'warrant', isd: isdCaveat('Inspector', '114'),
     awards: [{ id: 'a7', title: 'Field Conduct Commendation', date: iso(70), note: 'Exemplary conduct during containment escort.' }],
     events: [
       event(260, 'transfer', 'Joined Omega-1 as Specialist.'),
@@ -134,7 +143,7 @@ const SEED_SPECS = [
   },
   {
     designation: 'O1-7', codename: 'Bailiff', org: 'omega-1', rank: 'Sergeant',
-    clearance: 'CL3', username: 'bailiff',
+    clearance: 'CL3', username: 'bailiff', isd: isdCaveat('Investigator', '221'),
     events: [
       event(210, 'transfer', 'Inducted into Omega-1 following recruitment review.'),
       event(54, 'training', 'Completed close-protection refresher.'),

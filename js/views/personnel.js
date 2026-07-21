@@ -329,7 +329,20 @@ async function bulkRecycle(app, list, done) {
 // is not ISD or CL5, so this is self-gating. An agent records their OWN badge
 // number; rank and standing move through ISD command (see the gate).
 function sectionISD(u, actor) {
-  if (!u.isd) return '';
+  // Induction. A file with no membership shows nothing to anyone — except ISD
+  // command (or CL5), who may read the operator in. This is the only way to
+  // create an agent in-app; the record `isd` is otherwise stripped for everyone.
+  if (!u.isd) {
+    if (!canManageISD(actor) || u.accountStatus !== 'active') return '';
+    return `<section class="card">
+      <div class="card__title">Internal Security</div>
+      <div class="card__body">
+        <p class="muted">This operator is not read into the Department. Their cover post is ${orgTag(u.org)} ${esc(u.rank || '—')}.</p>
+        <div class="btn-row" style="margin-top:8px"><button class="btn btn--sm btn--primary" data-act="isd-induct">Read into Internal Security…</button></div>
+        <p class="field__hint" style="margin-top:8px">Only the Department and CL5 can see this control, or that it could exist.</p>
+      </div>
+    </section>`;
+  }
   const m = u.isd;
   const self = actor.id === u.id;
   const standing = m.standing === 'active'
@@ -377,6 +390,7 @@ function sectionISD(u, actor) {
         ${next ? `<button class="btn btn--sm btn--primary" data-act="isd-promote" ${allMet ? '' : 'disabled title="Requirements are not all met"'}>Promote to ${esc(next)}</button>` : ''}
         ${down ? `<button class="btn btn--sm btn--danger" data-act="isd-demote">Reduce to ${esc(down)}</button>` : ''}
       </div>` : ''}
+      ${command && !self ? '<div class="btn-row" style="margin-top:6px"><button class="btn btn--xs btn--danger" data-act="isd-remove">Read out of the Department</button></div>' : ''}
 
       <p class="field__hint" style="margin-top:8px">Visible only to the Department and CL5. The operator’s file otherwise shows their cover post; ISD rank never touches it.</p>
     </div>
@@ -425,6 +439,58 @@ async function isdRankMove(app, u, dir) {
 
 // An agent records their own badge number. The gate accepts a badge-only change
 // on your own record (SET_ISD_BADGE) and nothing else through this path.
+// Read an operator into the Department. Sets the covert `isd` caveat on their
+// record; their cover post (org/rank/clearance) is untouched. ISD command only.
+function openISDInduct(app, u) {
+  const actor = app.user;
+  if (!canManageISD(actor)) { toast('Internal Security membership is set by ISD command.', 'error'); return; }
+  const rankOpts = RANKS.isd.slice().reverse() // offer junior-first
+    .map((rk) => `<option value="${esc(rk)}">${esc(rk)} · ${esc(clearanceForRank('isd', rk))}</option>`).join('');
+  openModal({
+    title: `Read into Internal Security — ${u.designation}`,
+    body: `<p class="modal__message">This grants a covert Internal Security identity alongside ${esc(u.codename)}’s cover post. It is visible only to the Department and CL5.</p>
+      <div class="field"><label>ISD rank</label><select id="isd-rank">${rankOpts}</select></div>
+      <div class="field"><label>Badge number <span class="muted-text">(optional)</span></label><input id="isd-badge-new" type="text" placeholder="e.g. 114" autocomplete="off" /></div>`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Read in', tone: 'primary', onClick: (c, d) => {
+          const rank = d.querySelector('#isd-rank').value;
+          const badge = d.querySelector('#isd-badge-new').value.trim() || null;
+          const fresh = getUser(u.id);
+          if (!fresh) { c(); return; }
+          fresh.isd = { rank, clearance: clearanceForRank('isd', rank), standing: 'active', badgeNumber: badge, promoChecks: [] };
+          fresh.updatedAt = new Date().toISOString();
+          fresh.version = (fresh.version || 1) + 1;
+          upsertUser(fresh);
+          logAction(app.user, 'SET_ISD_MEMBERSHIP', `${fresh.designation} read into Internal Security (${rank}).`);
+          c();
+          toast('Read into the Department.', 'success');
+          app.refresh();
+        } },
+    ],
+  });
+}
+
+// Read an operator out of the Department — clears the covert identity entirely.
+async function removeFromISD(app, u) {
+  if (!canManageISD(app.user)) return;
+  const ok = await confirmDialog({
+    title: 'Read out of the Department',
+    message: `Remove ${u.designation}’s Internal Security membership? Their cover post is unaffected.`,
+    confirmLabel: 'Read out', danger: true,
+  });
+  if (!ok) return;
+  const fresh = getUser(u.id);
+  if (!fresh) return;
+  fresh.isd = null;
+  fresh.updatedAt = new Date().toISOString();
+  fresh.version = (fresh.version || 1) + 1;
+  upsertUser(fresh);
+  logAction(app.user, 'SET_ISD_MEMBERSHIP', `${fresh.designation} read out of Internal Security.`);
+  toast('Read out of the Department.', 'success');
+  app.refresh();
+}
+
 function openISDBadge(app, u) {
   const cur = getUser(u.id);
   if (!cur || !cur.isd) return;
@@ -730,6 +796,8 @@ export function renderDossier(host, app, id) {
   const dispatch = {
     edit: () => openEdit(app, u),
     'isd-badge': () => openISDBadge(app, u),
+    'isd-induct': () => openISDInduct(app, u),
+    'isd-remove': () => removeFromISD(app, u),
     'isd-promote': () => isdRankMove(app, u, 'up'),
     'isd-demote': () => isdRankMove(app, u, 'down'),
     tags: () => openTags(app, u),
