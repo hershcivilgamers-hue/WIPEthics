@@ -335,6 +335,32 @@ function sectionISD(u, actor) {
   const standing = m.standing === 'active'
     ? '<span class="badge badge--ok">Active</span>'
     : `<span class="badge badge--muted">${esc(m.standing || 'inactive')}</span>`;
+  const command = canManageISD(actor);
+
+  // Promotion on the ISD ladder — entirely separate from the cover-post ladder.
+  // Requirements come from promo_reqs keyed (org:'isd', fromRank), and progress
+  // is tracked in isd.promoChecks so it never collides with the cover checklist.
+  const next = rankUp('isd', m.rank);
+  const down = rankDown('isd', m.rank);
+  const set = next ? promoReqs().find((r) => r.org === 'isd' && r.fromRank === m.rank) : null;
+  const items = set?.items || [];
+  const checked = new Set(m.promoChecks || []);
+  const metCount = items.filter((it) => checked.has(it.id)).length;
+  const allMet = items.length > 0 && metCount === items.length;
+
+  let reqHTML;
+  if (!next) reqHTML = '<p class="muted">This agent holds the most senior rank in the Department.</p>';
+  else if (!items.length) reqHTML = '<p class="muted">No requirements are defined for this transition.</p>';
+  else {
+    reqHTML = `<ul class="reqs">${items.map((it) => {
+      const done = checked.has(it.id);
+      const control = command
+        ? `<input type="checkbox" class="req__box" data-isd-req="${esc(it.id)}" ${done ? 'checked' : ''} aria-label="Mark requirement met" />`
+        : `<span class="req__mark ${done ? 'req__mark--done' : ''}">${done ? '✓' : '○'}</span>`;
+      return `<li class="req ${done ? 'req--done' : ''}">${control}<span class="req__text">${esc(it.text)}</span></li>`;
+    }).join('')}</ul>`;
+  }
+
   return `<section class="card">
     <div class="card__title">Internal Security ${standing}</div>
     <div class="card__body">
@@ -342,9 +368,59 @@ function sectionISD(u, actor) {
       <div class="kv"><span class="kv__k">Badge number</span><span class="kv__v mono">${m.badgeNumber ? esc(m.badgeNumber) : '<span class="muted-text">not recorded</span>'}</span></div>
       <div class="kv"><span class="kv__k">Cover post</span><span class="kv__v">${orgTag(u.org)} ${esc(u.rank || '—')}</span></div>
       ${self ? '<div class="btn-row" style="margin-top:10px"><button class="btn btn--sm" data-act="isd-badge">Record badge number</button></div>' : ''}
-      <p class="field__hint" style="margin-top:8px">This record is visible only to the Department and CL5. The operator’s file otherwise shows their cover post.</p>
+
+      <div class="modal__divider"></div>
+      <div class="card__subtitle">Advancement${next ? ` — <span class="mono">${esc(m.rank)}</span> → <span class="mono">${esc(next)}</span>` : ''}
+        ${items.length ? `<span class="muted-text"> · ${metCount}/${items.length} met</span>` : ''}</div>
+      ${reqHTML}
+      ${command && (next || down) ? `<div class="btn-row" style="margin-top:10px">
+        ${next ? `<button class="btn btn--sm btn--primary" data-act="isd-promote" ${allMet ? '' : 'disabled title="Requirements are not all met"'}>Promote to ${esc(next)}</button>` : ''}
+        ${down ? `<button class="btn btn--sm btn--danger" data-act="isd-demote">Reduce to ${esc(down)}</button>` : ''}
+      </div>` : ''}
+
+      <p class="field__hint" style="margin-top:8px">Visible only to the Department and CL5. The operator’s file otherwise shows their cover post; ISD rank never touches it.</p>
     </div>
   </section>`;
+}
+
+// Tick an ISD requirement. Kept in isd.promoChecks so the cover-post checklist
+// is untouched; ISD command (Commissioner/Director, or CL5) manages it.
+function toggleISDRequirement(app, u, itemId) {
+  const fresh = getUser(u.id);
+  if (!fresh || !fresh.isd) return;
+  const checks = new Set(fresh.isd.promoChecks || []);
+  if (checks.has(itemId)) checks.delete(itemId); else checks.add(itemId);
+  fresh.isd = { ...fresh.isd, promoChecks: [...checks] };
+  fresh.updatedAt = new Date().toISOString();
+  fresh.version = (fresh.version || 1) + 1;
+  upsertUser(fresh);
+  logAction(app.user, 'SET_ISD_MEMBERSHIP', `Updated ${fresh.designation}’s Internal Security checklist.`);
+  app.refresh();
+}
+
+// Move an agent on the ISD ladder. Clearance is realigned from the ISD ladder
+// (the gate re-checks this) and the checklist resets, mirroring a cover-post
+// rank change. The agent's org/rank/clearance are deliberately untouched.
+async function isdRankMove(app, u, dir) {
+  const fresh = getUser(u.id);
+  if (!fresh || !fresh.isd) return;
+  const target = dir === 'up' ? rankUp('isd', fresh.isd.rank) : rankDown('isd', fresh.isd.rank);
+  if (!target) return;
+  const ok = await confirmDialog({
+    title: dir === 'up' ? 'Promote within the Department' : 'Reduce within the Department',
+    message: `${dir === 'up' ? 'Promote' : 'Reduce'} ${fresh.designation} from ${fresh.isd.rank} to ${target}? Their Internal Security checklist resets; their cover post is unaffected.`,
+    confirmLabel: dir === 'up' ? 'Promote' : 'Reduce',
+    danger: dir !== 'up',
+  });
+  if (!ok) return;
+  const latest = getUser(u.id);
+  latest.isd = { ...latest.isd, rank: target, clearance: clearanceForRank('isd', target), promoChecks: [] };
+  latest.updatedAt = new Date().toISOString();
+  latest.version = (latest.version || 1) + 1;
+  upsertUser(latest);
+  logAction(app.user, 'SET_ISD_MEMBERSHIP', `${latest.designation}: Internal Security rank → ${target}.`);
+  toast(`Internal Security rank set to ${target}.`, 'success');
+  app.refresh();
 }
 
 // An agent records their own badge number. The gate accepts a badge-only change
@@ -654,6 +730,8 @@ export function renderDossier(host, app, id) {
   const dispatch = {
     edit: () => openEdit(app, u),
     'isd-badge': () => openISDBadge(app, u),
+    'isd-promote': () => isdRankMove(app, u, 'up'),
+    'isd-demote': () => isdRankMove(app, u, 'down'),
     tags: () => openTags(app, u),
     medal: () => openAward(app, u),
     transfer: () => openTransfer(app, u),
@@ -699,6 +777,7 @@ export function renderDossier(host, app, id) {
     if (a) exportMedalCertificate(app, u, a);
   }));
   host.querySelectorAll('[data-req]').forEach((b) => b.addEventListener('change', () => toggleRequirement(app, u, b.dataset.req)));
+  host.querySelectorAll('[data-isd-req]').forEach((b) => b.addEventListener('change', () => toggleISDRequirement(app, u, b.dataset.isdReq)));
 }
 
 // --- Dossier sub-sections ---------------------------------------------------

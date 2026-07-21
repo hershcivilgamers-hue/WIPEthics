@@ -8,7 +8,7 @@
 // =============================================================================
 
 import assert from 'node:assert';
-import { isISD, isdWeight, canManageISD } from '../js/permissions.js';
+import { isISD, isdWeight, canManageISD, accessLevel, canManageOrg } from '../js/permissions.js';
 import { RANKS, RANK_CLEARANCE, clearanceForRank } from '../js/constants.js';
 import { redactUser, buildSnapshot } from '../worker/src/redact.js';
 import { authorizeWrite } from '../worker/src/gate.js';
@@ -89,4 +89,50 @@ assert.equal(usr(self, inducted, withBadge).action, 'SET_ISD_BADGE', 'an agent r
 assert.equal(usr(inspector, inducted, withBadge).ok, false, 'an agent cannot set someone else\'s badge');
 assert.equal(usr(commissioner, inducted, withBadge).ok, false, 'even ISD command uses the membership path, not the badge path, for others');
 
-console.log('OK — ISD covert redaction, ISD-ladder authority, badge and induction gate hold.');
+// --- Promotion on the ISD ladder ---------------------------------------------
+// Rank moves realign the ISD clearance and reset the ISD checklist, and must
+// leave the cover post completely alone.
+const agent = {
+  id: 'u8', designation: 'O1-8', org: 'omega-1', rank: 'Sergeant', clearance: 'CL3',
+  accountStatus: 'active', version: 1, deleted: false,
+  isd: { rank: 'Operative', clearance: 'CL3', standing: 'active', badgeNumber: '9', promoChecks: ['a', 'b'] },
+};
+const promoted = {
+  ...agent, version: 2,
+  isd: { rank: 'Investigator', clearance: clearanceForRank('isd', 'Investigator'), standing: 'active', badgeNumber: '9', promoChecks: [] },
+};
+assert.equal(usr(commissioner, agent, promoted).action, 'SET_ISD_MEMBERSHIP', 'ISD command promotes on the ISD ladder');
+assert.equal(usr(inspector, agent, promoted).ok, false, 'an Inspector cannot promote');
+assert.equal(promoted.org, agent.org, 'cover org untouched');
+assert.equal(promoted.rank, agent.rank, 'cover rank untouched');
+assert.equal(promoted.clearance, agent.clearance, 'cover clearance untouched');
+
+// An ISD move may NOT ride along with a cover-post rank change.
+const both = { ...promoted, rank: 'Command Sergeant', clearance: 'CL3' };
+assert.notEqual(usr(commissioner, agent, both).action, 'SET_ISD_MEMBERSHIP',
+  'an ISD rank change cannot be combined with a cover-post rank change');
+
+// Ticking the ISD checklist is ISD command's, and touches only isd.
+const ticked = { ...agent, version: 2, isd: { ...agent.isd, promoChecks: ['a', 'b', 'c'] } };
+assert.equal(usr(commissioner, agent, ticked).action, 'SET_ISD_MEMBERSHIP', 'ISD command ticks the ISD checklist');
+assert.equal(usr(omegaMgr, agent, ticked).ok, false, 'an Omega manager cannot tick an ISD checklist');
+
+// --- ISD membership grants NO cross-org reach --------------------------------
+// An agent reads other departments exactly as their COVER post allows. A CL3/
+// CL4-J agent therefore sees an Ethics or Omega file just as redacted as any
+// other outsider — ISD is a caveat, never a skeleton key. (It is also why a
+// junior agent never learns Omega-1's affiliation from the system.)
+const ethicsMember = { id: 'e1', designation: 'EC-3', org: 'ethics-committee', rank: 'Member', clearance: 'CL5' };
+const omegaFile = { id: 'o9', designation: 'O1-9', org: 'omega-1', rank: 'Sergeant', clearance: 'CL3' };
+
+assert.equal(accessLevel(inspector, ethicsMember), accessLevel(cl3, ethicsMember),
+  'an ISD Inspector reads an Ethics file exactly as a plain CL3 does');
+assert.equal(accessLevel(commissioner, ethicsMember), accessLevel(cl3, ethicsMember),
+  'even ISD command gets no cross-org elevation from membership');
+assert.equal(canManageOrg(omegaMgr, 'isd'), false, 'a CL4-S outsider gets no free stake in the ISD');
+assert.equal(canManageOrg(cl5, 'isd'), true, 'CL5 manages every organisation, ISD included');
+// Redaction of a third party is unchanged by the viewer's ISD membership.
+assert.deepEqual(redactUser(inspector, omegaFile), redactUser({ ...inspector, isd: undefined }, omegaFile),
+  'stripping ISD membership from the viewer changes nothing about what they can read');
+
+console.log('OK — ISD covert redaction, ISD-ladder authority, promotion, badge, induction gate and no-cross-org-reach hold.');

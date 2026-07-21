@@ -358,7 +358,8 @@ function drawPromoReqs(panel, app) {
     return;
   }
 
-  const orgsWithLadders = ['omega-1', 'ethics-committee', 'command'].filter((o) => (RANKS[o] || []).length >= 2);
+  // ISD is included: this panel is CL5-only, and CL5 is cleared for the Department.
+  const orgsWithLadders = ['omega-1', 'ethics-committee', 'command', 'isd'].filter((o) => (RANKS[o] || []).length >= 2);
 
   panel.innerHTML = `
     <div class="card">
