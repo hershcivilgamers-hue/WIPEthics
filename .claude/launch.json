@@ -4,8 +4,26 @@
     {
       "name": "docs-audit",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8377", "--directory", "C:/Users/Luke/AppData/Local/Temp/claude/C--Users-Luke-Documents-susyem-thing-WIP-new-br/5f7f0772-8422-4693-b20d-63137128dc64/scratchpad/docs-audit"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8377",
+        "--directory",
+        "C:/Users/Luke/AppData/Local/Temp/claude/C--Users-Luke-Documents-susyem-thing-WIP-new-br/5f7f0772-8422-4693-b20d-63137128dc64/scratchpad/docs-audit"
+      ],
       "port": 8377
+    },
+    {
+      "name": "cairo-static",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8899",
+        "--directory",
+        "C:/Users/Luke/Documents/susyem thing/WIP new br"
+      ],
+      "port": 8899
     }
   ]
 }

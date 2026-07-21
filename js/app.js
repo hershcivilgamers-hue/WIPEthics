@@ -76,20 +76,42 @@ function navNameForOrg(org) {
   return org === 'ethics-committee' ? 'ethics' : org; // 'omega-1' | 'command'
 }
 
+// Which sidebar groups the operator has collapsed. A per-device preference like
+// the theme — how you like the screen arranged is not part of the shared record.
+// Native <details> does the toggling, so there is no JS state to keep in sync.
+const NAV_COLLAPSE_KEY = 'cairo.nav.collapsed';
+function collapsedGroups() {
+  try { return new Set(JSON.parse(localStorage.getItem(NAV_COLLAPSE_KEY) || '[]')); } catch (_) { return new Set(); }
+}
+function rememberGroup(name, open) {
+  try {
+    const set = collapsedGroups();
+    if (open) set.delete(name); else set.add(name);
+    localStorage.setItem(NAV_COLLAPSE_KEY, JSON.stringify([...set]));
+  } catch (_) { /* private mode — collapse still works, just isn't remembered */ }
+}
+
 function buildSidebar(user, activeName) {
+  const collapsed = collapsedGroups();
   const groups = NAV.map((group) => {
-    const items = group.items
-      .filter((item) => isRouteAllowed(item.name, user))
-      .map((item) => `
+    const allowed = group.items.filter((item) => isRouteAllowed(item.name, user));
+    if (!allowed.length) return '';
+    const items = allowed.map((item) => `
         <a class="nav__item ${item.name === activeName ? 'nav__item--active' : ''}" href="${item.hash}">
           ${esc(item.label)}
         </a>`).join('');
-    if (!items) return '';
+    // The group holding the current page is always open, so you can see where
+    // you are; the rest follow the saved preference.
+    const hasActive = allowed.some((item) => item.name === activeName);
+    const open = hasActive || !collapsed.has(group.group);
     return `
-      <div class="nav__group">
-        <div class="nav__group-label">${esc(group.group)}</div>
+      <details class="nav__group" data-nav-group="${esc(group.group)}" ${open ? 'open' : ''}>
+        <summary class="nav__group-label">
+          <span>${esc(group.group)}</span>
+          <span class="nav__group-count">${allowed.length}</span>
+        </summary>
         ${items}
-      </div>`;
+      </details>`;
   }).join('');
 
   return `
@@ -205,6 +227,8 @@ function renderShell(user, route) {
   // Account controls appear in the topbar on desktop and in the drawer on mobile;
   // wire both copies in one pass by class / data-act.
   root.querySelectorAll('.js-theme-select').forEach((sel) => sel.addEventListener('change', (e) => setTheme(e.target.value)));
+  // <details> toggles itself; we only record the preference for next render.
+  root.querySelectorAll('[data-nav-group]').forEach((d) => d.addEventListener('toggle', () => rememberGroup(d.dataset.navGroup, d.open)));
   root.querySelectorAll('[data-act="tour"]').forEach((b) => b.addEventListener('click', () => startTutorial(app)));
   root.querySelectorAll('[data-act="change-pass"]').forEach((b) => b.addEventListener('click', () => personnelView.openChangePassphrase(app)));
   root.querySelectorAll('[data-act="logout"]').forEach((b) => b.addEventListener('click', () => {
