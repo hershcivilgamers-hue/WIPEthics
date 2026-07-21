@@ -303,7 +303,8 @@ function dispatch(route, user) {
     case 'operation':    deploymentsView.renderOperation(view, app, route.params.id); break;
     case 'intel':        intelView.renderList(view, app); break;
     case 'source':       intelView.renderSource(view, app, route.params.id); break;
-    case 'engagement':   engagementView.render(view, app); break;
+    case 'engagement':   engagementView.render(view, app, 'omega-1'); break;
+    case 'isd-engagement': engagementView.render(view, app, 'isd'); break;
     case 'evidence':     evidenceView.render(view, app); break;
     case 'trainings':    trainingsView.render(view, app); break;
     case 'blacklist':    blacklistView.render(view, app); break;

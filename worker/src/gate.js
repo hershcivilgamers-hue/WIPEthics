@@ -1085,7 +1085,10 @@ function authorizeTraining(actor, cur, next) {
 function authorizeEngagement(actor, cur, next) {
   const org = (next || cur).org || 'omega-1';
   const who = (next || cur).userId || 'operator';
-  if (!canManageOrg(actor, org)) return deny('Engagement scoring is maintained by senior command.');
+  // ISD scoring answers to ISD command, judged on the ISD ladder — a Commissioner
+  // may hold a CL3 cover post, so canManageOrg would wrongly lock them out.
+  const allowed = org === 'isd' ? canManageISD(actor) : canManageOrg(actor, org);
+  if (!allowed) return deny('Engagement scoring is maintained by senior command.');
   if (!cur) return ok('CREATE_ENGAGEMENT', `Engagement scored for ${who}.`);
   if (!!next.deleted !== !!cur.deleted) {
     return next.deleted ? ok('REMOVE_ENGAGEMENT', `Removed an engagement score.`) : ok('RESTORE_ENGAGEMENT', `Restored an engagement score.`);

@@ -542,23 +542,57 @@ export function activityInBreach(user, record, reqs = ACTIVITY_REQ_DEFAULT, now 
 //     manual:{ squadron, rp },
 //     overrides:{ scouting?, orders?, evidence?, pois?, trainings?, activity? },
 //     note, by, createdAt, updatedAt, version, deleted, deletedAt }
-export const ENGAGEMENT_SECTIONS = [
-  { key: 'scouting',  label: 'Scouting',       max: 10, mode: 'auto' },
-  { key: 'orders',    label: 'Orders',         max: 10, mode: 'auto' },
-  { key: 'evidence',  label: 'Evidence',       max: 5,  mode: 'auto' },
-  { key: 'pois',      label: 'PoIs / Targets', max: 10, mode: 'auto' },
-  { key: 'squadron',  label: 'Squadron',       max: 10, mode: 'manual' },
-  { key: 'trainings', label: 'Trainings',      max: 10, mode: 'auto' },
-  { key: 'activity',  label: 'Activity',       max: 10, mode: 'auto' },
-  { key: 'rp',        label: 'RP',             max: 5,  mode: 'manual' },
-];
+// Each organisation scores different work, so the section set is per-org. Omega
+// scores field engagement; the ISD scores casework. Everything downstream takes
+// an `org` and defaults to Omega, so existing callers are unaffected.
+export const ENGAGEMENT_SECTIONS_BY_ORG = {
+  'omega-1': [
+    { key: 'scouting',  label: 'Scouting',       max: 10, mode: 'auto' },
+    { key: 'orders',    label: 'Orders',         max: 10, mode: 'auto' },
+    { key: 'evidence',  label: 'Evidence',       max: 5,  mode: 'auto' },
+    { key: 'pois',      label: 'PoIs / Targets', max: 10, mode: 'auto' },
+    { key: 'squadron',  label: 'Squadron',       max: 10, mode: 'manual' },
+    { key: 'trainings', label: 'Trainings',      max: 10, mode: 'auto' },
+    { key: 'activity',  label: 'Activity',       max: 10, mode: 'auto' },
+    { key: 'rp',        label: 'RP',             max: 5,  mode: 'manual' },
+  ],
+  // Internal Security is measured on casework, not field presence: matters
+  // referred, work recorded to files, and matters brought to a disposition.
+  'isd': [
+    { key: 'referrals',    label: 'Referrals',    max: 10, mode: 'auto' },
+    { key: 'casework',     label: 'Casework',     max: 10, mode: 'auto' },
+    { key: 'dispositions', label: 'Dispositions', max: 10, mode: 'auto' },
+    { key: 'trainings',    label: 'Trainings',    max: 10, mode: 'auto' },
+    { key: 'activity',     label: 'Activity',     max: 10, mode: 'auto' },
+    { key: 'discretion',   label: 'Discretion',   max: 5,  mode: 'manual' },
+    { key: 'conduct',      label: 'Conduct',      max: 5,  mode: 'manual' },
+  ],
+};
+export const ENGAGEMENT_ORG_DEFAULT = 'omega-1';
+export function engagementSections(org = ENGAGEMENT_ORG_DEFAULT) {
+  return ENGAGEMENT_SECTIONS_BY_ORG[org] || ENGAGEMENT_SECTIONS_BY_ORG[ENGAGEMENT_ORG_DEFAULT];
+}
+export function engagementMaxFor(org = ENGAGEMENT_ORG_DEFAULT) {
+  return Object.fromEntries(engagementSections(org).map((s) => [s.key, s.max]));
+}
+export function engagementTotalMax(org = ENGAGEMENT_ORG_DEFAULT) {
+  return engagementSections(org).reduce((sum, s) => sum + s.max, 0);
+}
+
+// Back-compatible Omega aliases (the board and its self-check predate the split).
+export const ENGAGEMENT_SECTIONS = ENGAGEMENT_SECTIONS_BY_ORG['omega-1'];
 export const ENGAGEMENT_MANUAL_KEYS = ENGAGEMENT_SECTIONS.filter((s) => s.mode === 'manual').map((s) => s.key);
 export const ENGAGEMENT_OVERRIDE_KEYS = ENGAGEMENT_SECTIONS.filter((s) => s.mode === 'auto').map((s) => s.key);
 export const ENGAGEMENT_MAX = Object.fromEntries(ENGAGEMENT_SECTIONS.map((s) => [s.key, s.max]));
 export const ENGAGEMENT_TOTAL_MAX = ENGAGEMENT_SECTIONS.reduce((s, x) => s + x.max, 0); // 70
 // Point weights (tune here). Count-per-point for the count sections; host/attend
 // for trainings. Activity maps logged hours straight to points (capped).
-export const ENGAGEMENT_WEIGHTS = { scoutingPer: 3, ordersPer: 2, evidencePer: 2, poisPer: 2, trainHost: 3, trainAttend: 1 };
+export const ENGAGEMENT_WEIGHTS = {
+  scoutingPer: 3, ordersPer: 2, evidencePer: 2, poisPer: 2, trainHost: 3, trainAttend: 1,
+  // ISD casework: a referral is worth more than a single file entry; bringing a
+  // matter to a disposition is the heaviest single act.
+  referralsPer: 3, caseworkPer: 1, dispositionsPer: 3,
+};
 export const ENGAGEMENT_WEEK_MS = 7 * 24 * 3600000;
 
 // --- Evidence submissions ---------------------------------------------------
@@ -627,26 +661,34 @@ export function clampEngagement(v, max) {
 
 // Pure: derived scores from a raw event-count bundle (see engagement.js gather).
 //   raw = { scoutingCount, ordersCount, poisCount, trainHost, trainAttend, hours, host3wk }
-export function engagementAutoScores(raw = {}) {
+export function engagementAutoScores(raw = {}, org = ENGAGEMENT_ORG_DEFAULT) {
   const w = ENGAGEMENT_WEIGHTS;
+  const max = engagementMaxFor(org);
+  if (org === 'isd') {
+    return {
+      referrals:    clampEngagement((raw.referralsCount || 0) * w.referralsPer, max.referrals),
+      casework:     clampEngagement((raw.caseworkCount || 0) * w.caseworkPer, max.casework),
+      dispositions: clampEngagement((raw.dispositionsCount || 0) * w.dispositionsPer, max.dispositions),
+      trainings:    clampEngagement((raw.trainHost || 0) * w.trainHost + (raw.trainAttend || 0) * w.trainAttend, max.trainings),
+      activity:     clampEngagement(Math.floor(raw.hours || 0), max.activity),
+    };
+  }
   return {
-    scouting:  clampEngagement((raw.scoutingCount || 0) * w.scoutingPer, ENGAGEMENT_MAX.scouting),
-    orders:    clampEngagement((raw.ordersCount || 0) * w.ordersPer, ENGAGEMENT_MAX.orders),
-    pois:      clampEngagement((raw.poisCount || 0) * w.poisPer, ENGAGEMENT_MAX.pois),
-    evidence:  clampEngagement((raw.evidenceCount || 0) * w.evidencePer, ENGAGEMENT_MAX.evidence),
-    trainings: clampEngagement((raw.trainHost || 0) * w.trainHost + (raw.trainAttend || 0) * w.trainAttend, ENGAGEMENT_MAX.trainings),
-    activity:  clampEngagement(Math.floor(raw.hours || 0), ENGAGEMENT_MAX.activity),
+    scouting:  clampEngagement((raw.scoutingCount || 0) * w.scoutingPer, max.scouting),
+    orders:    clampEngagement((raw.ordersCount || 0) * w.ordersPer, max.orders),
+    pois:      clampEngagement((raw.poisCount || 0) * w.poisPer, max.pois),
+    evidence:  clampEngagement((raw.evidenceCount || 0) * w.evidencePer, max.evidence),
+    trainings: clampEngagement((raw.trainHost || 0) * w.trainHost + (raw.trainAttend || 0) * w.trainAttend, max.trainings),
+    activity:  clampEngagement(Math.floor(raw.hours || 0), max.activity),
   };
 }
 
-// Pure: fold auto scores, manual scores and quality overrides into final values.
-// Returns { val:{key:score}, src:{key:'auto'|'override'|'manual'}, auto, total }.
-export function engagementResolved(raw = {}, record = null) {
-  const auto = engagementAutoScores(raw);
+export function engagementResolved(raw = {}, record = null, org = ENGAGEMENT_ORG_DEFAULT) {
+  const auto = engagementAutoScores(raw, org);
   const ov = (record && record.overrides) || {};
   const man = (record && record.manual) || {};
   const val = {}; const src = {};
-  for (const s of ENGAGEMENT_SECTIONS) {
+  for (const s of engagementSections(org)) {
     if (s.mode === 'manual') { val[s.key] = clampEngagement(man[s.key], s.max); src[s.key] = 'manual'; continue; }
     const o = ov[s.key];
     if (o !== undefined && o !== null && o !== '') { val[s.key] = clampEngagement(o, s.max); src[s.key] = 'override'; }
@@ -658,7 +700,13 @@ export function engagementResolved(raw = {}, record = null) {
 
 // Pure: the two engagement requirements. Req1 — ≥1 Scouting/Order/Evidence/PoI
 // engagement this week. Req2 — ≥1 training hosted in the trailing three weeks.
-export function engagementReqs(raw = {}) {
+export function engagementReqs(raw = {}, org = ENGAGEMENT_ORG_DEFAULT) {
+  if (org === 'isd') {
+    // One investigative contribution this week, and a matter carried in the
+    // trailing three weeks — the Department's equivalent of Omega's two.
+    const contributions = (raw.referralsCount || 0) + (raw.caseworkCount || 0) + (raw.dispositionsCount || 0);
+    return { req1: contributions >= 1, req2: (raw.contrib3wk || 0) >= 1 };
+  }
   const engagements = (raw.scoutingCount || 0) + (raw.ordersCount || 0)
     + (raw.poisCount || 0) + (raw.evidenceCount || 0);
   return { req1: engagements >= 1, req2: (raw.host3wk || 0) >= 1 };

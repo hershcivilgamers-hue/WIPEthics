@@ -1300,7 +1300,7 @@ export function buildSummonsHTML(record, m, actor) {
 //   { weekLabel, totalMax, sections:[{key,label,max}], atRisk,
 //     rows:[{designation,codename,rank,val:{key:score},total,req1,req2}] }
 export function buildEngagementSummaryHTML(summary, actor) {
-  const { weekLabel, sections, totalMax, rows, atRisk } = summary;
+  const { weekLabel, sections, totalMax, rows, atRisk, org = 'omega-1', orgLabel = 'MTF Omega-1' } = summary;
   const th = 'border-bottom:1px solid #111;padding:4px 5px;font-size:9px;letter-spacing:.04em;text-transform:uppercase';
   const td = 'padding:4px 5px;border-bottom:1px solid #ccc;font-size:10px';
   const body = rows.length ? rows.map((r) => `
@@ -1312,9 +1312,10 @@ export function buildEngagementSummaryHTML(summary, actor) {
       </tr>`).join('') : `<tr><td style="${td}" colspan="${sections.length + 3}">No active operators.</td></tr>`;
 
   const inner = `
-    ${letterhead('omega-1', 'Command Section')}
+    ${letterhead(org === 'isd' ? 'isd' : 'omega-1', 'Command Section')}
     <hr class="rule" />
     <div class="doc-title">Weekly Engagement Summary</div>
+    <div class="doc-sub">${esc(orgLabel)}</div>
     <div class="doc-sub">Review week: ${esc(weekLabel)}</div>
     <hr class="rule" />
     ${atRisk ? `<p class="muted"><strong>${esc(String(atRisk))}</strong> operator(s) below the weekly engagement requirement this week.</p>` : ''}
@@ -1335,8 +1336,8 @@ export function buildEngagementSummaryHTML(summary, actor) {
     classification: banner('CL4-S', 'Command'),
     inner,
     org: 'omega-1',
-    distribution: 'Omega-1 Command; Site Command.',
-    footerRef: 'O1-ENG-SUMMARY',
+    distribution: org === 'isd' ? 'Internal Security Department.' : 'Omega-1 Command; Site Command.',
+    footerRef: org === 'isd' ? 'ISD-ENG-SUMMARY' : 'O1-ENG-SUMMARY',
     actor,
   });
 }

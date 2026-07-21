@@ -9,18 +9,61 @@
 // numbers are recomputed on every read.
 // =============================================================================
 
-import { ENGAGEMENT_WEEK_MS, engagementResolved, engagementReqs, evidenceCounts } from './constants.js';
-import { recruits, subjects, users, getActivityForUser, getEngagementFor, evidenceFor } from './storage.js';
+import { ENGAGEMENT_WEEK_MS, ENGAGEMENT_ORG_DEFAULT, engagementResolved, engagementReqs, evidenceCounts } from './constants.js';
+import { recruits, subjects, users, getActivityForUser, getEngagementFor, evidenceFor, investigations } from './storage.js';
 
 const ms = (t) => (typeof t === 'number' ? t : Date.parse(t)) || 0;
 const inWin = (t, start, end) => { const v = ms(t); return v >= start && v < end; };
 
 // Raw event counts for one operator across the review week (and a trailing
 // three-week host count for requirement two).
-export function gatherRaw(user, weekStart, now = Date.now()) {
+export function gatherRaw(user, weekStart, now = Date.now(), org = ENGAGEMENT_ORG_DEFAULT) {
   const desig = user.designation;
   const end = weekStart + ENGAGEMENT_WEEK_MS;
   const threeWeeksAgo = now - 3 * ENGAGEMENT_WEEK_MS;
+
+  // Trainings and hours are common to every organisation: an agent logs their
+  // hours once, under their cover post.
+  const commonAct = getActivityForUser(user.id);
+  let commonHours = 0;
+  for (const e of ((commonAct && commonAct.log) || [])) {
+    if (e.at >= weekStart && e.at < end) commonHours += Number(e.hours) || 0;
+  }
+  let cTrainAttend = 0; let cTrainHost = 0; let cHost3wk = 0;
+  for (const u of users()) {
+    for (const t of (u.trainings || [])) {
+      if (u.id === user.id) {
+        if (inWin(t.awardedAt, weekStart, end)) cTrainAttend += 1;
+      } else if (t.awardedBy === desig) {
+        if (inWin(t.awardedAt, weekStart, end)) cTrainHost += 1;
+        if (inWin(t.awardedAt, threeWeeksAgo, now + 1)) cHost3wk += 1;
+      }
+    }
+  }
+
+  // --- Internal Security: casework, not field presence ------------------------
+  // Referrals filed, work recorded to files, and matters brought to a
+  // disposition. The referral's own filing entry is excluded from casework so a
+  // referral is not counted twice.
+  if (org === 'isd') {
+    let referralsCount = 0; let caseworkCount = 0; let dispositionsCount = 0; let contrib3wk = 0;
+    for (const inv of investigations()) {
+      if (inv.deleted) continue;
+      if (inv.openedBy === desig && inWin(inv.createdAt, weekStart, end)) referralsCount += 1;
+      for (const e of (inv.entries || [])) {
+        if (e.by !== desig) continue;
+        if (inWin(e.ts, weekStart, end)) {
+          if (e.type !== 'filing') caseworkCount += 1;
+          if (e.type === 'disposition') dispositionsCount += 1;
+        }
+        if (inWin(e.ts, threeWeeksAgo, now + 1)) contrib3wk += 1;
+      }
+    }
+    return {
+      referralsCount, caseworkCount, dispositionsCount, contrib3wk,
+      trainAttend: cTrainAttend, trainHost: cTrainHost, hours: commonHours, host3wk: cHost3wk,
+    };
+  }
 
   // Scouting — Omega candidates this operator opened or commented on, in-week.
   let scoutingCount = 0;
@@ -70,10 +113,10 @@ export function gatherRaw(user, weekStart, now = Date.now()) {
 
 // The full model for one operator/week: raw counts, the stored record, resolved
 // per-section scores + source, total, and the two requirement flags.
-export function engagementModel(user, weekStart, now = Date.now()) {
-  const raw = gatherRaw(user, weekStart, now);
+export function engagementModel(user, weekStart, now = Date.now(), org = ENGAGEMENT_ORG_DEFAULT) {
+  const raw = gatherRaw(user, weekStart, now, org);
   const record = getEngagementFor(user.id, weekStart);
-  const resolved = engagementResolved(raw, record);
-  const reqs = engagementReqs(raw);
+  const resolved = engagementResolved(raw, record, org);
+  const reqs = engagementReqs(raw, org);
   return { user, weekStart, raw, record, ...resolved, reqs };
 }

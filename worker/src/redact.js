@@ -18,7 +18,7 @@ import {
   compartmentClears, readIntoCompartment, canManageCompartment,
   canViewActivity, canViewRecruitment, canViewOperation, isAssignedToOperation,
   canViewIntel, isAssignedToIntel, canViewTraining,
-  canViewDocument, canManageOrg, isISD, canViewInvestigation,
+  canViewDocument, canManageOrg, isISD, canViewInvestigation, canManageISD,
 } from '../../js/permissions.js';
 import { strikeVoided } from '../../js/constants.js';
 
@@ -221,7 +221,9 @@ export function buildSnapshot(actor, db) {
     trainings: (db.trainings || []).filter((t) => !t.deleted && canViewTraining(actor, t)),
     // Engagement scores are a Sr CL4 command tool — shipped only to managers of the
     // owning organisation (or CL5), matching who may view/edit the board.
-    engagement: (db.engagement || []).filter((e) => !e.deleted && (isCL5(actor) || canManageOrg(actor, e.org || 'omega-1'))),
+    engagement: (db.engagement || []).filter((e) => !e.deleted && ((e.org === 'isd')
+      ? canManageISD(actor)
+      : (isCL5(actor) || canManageOrg(actor, e.org || 'omega-1')))),
     // Evidence — a manager of the owning org (or CL5) sees all of it; an operator
     // sees their own submissions (so they can file and track them).
     evidence: (db.evidence || []).filter((e) => !e.deleted && (isCL5(actor) || canManageOrg(actor, e.org || 'omega-1') || e.userId === actor.id)),

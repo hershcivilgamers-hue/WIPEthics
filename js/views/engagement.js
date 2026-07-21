@@ -11,44 +11,59 @@
 // =============================================================================
 
 import {
-  RANKS, ENGAGEMENT_SECTIONS, ENGAGEMENT_MANUAL_KEYS, ENGAGEMENT_OVERRIDE_KEYS,
-  ENGAGEMENT_MAX, ENGAGEMENT_TOTAL_MAX, engagementWeekStart, engagementWeekShift, rankIndex,
+  ORGS, engagementSections, engagementMaxFor, engagementTotalMax,
+  engagementWeekStart, engagementWeekShift, rankIndex,
 } from '../constants.js';
 import { engagementModel } from '../engagement.js';
 import { users, getEngagement, getEngagementFor, upsertEngagement, newId } from '../storage.js';
-import { isCL5, canManageOrg } from '../permissions.js';
+import { isCL5, canManageOrg, isISD, canManageISD } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { esc, fmtDate, toast, openModal } from '../ui.js';
 import { exportEngagementSummary } from '../export.js';
 
-const ORG = 'omega-1';
+// The board is per-organisation. `curOrg` tracks the board being viewed so the
+// editor/save helpers below score against the right section set.
+let curOrg = 'omega-1';
 let viewWeek = engagementWeekStart();
 
-const canEdit = (actor) => isCL5(actor) || canManageOrg(actor, ORG);
+// Omega scoring is a Sr CL4 command tool; ISD scoring belongs to ISD command
+// (judged on the ISD ladder, never the cover clearance).
+const canEdit = (actor, org = curOrg) => (org === 'isd' ? canManageISD(actor) : (isCL5(actor) || canManageOrg(actor, org)));
 
 function weekLabel(ws) {
   return `${fmtDate(new Date(ws).toISOString())} – ${fmtDate(new Date(ws + 6 * 86400000).toISOString())}`;
 }
 
 // The active Omega-1 roster, most-senior rank first (rows grouped by rank).
-function roster() {
+function roster(org) {
+  const isd = org === 'isd';
   return users()
-    .filter((u) => !u.deleted && u.org === ORG && u.accountStatus === 'active' && u.status !== 'discharged')
-    .sort((a, b) => (rankIndex(ORG, a.rank) - rankIndex(ORG, b.rank)) || (a.designation || '').localeCompare(b.designation || ''));
+    .filter((u) => !u.deleted && u.accountStatus === 'active' && u.status !== 'discharged'
+      && (isd ? isISD(u) : u.org === org))
+    .sort((a, b) => {
+      const ra = isd ? rankIndex('isd', a.isd?.rank) : rankIndex(org, a.rank);
+      const rb = isd ? rankIndex('isd', b.isd?.rank) : rankIndex(org, b.rank);
+      return (ra - rb) || (a.designation || '').localeCompare(b.designation || '');
+    });
 }
 
-export function render(host, app) {
+export function render(host, app, org = 'omega-1') {
+  curOrg = org;
   const actor = app.user;
-  const editable = canEdit(actor);
-  const list = roster();
+  const editable = canEdit(actor, org);
+  const list = roster(org);
+  const SECTIONS = engagementSections(org);
+  const MAXES = engagementMaxFor(org);
+  const TOTAL_MAX = engagementTotalMax(org);
+  const isd = org === 'isd';
 
-  const models = new Map(list.map((u) => [u.id, engagementModel(u, viewWeek)]));
+  const models = new Map(list.map((u) => [u.id, engagementModel(u, viewWeek, Date.now(), org)]));
 
   const scoreCell = (m, key) => {
     const v = m.val[key]; const src = m.src[key];
     const mark = src === 'override' ? ' eng-cell--ov' : (src === 'manual' ? ' eng-cell--man' : '');
     const title = src === 'override' ? 'quality override' : (src === 'manual' ? 'entered by reviewer' : 'derived from logs');
-    return `<td class="cell-num eng-cell${mark}" title="${title}">${v}<span class="eng-max">/${ENGAGEMENT_MAX[key]}</span></td>`;
+    return `<td class="cell-num eng-cell${mark}" title="${title}">${v}<span class="eng-max">/${MAXES[key]}</span></td>`;
   };
   const reqDot = (ok, label) => `<span class="eng-req ${ok ? 'eng-req--ok' : 'eng-req--no'}" title="${esc(label)}">${ok ? '✓' : '✕'}</span>`;
 
@@ -58,8 +73,8 @@ export function render(host, app) {
   const TREND_WEEKS = 5;
   const sparkline = (u) => {
     const totals = [];
-    for (let k = TREND_WEEKS - 1; k >= 0; k--) totals.push(engagementModel(u, engagementWeekShift(viewWeek, -k)).total);
-    const bars = totals.map((t) => SPARK[Math.max(0, Math.min(7, Math.round((t / ENGAGEMENT_TOTAL_MAX) * 7)))]).join('');
+    for (let k = TREND_WEEKS - 1; k >= 0; k--) totals.push(engagementModel(u, engagementWeekShift(viewWeek, -k), Date.now(), org).total);
+    const bars = totals.map((t) => SPARK[Math.max(0, Math.min(7, Math.round((t / TOTAL_MAX) * 7)))]).join('');
     return `<span class="eng-spark" title="Totals, last ${TREND_WEEKS} weeks (oldest → newest): ${totals.join(' → ')}">${bars}</span>`;
   };
 
@@ -70,16 +85,16 @@ export function render(host, app) {
   let lastRank = null;
   const bodyRows = list.map((u) => {
     const m = models.get(u.id);
-    const header = u.rank !== lastRank ? `<tr class="eng-rankrow"><td colspan="${ENGAGEMENT_SECTIONS.length + 5}">${esc(u.rank || 'Unranked')}</td></tr>` : '';
+    const header = u.rank !== lastRank ? `<tr class="eng-rankrow"><td colspan="${SECTIONS.length + 5}">${esc(u.rank || 'Unranked')}</td></tr>` : '';
     lastRank = u.rank;
-    const totalTone = m.total >= ENGAGEMENT_TOTAL_MAX * 0.6 ? 'ok' : (m.total >= ENGAGEMENT_TOTAL_MAX * 0.3 ? 'warn' : 'bad');
+    const totalTone = m.total >= TOTAL_MAX * 0.6 ? 'ok' : (m.total >= TOTAL_MAX * 0.3 ? 'warn' : 'bad');
     return `${header}
       <tr data-user="${esc(u.id)}" ${editable ? 'tabindex="0" class="row-click"' : ''}>
         <td class="cell-name"><span class="mono">${esc(u.designation)}</span> ${esc(u.codename || '')}</td>
-        ${ENGAGEMENT_SECTIONS.map((s) => scoreCell(m, s.key)).join('')}
-        <td class="cell-num"><span class="badge badge--${totalTone}">${m.total}<span class="eng-max">/${ENGAGEMENT_TOTAL_MAX}</span></span></td>
+        ${SECTIONS.map((s) => scoreCell(m, s.key)).join('')}
+        <td class="cell-num"><span class="badge badge--${totalTone}">${m.total}<span class="eng-max">/${TOTAL_MAX}</span></span></td>
         <td class="cell-center">${sparkline(u)}</td>
-        <td class="cell-center">${reqDot(m.reqs.req1, '1 Scouting/Order/Evidence/PoI this week')} ${reqDot(m.reqs.req2, '1 training host in 3 weeks')}</td>
+        <td class="cell-center">${reqDot(m.reqs.req1, isd ? '1 investigative contribution this week' : '1 Scouting/Order/Evidence/PoI this week')} ${reqDot(m.reqs.req2, isd ? '1 matter carried in 3 weeks' : '1 training host in 3 weeks')}</td>
         <td class="cell-right">${editable ? '<span class="row-go">Score →</span>' : ''}</td>
       </tr>`;
   }).join('');
@@ -87,9 +102,9 @@ export function render(host, app) {
   host.innerHTML = `
     <div class="page-head">
       <div>
-        <div class="eyebrow">CAIRO · Omega-1</div>
+        <div class="eyebrow">CAIRO · ${esc(ORGS[org].short)}</div>
         <h1 class="page-title">Engagement</h1>
-        <div class="page-sub">Weekly engagement score · six sections derived from the records, two entered by Sr CL4</div>
+        <div class="page-sub">${isd ? 'Weekly casework score · five sections derived from the investigative record, two entered by ISD command' : 'Weekly engagement score · six sections derived from the records, two entered by Sr CL4'}</div>
       </div>
     </div>
 
@@ -107,27 +122,30 @@ export function render(host, app) {
       <table class="table eng-table">
         <thead><tr>
           <th>Operator</th>
-          ${ENGAGEMENT_SECTIONS.map((s) => `<th class="cell-num" title="Max ${s.max}">${esc(s.label)}</th>`).join('')}
+          ${SECTIONS.map((s) => `<th class="cell-num" title="Max ${s.max}">${esc(s.label)}</th>`).join('')}
           <th class="cell-num">Total</th><th class="cell-center" title="Total score, last 5 weeks">Trend</th><th class="cell-center">Reqs</th><th></th>
         </tr></thead>
-        <tbody>${list.length ? bodyRows : `<tr><td colspan="${ENGAGEMENT_SECTIONS.length + 5}" class="empty">No active Omega-1 operators.</td></tr>`}</tbody>
+        <tbody>${list.length ? bodyRows : `<tr><td colspan="${SECTIONS.length + 5}" class="empty">${isd ? 'No active Internal Security agents.' : 'No active Omega-1 operators.'}</td></tr>`}</tbody>
       </table>
     </div>
-    <p class="field__hint" style="margin-top:12px">Derived sections (Scouting, Orders, Evidence, PoIs, Trainings, Activity) come from the week's records — Evidence from the <a class="rec-link" href="#/evidence">evidence submissions</a>; Squadron and RP are entered by a reviewer, who may override any derived score for quality. Expectation: one Scouting/Order/Evidence/PoI engagement a week, one training host every three weeks.</p>
+    ${isd
+      ? '<p class="field__hint" style="margin-top:12px">Derived sections (Referrals, Casework, Dispositions, Trainings, Activity) come from the week’s <a class="rec-link" href="#/investigations">investigative record</a>; Discretion and Conduct are entered by ISD command, who may override any derived score. Expectation: one investigative contribution a week, and a matter carried in the trailing three weeks.</p>'
+      : '<p class="field__hint" style="margin-top:12px">Derived sections (Scouting, Orders, Evidence, PoIs, Trainings, Activity) come from the week’s records — Evidence from the <a class="rec-link" href="#/evidence">evidence submissions</a>; Squadron and RP are entered by a reviewer, who may override any derived score for quality. Expectation: one Scouting/Order/Evidence/PoI engagement a week, one training host every three weeks.</p>'}
   `;
 
-  host.querySelector('#eng-prev').addEventListener('click', () => { viewWeek = engagementWeekShift(viewWeek, -1); render(host, app); });
+  host.querySelector('#eng-prev').addEventListener('click', () => { viewWeek = engagementWeekShift(viewWeek, -1); render(host, app, org); });
   const nx = host.querySelector('#eng-next');
-  if (nx) nx.addEventListener('click', () => { viewWeek = engagementWeekShift(viewWeek, 1); render(host, app); });
+  if (nx) nx.addEventListener('click', () => { viewWeek = engagementWeekShift(viewWeek, 1); render(host, app, org); });
   host.querySelector('#eng-export').addEventListener('click', () => exportEngagementSummary(app, {
+    org, orgLabel: ORGS[org].name,
     weekLabel: weekLabel(viewWeek),
-    sections: ENGAGEMENT_SECTIONS,
-    totalMax: ENGAGEMENT_TOTAL_MAX,
+    sections: SECTIONS,
+    totalMax: TOTAL_MAX,
     atRisk: atRisk.length,
     rows: list.map((u) => { const m = models.get(u.id); return { designation: u.designation, codename: u.codename, rank: u.rank, val: m.val, total: m.total, req1: m.reqs.req1, req2: m.reqs.req2 }; }),
   }));
   const nowBtn = host.querySelector('#eng-now');
-  if (nowBtn) nowBtn.addEventListener('click', () => { viewWeek = engagementWeekStart(); render(host, app); });
+  if (nowBtn) nowBtn.addEventListener('click', () => { viewWeek = engagementWeekStart(); render(host, app, org); });
 
   if (editable) {
     host.querySelectorAll('tr[data-user]').forEach((tr) => {
@@ -144,7 +162,7 @@ function openEditor(app, userId) {
   if (!canEdit(actor)) { toast('Engagement scoring is maintained by Sr CL4 command.', 'error'); return; }
   const user = users().find((u) => u.id === userId);
   if (!user) return;
-  const m = engagementModel(user, viewWeek);
+  const m = engagementModel(user, viewWeek, Date.now(), curOrg);
   const rec = m.record;
   const man = (rec && rec.manual) || {};
   const ov = (rec && rec.overrides) || {};
@@ -160,8 +178,8 @@ function openEditor(app, userId) {
       <input id="eng-o-${s.key}" type="number" min="0" max="${s.max}" step="1" value="${ov[s.key] != null && ov[s.key] !== '' ? esc(String(ov[s.key])) : ''}" placeholder="auto: ${m.auto[s.key]}" />
     </div>`;
 
-  const manualSecs = ENGAGEMENT_SECTIONS.filter((s) => s.mode === 'manual');
-  const autoSecs = ENGAGEMENT_SECTIONS.filter((s) => s.mode === 'auto');
+  const manualSecs = engagementSections(curOrg).filter((s) => s.mode === 'manual');
+  const autoSecs = engagementSections(curOrg).filter((s) => s.mode === 'auto');
 
   // Last week's record, so the reviewer can carry its entries forward.
   const lastRec = getEngagementFor(user.id, engagementWeekShift(viewWeek, -1));
@@ -213,7 +231,7 @@ function saveScore(app, user, manual, overrides, note) {
     upsertEngagement(fresh);
   } else {
     upsertEngagement({
-      id: newId('eng'), userId: user.id, org: ORG, weekStart: viewWeek,
+      id: newId('eng'), userId: user.id, org: curOrg, weekStart: viewWeek,
       manual, overrides, note, by: app.user.designation,
       createdBy: app.user.designation, createdAt: now, updatedAt: now,
       version: 1, deleted: false, deletedAt: null,

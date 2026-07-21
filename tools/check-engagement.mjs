@@ -8,7 +8,8 @@
 // =============================================================================
 
 import assert from 'node:assert';
-import { engagementAutoScores, engagementResolved, engagementReqs, ENGAGEMENT_TOTAL_MAX, engagementWeekStart, engagementWeekShift } from '../js/constants.js';
+import { engagementAutoScores, engagementResolved, engagementReqs, ENGAGEMENT_TOTAL_MAX,
+  engagementWeekStart, engagementWeekShift, engagementSections, engagementTotalMax } from '../js/constants.js';
 import { authorizeWrite } from '../worker/src/gate.js';
 
 // --- Scoring math -----------------------------------------------------------
@@ -82,4 +83,45 @@ for (let k = -6; k <= 6; k++) {
 assert.equal(engagementWeekShift(engagementWeekShift(w0, 3), -3), w0, 'shift round-trips exactly');
 assert.equal(engagementWeekShift(w0, 0), w0, 'zero shift is identity');
 
-console.log('OK — engagement scoring + gate hold.');
+// --- ISD engagement: a different section set on the same machinery -----------
+const isdSecs = engagementSections('isd').map((s) => s.key);
+assert.deepEqual(isdSecs, ['referrals', 'casework', 'dispositions', 'trainings', 'activity', 'discretion', 'conduct'],
+  'the ISD scores casework, not field presence');
+assert.equal(engagementTotalMax('isd'), 60, 'ISD total = 10+10+10+10+10+5+5');
+assert.equal(engagementTotalMax('omega-1'), 70, 'Omega is untouched by the split');
+assert.deepEqual(engagementSections(), engagementSections('omega-1'), 'the default org is Omega');
+assert.deepEqual(engagementSections('nonsense'), engagementSections('omega-1'), 'an unknown org falls back to Omega');
+
+const isdRaw = { referralsCount: 2, caseworkCount: 4, dispositionsCount: 1, trainHost: 1, trainAttend: 2, hours: 5.9, contrib3wk: 3 };
+const isdAuto = engagementAutoScores(isdRaw, 'isd');
+assert.equal(isdAuto.referrals, 6, '2 referrals × 3');
+assert.equal(isdAuto.casework, 4, '4 entries × 1');
+assert.equal(isdAuto.dispositions, 3, '1 disposition × 3');
+assert.equal(isdAuto.trainings, 5, '1 host × 3 + 2 attend × 1');
+assert.equal(isdAuto.activity, 5, 'floor(5.9 hours)');
+assert.equal(engagementAutoScores({ referralsCount: 99 }, 'isd').referrals, 10, 'referrals cap');
+assert.equal(isdAuto.scouting, undefined, 'ISD has no Omega sections');
+
+const isdRes = engagementResolved(isdRaw, { manual: { discretion: 4, conduct: 5 }, overrides: { casework: 9 } }, 'isd');
+assert.equal(isdRes.val.casework, 9, 'override wins');
+assert.equal(isdRes.src.casework, 'override');
+assert.equal(isdRes.val.discretion, 4, 'manual section');
+assert.equal(isdRes.total, 6 + 9 + 3 + 5 + 5 + 4 + 5, 'ISD total sums its own sections');
+
+assert.deepEqual(engagementReqs(isdRaw, 'isd'), { req1: true, req2: true }, 'an active ISD week meets both');
+assert.deepEqual(engagementReqs({}, 'isd'), { req1: false, req2: false }, 'an empty ISD week meets neither');
+assert.equal(engagementReqs({ caseworkCount: 1 }, 'isd').req1, true, 'one contribution meets req1');
+assert.equal(engagementReqs({ contrib3wk: 1 }, 'isd').req2, true, 'a matter carried meets req2');
+
+// Gate: ISD scoring answers to ISD command, judged on the ISD ladder.
+const isdCmd = { id: 'x1', designation: 'O1-7', org: 'omega-1', rank: 'Private', clearance: 'CL3',
+  isd: { rank: 'Commissioner', clearance: 'CL4-S', standing: 'active' } };
+const isdInspector = { id: 'x2', designation: 'O1-8', org: 'omega-1', rank: 'Private', clearance: 'CL3',
+  isd: { rank: 'Inspector', clearance: 'CL4-J', standing: 'active' } };
+const isdRec = { id: 'eng2', org: 'isd', userId: 'u1', manual: {}, overrides: {}, version: 1, deleted: false };
+assert.equal(eng(isdCmd, null, isdRec).action, 'CREATE_ENGAGEMENT', 'ISD command scores, despite a CL3 cover post');
+assert.equal(eng(isdInspector, null, isdRec).ok, false, 'an Inspector does not score');
+assert.equal(eng(srCL4, null, isdRec).ok, false, 'an Omega CL4-S cannot score ISD agents');
+assert.equal(eng(cl5, null, isdRec).action, 'CREATE_ENGAGEMENT', 'CL5 always may');
+
+console.log('OK — engagement scoring (Omega + ISD) + gate hold.');
