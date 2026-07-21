@@ -8,3 +8,9 @@ node_modules/
 # OS cruft
 .DS_Store
 Thumbs.db
+
+# Credential-bearing artifacts — never publish. These contain password hashes,
+# salts and/or account identifiers. Keep them locally; they are not source.
+worker/bootstrap.sql
+worker/backup-*.sql
+worker/*.bak

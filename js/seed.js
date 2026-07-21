@@ -14,15 +14,34 @@ import { ACTIVITY_REQ_SETTING_ID, ACTIVITY_REQ_DEFAULT } from './constants.js';
 import { makeCredential } from './crypto.js';
 import { logAction } from './audit.js';
 
-// Demo logins surfaced on the sign-in screen. Keeping this list in one place
-// means the credentials shown to the user always match what is seeded.
-export const DEMO_LOGINS = [
-  { username: 'director', password: 'Thaumiel-5',   note: 'CL5 \u00b7 Command \u2014 full access' },
-  { username: 'vanguard', password: 'LeftHand-4',   note: 'CL4\u00b7S \u00b7 Omega-1 \u2014 task-force command' },
-  { username: 'warrant',  password: 'Warrant-4',    note: 'CL4\u00b7J \u00b7 Omega-1 \u2014 junior command (Lieutenant)' },
-  { username: 'advocate', password: 'Conscience-4', note: 'CL4\u00b7J \u00b7 Ethics \u2014 junior member' },
-  { username: 'bailiff',  password: 'Operative-3',  note: 'CL3 \u00b7 Omega-1 \u2014 operative (sees redaction)' },
-];
+// Demonstration operators for the LOCAL demo only. Their passphrases are
+// generated fresh on each install and held in memory \u2014 the repository must never
+// contain a working credential. (It previously shipped fixed passwords, which,
+// with a live backend configured, published an admin login to anyone reading the
+// source. Rotate any account that was seeded from that older revision.)
+const DEMO_NOTES = {
+  director: 'CL5 \u00b7 Command \u2014 full access',
+  vanguard: 'CL4\u00b7S \u00b7 Omega-1 \u2014 task-force command',
+  warrant:  'CL4\u00b7J \u00b7 Omega-1 \u2014 junior command (Lieutenant)',
+  advocate: 'CL4\u00b7J \u00b7 Ethics \u2014 junior member',
+  bailiff:  'CL3 \u00b7 Omega-1 \u2014 operative (sees redaction)',
+};
+
+// Populated by buildUser() as the demo dataset is seeded; read by the sign-in
+// screen, which only renders it when no real backend is configured.
+export const DEMO_LOGINS = [];
+
+function randomPassphrase() {
+  const a = new Uint8Array(9);
+  globalThis.crypto.getRandomValues(a);
+  return [...a].map((b) => b.toString(36).padStart(2, '0')).join('').slice(0, 14);
+}
+
+function demoPassphrase(username) {
+  const password = randomPassphrase();
+  DEMO_LOGINS.push({ username, password, note: DEMO_NOTES[username] });
+  return password;
+}
 
 function iso(daysAgo) {
   const d = new Date();
@@ -38,7 +57,10 @@ async function buildUser(spec) {
   const now = new Date().toISOString();
   // Every account gets a credential. Demo accounts use the disclosed password;
   // the rest get a random one (active personnel, but not login-demoable).
-  const password = spec.password || `seed-${newId('pw')}`;
+  // Demo accounts draw a freshly generated passphrase (recorded in DEMO_LOGINS
+  // for the local sign-in panel); everyone else gets a random, non-demoable one.
+  const password = spec.password
+    || (DEMO_NOTES[spec.username] ? demoPassphrase(spec.username) : `seed-${newId('pw')}`);
   const { salt, hash } = await makeCredential(password);
 
   return {
@@ -72,7 +94,7 @@ async function buildUser(spec) {
 const SEED_SPECS = [
   {
     designation: 'CMD-1', codename: 'Praetor', org: 'command', rank: 'Director',
-    clearance: 'CL5', username: 'director', password: 'Thaumiel-5',
+    clearance: 'CL5', username: 'director',
     awards: [{ id: 'a1', title: 'Site Stewardship Citation', date: iso(420), note: 'Three years continuous command.' }],
     events: [
       event(900, 'appointment', 'Appointed Site Command Liaison; CAIRO administration assigned.'),
@@ -82,7 +104,7 @@ const SEED_SPECS = [
   },
   {
     designation: 'O1-1', codename: 'Vanguard', org: 'omega-1', rank: 'Commander',
-    clearance: 'CL4-S', username: 'vanguard', password: 'LeftHand-4',
+    clearance: 'CL4-S', username: 'vanguard',
     awards: [{ id: 'a2', title: 'MTF Command Ribbon', date: iso(300), note: 'Assumed command of Omega-1.' }],
     events: [
       event(600, 'transfer', 'Transferred into MTF Omega-1 from Site security.'),
@@ -92,7 +114,7 @@ const SEED_SPECS = [
   },
   {
     designation: 'O1-3', codename: 'Warrant', org: 'omega-1', rank: 'Lieutenant',
-    clearance: 'CL4-J', username: 'warrant', password: 'Warrant-4',
+    clearance: 'CL4-J', username: 'warrant',
     awards: [{ id: 'a7', title: 'Field Conduct Commendation', date: iso(70), note: 'Exemplary conduct during containment escort.' }],
     events: [
       event(260, 'transfer', 'Joined Omega-1 as Specialist.'),
@@ -112,7 +134,7 @@ const SEED_SPECS = [
   },
   {
     designation: 'O1-7', codename: 'Bailiff', org: 'omega-1', rank: 'Sergeant',
-    clearance: 'CL3', username: 'bailiff', password: 'Operative-3',
+    clearance: 'CL3', username: 'bailiff',
     events: [
       event(210, 'transfer', 'Inducted into Omega-1 following recruitment review.'),
       event(54, 'training', 'Completed close-protection refresher.'),
@@ -151,7 +173,7 @@ const SEED_SPECS = [
   },
   {
     designation: 'EC-5', codename: 'Advocate', org: 'ethics-committee', rank: 'Assistant',
-    clearance: 'CL4-J', username: 'advocate', password: 'Conscience-4',
+    clearance: 'CL4-J', username: 'advocate',
     events: [
       event(95, 'appointment', 'Appointed Ethics Committee Assistant.'),
       event(40, 'training', 'Completed records-handling certification.'),
