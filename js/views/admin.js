@@ -478,7 +478,7 @@ function drawActivityReqs(panel, app) {
     const cur = getSetting(ACTIVITY_REQ_SETTING_ID) || { id: ACTIVITY_REQ_SETTING_ID, org: 'command' };
     cur.data = data;
     upsertSetting(cur);
-    logAction(app.user, 'SET_SETTING', `Activity requirements: O1 ${data.omegaWeekly}h/wk + ${data.omegaMonthly}h/mo; EC Assistant ${data.ethicsWeekly}h/wk${data.ethicsNeedsInteraction ? ' + interaction' : ''}.`);
+    logAction(app.user, 'SET_SETTING', `Activity requirements: O1 ${data.omegaWeekly}h/wk + ${data.omegaMonthly}h/mo; EC Assistant ${data.ethicsWeekly}h/wk${data.ethicsNeedsInteraction ? ' + interaction' : ''}; ISD ${data.isdWeekly}h/wk.`);
     toast('Activity requirements saved.', 'success');
     drawActivityReqs(panel, app);
   };
@@ -489,6 +489,7 @@ function drawActivityReqs(panel, app) {
       omegaMonthly: parseFloat(panel.querySelector('#rq-om').value),
       ethicsWeekly: parseFloat(panel.querySelector('#rq-ew').value),
       ethicsNeedsInteraction: panel.querySelector('#rq-ei').checked,
+      isdWeekly: parseFloat(panel.querySelector('#rq-iw').value),
     }));
   });
   panel.querySelector('#rq-reset').addEventListener('click', async () => {

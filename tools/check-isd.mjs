@@ -9,7 +9,8 @@
 
 import assert from 'node:assert';
 import { isISD, isdWeight, canManageISD, accessLevel, canManageOrg } from '../js/permissions.js';
-import { RANKS, RANK_CLEARANCE, clearanceForRank } from '../js/constants.js';
+import { RANKS, RANK_CLEARANCE, clearanceForRank,
+  ACTIVITY_REQ_DEFAULT, activityStatus, activityRequirement } from '../js/constants.js';
 import { redactUser, buildSnapshot } from '../worker/src/redact.js';
 import { authorizeWrite } from '../worker/src/gate.js';
 
@@ -135,4 +136,26 @@ assert.equal(canManageOrg(cl5, 'isd'), true, 'CL5 manages every organisation, IS
 assert.deepEqual(redactUser(inspector, omegaFile), redactUser({ ...inspector, isd: undefined }, omegaFile),
   'stripping ISD membership from the viewer changes nothing about what they can read');
 
-console.log('OK — ISD covert redaction, ISD-ladder authority, promotion, badge, induction gate and no-cross-org-reach hold.');
+// --- Playtime: one activity record, two chains of command --------------------
+// An agent logs hours ONCE, under their cover post. Omega command judges those
+// hours against Omega's threshold; the Department judges the SAME hours against
+// its own. The scope is an explicit argument, so neither can be mistaken for the
+// other, and the default stays the operator's own org.
+const nowMs = Date.now();
+const covered = { id: 'a1', org: 'omega-1', rank: 'Private', clearance: 'CL3', status: 'active',
+  isd: { rank: 'Investigator', clearance: 'CL3', standing: 'active' } };
+const actRec = { userId: 'a1', log: [{ id: 'l1', at: nowMs - 60000, hours: 4, by: 'O1-9' }] };
+
+const asOmega = activityStatus(covered, actRec, ACTIVITY_REQ_DEFAULT, nowMs);
+const asISD = activityStatus(covered, actRec, ACTIVITY_REQ_DEFAULT, nowMs, 'isd');
+assert.equal(asOmega.req.weekly, ACTIVITY_REQ_DEFAULT.omegaWeekly, 'the cover chain uses Omega’s threshold');
+assert.equal(asISD.req.weekly, ACTIVITY_REQ_DEFAULT.isdWeekly, 'the Department uses its own');
+assert.equal(asOmega.weekHours, asISD.weekHours, 'one activity record, not two');
+assert.equal(asOmega.key, 'semi', '4h is under Omega’s 5h');
+assert.equal(asISD.key, 'active', 'but meets the Department’s 3h');
+assert.deepEqual(activityRequirement(covered, ACTIVITY_REQ_DEFAULT),
+  activityRequirement(covered, ACTIVITY_REQ_DEFAULT, 'omega-1'),
+  'the default scope is the operator’s own org — existing callers are unaffected');
+assert.equal(activityRequirement(null, ACTIVITY_REQ_DEFAULT, 'isd').exempt, true, 'no user = exempt');
+
+console.log('OK — ISD covert redaction, ISD-ladder authority, promotion, badge, induction gate, no-cross-org-reach and dual playtime thresholds hold.');

@@ -13,9 +13,10 @@
 import {
   ORGS, engagementSections, engagementMaxFor, engagementTotalMax,
   engagementWeekStart, engagementWeekShift, rankIndex,
+  ACTIVITY_STATUS, ACTIVITY_REQ_SETTING_ID, mergeActivityReqs, activityStatus,
 } from '../constants.js';
 import { engagementModel } from '../engagement.js';
-import { users, getEngagement, getEngagementFor, upsertEngagement, newId } from '../storage.js';
+import { users, getEngagement, getEngagementFor, upsertEngagement, newId, getActivityForUser, getSetting } from '../storage.js';
 import { isCL5, canManageOrg, isISD, canManageISD } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { esc, fmtDate, toast, openModal } from '../ui.js';
@@ -65,6 +66,16 @@ export function render(host, app, org = 'omega-1') {
     const title = src === 'override' ? 'quality override' : (src === 'manual' ? 'entered by reviewer' : 'derived from logs');
     return `<td class="cell-num eng-cell${mark}" title="${title}">${v}<span class="eng-max">/${MAXES[key]}</span></td>`;
   };
+  // Playtime is judged by the chain of command doing the looking: an agent logs
+  // hours once under their cover post, so the ISD board judges those same hours
+  // against the Department's threshold rather than Omega's.
+  const actReqs = mergeActivityReqs((getSetting(ACTIVITY_REQ_SETTING_ID) || {}).data);
+  const readiness = (u) => {
+    const st = activityStatus(u, getActivityForUser(u.id), actReqs, Date.now(), org);
+    const m = ACTIVITY_STATUS[st.key] || { label: st.key, tone: 'muted' };
+    const need = st.req && st.req.weekly ? ` · needs ${st.req.weekly}h` : '';
+    return `<span class="badge badge--${m.tone}" title="${esc(st.weekHours)}h logged this week${esc(need)}">${esc(m.label)}</span>`;
+  };
   const reqDot = (ok, label) => `<span class="eng-req ${ok ? 'eng-req--ok' : 'eng-req--no'}" title="${esc(label)}">${ok ? '✓' : '✕'}</span>`;
 
   // Trend: the last few weeks' totals as a compact spark, computed from the same
@@ -85,7 +96,7 @@ export function render(host, app, org = 'omega-1') {
   let lastRank = null;
   const bodyRows = list.map((u) => {
     const m = models.get(u.id);
-    const header = u.rank !== lastRank ? `<tr class="eng-rankrow"><td colspan="${SECTIONS.length + 5}">${esc(u.rank || 'Unranked')}</td></tr>` : '';
+    const header = u.rank !== lastRank ? `<tr class="eng-rankrow"><td colspan="${SECTIONS.length + 6}">${esc(u.rank || 'Unranked')}</td></tr>` : '';
     lastRank = u.rank;
     const totalTone = m.total >= TOTAL_MAX * 0.6 ? 'ok' : (m.total >= TOTAL_MAX * 0.3 ? 'warn' : 'bad');
     return `${header}
@@ -94,6 +105,7 @@ export function render(host, app, org = 'omega-1') {
         ${SECTIONS.map((s) => scoreCell(m, s.key)).join('')}
         <td class="cell-num"><span class="badge badge--${totalTone}">${m.total}<span class="eng-max">/${TOTAL_MAX}</span></span></td>
         <td class="cell-center">${sparkline(u)}</td>
+        <td class="cell-center">${readiness(u)}</td>
         <td class="cell-center">${reqDot(m.reqs.req1, isd ? '1 investigative contribution this week' : '1 Scouting/Order/Evidence/PoI this week')} ${reqDot(m.reqs.req2, isd ? '1 matter carried in 3 weeks' : '1 training host in 3 weeks')}</td>
         <td class="cell-right">${editable ? '<span class="row-go">Score →</span>' : ''}</td>
       </tr>`;
@@ -123,9 +135,9 @@ export function render(host, app, org = 'omega-1') {
         <thead><tr>
           <th>Operator</th>
           ${SECTIONS.map((s) => `<th class="cell-num" title="Max ${s.max}">${esc(s.label)}</th>`).join('')}
-          <th class="cell-num">Total</th><th class="cell-center" title="Total score, last 5 weeks">Trend</th><th class="cell-center">Reqs</th><th></th>
+          <th class="cell-num">Total</th><th class="cell-center" title="Total score, last 5 weeks">Trend</th><th class="cell-center" title="Weekly hours against this organisation's own threshold">Readiness</th><th class="cell-center">Reqs</th><th></th>
         </tr></thead>
-        <tbody>${list.length ? bodyRows : `<tr><td colspan="${SECTIONS.length + 5}" class="empty">${isd ? 'No active Internal Security agents.' : 'No active Omega-1 operators.'}</td></tr>`}</tbody>
+        <tbody>${list.length ? bodyRows : `<tr><td colspan="${SECTIONS.length + 6}" class="empty">${isd ? 'No active Internal Security agents.' : 'No active Omega-1 operators.'}</td></tr>`}</tbody>
       </table>
     </div>
     ${isd

@@ -387,6 +387,10 @@ export const ACTIVITY_REQ_DEFAULT = {
   omegaMonthly: 25,
   ethicsWeekly: 1,
   ethicsNeedsInteraction: true,
+  // Internal Security is covert casework rather than field presence, so the
+  // Department sets its own (lighter) weekly expectation.
+  isdWeekly: 3,
+  isdNeedsInteraction: false,
 };
 
 // The activity requirements live in a single global `settings` record under this
@@ -438,18 +442,29 @@ export function mergeActivityReqs(data) {
     omegaMonthly: num(d.omegaMonthly, ACTIVITY_REQ_DEFAULT.omegaMonthly),
     ethicsWeekly: num(d.ethicsWeekly, ACTIVITY_REQ_DEFAULT.ethicsWeekly),
     ethicsNeedsInteraction: typeof d.ethicsNeedsInteraction === 'boolean' ? d.ethicsNeedsInteraction : ACTIVITY_REQ_DEFAULT.ethicsNeedsInteraction,
+    isdWeekly: num(d.isdWeekly, ACTIVITY_REQ_DEFAULT.isdWeekly),
+    isdNeedsInteraction: typeof d.isdNeedsInteraction === 'boolean' ? d.isdNeedsInteraction : ACTIVITY_REQ_DEFAULT.isdNeedsInteraction,
   };
 }
 
 // What a given operator must meet. Omega-1 carry the weekly+monthly hours rule;
 // Ethics Assistants a light weekly rule plus an interaction; every other
 // Committee role and all of Command are exempt.
-export function activityRequirement(user, reqs = ACTIVITY_REQ_DEFAULT) {
+// `org` names the chain of command doing the judging, and defaults to the
+// operator's own. It is an explicit parameter because an ISD agent logs their
+// hours ONCE, under their cover post: Omega command judges those hours against
+// Omega's threshold, while the Department judges the SAME hours against its own.
+// One record, two expectations — mirroring the two rank ladders.
+export function activityRequirement(user, reqs = ACTIVITY_REQ_DEFAULT, org = null) {
   if (!user) return { exempt: true };
-  if (user.org === 'omega-1') {
+  const scope = org || user.org;
+  if (scope === 'isd') {
+    return { weekly: reqs.isdWeekly, monthly: 0, needsInteraction: !!reqs.isdNeedsInteraction, exempt: false };
+  }
+  if (scope === 'omega-1') {
     return { weekly: reqs.omegaWeekly, monthly: reqs.omegaMonthly, needsInteraction: false, exempt: false };
   }
-  if (user.org === 'ethics-committee' && user.rank === 'Assistant') {
+  if (scope === 'ethics-committee' && user.rank === 'Assistant') {
     return { weekly: reqs.ethicsWeekly, monthly: 0, needsInteraction: !!reqs.ethicsNeedsInteraction, exempt: false };
   }
   return { exempt: true };
@@ -495,8 +510,8 @@ function hasInteractionSince(log, since, now = Date.now()) {
 // → otherwise Active when the weekly requirement is met (hours, plus an
 // interaction for Assistants), Semi-Active for some-but-under, Inactive for
 // nothing logged this week. Returns the derived hours so callers can show them.
-export function activityStatus(user, record, reqs = ACTIVITY_REQ_DEFAULT, now = Date.now()) {
-  const req = activityRequirement(user, reqs);
+export function activityStatus(user, record, reqs = ACTIVITY_REQ_DEFAULT, now = Date.now(), org = null) {
+  const req = activityRequirement(user, reqs, org);
   const wk = weekStart(now), mo = monthStart(now);
   const log = (record && record.log) || [];
   const weekHours = sumHours(log, wk, now);
