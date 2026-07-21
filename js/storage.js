@@ -40,6 +40,7 @@ function emptyDb() {
     engagement: [],
     evidence: [],
     investigations: [],
+    inductions: [],
     promoReqs: [],
     settings: [],
     audit: [],
@@ -120,6 +121,7 @@ export function applyServerSnapshot(snap) {
     engagement: snap.engagement || [],
     evidence: snap.evidence || [],
     investigations: snap.investigations || [],
+    inductions: snap.inductions || [],
     blacklist: snap.blacklist || [],
     promoReqs: snap.promoReqs || [],
     settings: snap.settings || [],
@@ -416,6 +418,19 @@ export function upsertInvestigation(record) {
   const i = list.findIndex((r) => r.id === record.id);
   if (i >= 0) list[i] = record; else list.push(record);
   afterWrite('investigations', record);
+  return record;
+}
+
+// ISD induction assessments — covert; only the Department carries them.
+export const inductions = () => loadDb().inductions;
+export function getInduction(id) {
+  return inductions().find((r) => r.id === id) || null;
+}
+export function upsertInduction(record) {
+  const list = inductions();
+  const i = list.findIndex((r) => r.id === record.id);
+  if (i >= 0) list[i] = record; else list.push(record);
+  afterWrite('inductions', record);
   return record;
 }
 

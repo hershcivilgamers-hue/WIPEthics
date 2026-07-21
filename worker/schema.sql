@@ -167,6 +167,17 @@ CREATE TABLE IF NOT EXISTS investigations (
 );
 CREATE INDEX IF NOT EXISTS idx_investigations_org ON investigations (org);
 
+-- ISD induction assessments (covert; Department or CL5 only).
+CREATE TABLE IF NOT EXISTS inductions (
+  id          TEXT PRIMARY KEY,
+  org         TEXT,
+  deleted     INTEGER NOT NULL DEFAULT 0,
+  version     INTEGER NOT NULL DEFAULT 1,
+  updated_at  TEXT,
+  data        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_inductions_org ON inductions (org);
+
 CREATE TABLE IF NOT EXISTS promo_reqs (
   id          TEXT PRIMARY KEY,
   org         TEXT,

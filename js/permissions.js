@@ -75,6 +75,16 @@ export function canAdjudicateInvestigation(actor) {
   return canManageISD(actor);
 }
 
+// ISD induction assessments. Covert like everything else in the Department.
+// A recruiter (Investigator and above) files and scores an induction; the final
+// outcome — and reading a passing candidate in — is ISD command's.
+export function canViewInduction(actor) {
+  return isCL5(actor) || isISD(actor);
+}
+export function canFileInduction(actor) {
+  return isdAtLeast(actor, 'Investigator');
+}
+
 function hasStakeIn(actor, org) {
   if (org === 'isd') return isISD(actor); // Command does NOT get a free ISD stake
   return actor.org === org || actor.org === 'command';

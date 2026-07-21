@@ -235,3 +235,19 @@
 .tl__item.dash-go { cursor: pointer; }
 .tl__item.dash-go:hover .tl__text, .tl__item.dash-go:focus-visible .tl__text { text-decoration: underline; }
 .card__foot { padding-top: var(--s3); }
+
+/* --- ISD induction assessment ----------------------------------------------- */
+.ind-admin { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px 12px; }
+.ind-score { margin-left: 8px; }
+.ind-q { border-top: 1px solid var(--line); padding: 10px 0; }
+.ind-q:first-child { border-top: none; }
+.ind-q__head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.ind-q__n { font-family: var(--mono); color: var(--text-3); }
+.ind-q__prompt { font-weight: 600; }
+.ind-q__type { font-size: 11px; margin-left: auto; }
+.ind-q__opts { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.ind-opt { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.ind-answers { list-style: none; margin: 6px 0 0; padding: 0; }
+.ind-a { font-size: 13px; padding: 2px 0; color: var(--text-2); }
+.ind-a--correct { color: var(--ok); }
+.ind-a--wrong { color: var(--bad); }

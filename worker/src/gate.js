@@ -22,8 +22,10 @@ import {
   canManageOrg, canParticipateRecruitment, canActOnRecruit, isMemberTrack, canLogToOperation, canLogIntel, canManageTraining, isCL5,
   canDischarge, canManageLeave, isISD, canManageISD,
   canViewInvestigation, canFileInvestigation, canAdvanceInvestigation, canAdjudicateInvestigation,
+  canViewInduction, canFileInduction,
 } from '../../js/permissions.js';
 import { investigationNextStage, INVESTIGATION_DISPOSITION } from '../../js/constants.js';
+import { scoreInduction } from '../../js/isd-induction.js';
 import { rankUp, rankDown, clearanceForRank, clearanceWeight, tallyVotes, RANKS, caseTakesVote, strikeActive } from '../../js/constants.js';
 
 const deny = (msg) => ({ ok: false, status: 403, error: msg || 'Not permitted.' });
@@ -957,9 +959,48 @@ function authorizeInvestigation(actor, cur, next) {
   return ok('EDIT_INVESTIGATION', `Updated ${ref}.`);
 }
 
+// ISD inductions. Covert. A recruiter (Investigator+) files and records the
+// assessment; the final outcome — and reading a PASSING candidate in — is ISD
+// command's. The score is derived from the recorded answers on read, so the gate
+// re-derives it here rather than trusting a client-sent pass/fail: a candidate
+// who did not pass cannot be marked inducted, whatever the client attempts.
+function authorizeInduction(actor, cur, next) {
+  const rec = next || cur;
+  const ref = rec.ref || 'induction';
+  if (!canViewInduction(actor)) return deny('No such record.');
+
+  if (!cur) {
+    if (!canFileInduction(actor)) return deny('An Operative may not file an induction.');
+    if (next.outcome) return deny('An induction is filed before it is decided.');
+    return ok('OPEN_INDUCTION', `Induction ${ref} filed.`);
+  }
+
+  if (!!next.deleted !== !!cur.deleted) {
+    if (!canManageISD(actor)) return deny('Only ISD command may withdraw an induction.');
+    return next.deleted ? ok('REMOVE_INDUCTION', `Withdrew ${ref}.`) : ok('RESTORE_INDUCTION', `Restored ${ref}.`);
+  }
+
+  // The outcome and the read-in link are ISD command's, and inducting requires a
+  // genuine pass (re-derived from the recorded answers, never taken on trust).
+  if (j(next.outcome ?? null) !== j(cur.outcome ?? null) || j(next.inductedUserId ?? null) !== j(cur.inductedUserId ?? null)) {
+    if (!canManageISD(actor)) return deny('An induction outcome is decided by ISD command.');
+    if (next.outcome && next.outcome !== 'inducted' && next.outcome !== 'declined') return deny('Unknown outcome.');
+    if (next.outcome === 'inducted' && !scoreInduction(next.answers || {}).passed) {
+      return deny('A candidate who did not pass the assessment cannot be inducted.');
+    }
+    if (next.inductedUserId && next.outcome !== 'inducted') return deny('Only an inducted candidate is linked to a record.');
+    return ok('DECIDE_INDUCTION', `Induction ${ref} ${next.outcome || 'reopened'}.`);
+  }
+
+  // Recording or correcting the assessment — the recorder (Investigator+).
+  if (!canFileInduction(actor)) return deny('An Operative may not amend an induction.');
+  return ok('EDIT_INDUCTION', `Updated induction ${ref}.`);
+}
+
 const AUTHORIZERS = {
   users: authorizeUser,
   investigations: authorizeInvestigation,
+  inductions: authorizeInduction,
   documents: authorizeDocument,
   directives: authorizeDirective,
   subjects: authorizeSubject,

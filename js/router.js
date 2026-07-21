@@ -91,6 +91,7 @@ export const NAV = [
       { name: 'isd', hash: '#/isd', label: 'Personnel Files', feature: 'isd', guard: canSeeISD },
       { name: 'investigations', hash: '#/investigations', label: 'Investigations', feature: 'investigations', guard: canSeeISD },
       { name: 'isd-engagement', hash: '#/isd/engagement', label: 'Engagement', feature: 'engagement', guard: canSeeISDEngagement },
+      { name: 'isd-induction', hash: '#/isd/induction', label: 'Induction', feature: 'inductions', guard: canSeeISD },
     ],
   },
 ];
@@ -115,6 +116,7 @@ const GUARDS = {
   isd: canSeeISD,
   investigations: canSeeISD,
   'isd-engagement': canSeeISDEngagement,
+  'isd-induction': canSeeISD,
 };
 
 // Routes disabled by a CONFIG feature flag.
@@ -136,12 +138,13 @@ function featureBlocked(name) {
   if (name === 'docket') return !CONFIG.features.dashboard;
   if (name === 'engagement' || name === 'isd-engagement') return !CONFIG.features.engagement;
   if (name === 'isd') return !CONFIG.features.isd;
+  if (name === 'isd-induction') return !CONFIG.features.inductions;
   if (name === 'investigations') return !CONFIG.features.investigations;
   if (name === 'evidence') return !CONFIG.features.evidence;
   return false;
 }
 
-const TOP_LEVEL = ['overview', 'notifications', 'search', 'surveillance', 'compartments', 'operations', 'trainings', 'deployments', 'intel', 'engagement', 'evidence', 'dashboard', 'docket', 'tribunals', 'directives', 'documents', 'terminal', 'activity', 'blacklist', 'recruit-omega', 'recruit-ethics', 'omega-1', 'ethics', 'command', 'isd', 'investigations', 'isd-engagement', 'insight', 'admin'];
+const TOP_LEVEL = ['overview', 'notifications', 'search', 'surveillance', 'compartments', 'operations', 'trainings', 'deployments', 'intel', 'engagement', 'evidence', 'dashboard', 'docket', 'tribunals', 'directives', 'documents', 'terminal', 'activity', 'blacklist', 'recruit-omega', 'recruit-ethics', 'omega-1', 'ethics', 'command', 'isd', 'investigations', 'isd-engagement', 'isd-induction', 'insight', 'admin'];
 
 // Parse the current location hash into a route { name, params }.
 export function parseHash() {
@@ -189,6 +192,9 @@ export function parseHash() {
   }
   if (parts[0] === 'isd' && parts[1] === 'engagement') {
     return { name: 'isd-engagement', params: {} };
+  }
+  if (parts[0] === 'isd' && parts[1] === 'induction') {
+    return { name: 'isd-induction', params: {} };
   }
   if (parts[0] === 'ethics' && parts[1] === 'recruitment') {
     return { name: 'recruit-ethics', params: {} };

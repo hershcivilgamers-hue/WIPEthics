@@ -48,6 +48,7 @@ import * as activityView from './views/activity.js';
 import * as adminView from './views/admin.js';
 import * as insightView from './views/insight.js';
 import * as investigationsView from './views/investigations.js';
+import * as isdInductionView from './views/isd-induction.js';
 
 const root = document.getElementById('app');
 
@@ -305,6 +306,7 @@ function dispatch(route, user) {
     case 'source':       intelView.renderSource(view, app, route.params.id); break;
     case 'engagement':   engagementView.render(view, app, 'omega-1'); break;
     case 'isd-engagement': engagementView.render(view, app, 'isd'); break;
+    case 'isd-induction': isdInductionView.render(view, app); break;
     case 'evidence':     evidenceView.render(view, app); break;
     case 'trainings':    trainingsView.render(view, app); break;
     case 'blacklist':    blacklistView.render(view, app); break;

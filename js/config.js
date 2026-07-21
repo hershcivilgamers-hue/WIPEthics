@@ -48,6 +48,7 @@ export const CONFIG = {
     evidence: true,
     isd: true,
     investigations: true,
+    inductions: true,
     dashboard: true,
     // Passive tab refresh in server mode (on return-to-tab + a slow interval),
     // so colleagues' changes appear without a manual reload.

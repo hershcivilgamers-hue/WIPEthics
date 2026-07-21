@@ -21,8 +21,8 @@ import { buildSnapshot, redactUser, redactDirective, redactCompartment, redactDo
 import { canReadDirective, compartmentClears, canManageOrg, isCL5, canParticipateRecruitment } from '../../js/permissions.js';
 import { CLEARANCES } from '../../js/constants.js';
 
-const WRITABLE = new Set(['users', 'documents', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'engagement', 'evidence', 'investigations', 'blacklist', 'promo_reqs', 'settings']);
-const SNAPSHOT = ['users', 'documents', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'engagement', 'evidence', 'investigations', 'blacklist', 'promo_reqs', 'settings', 'audit'];
+const WRITABLE = new Set(['users', 'documents', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'engagement', 'evidence', 'investigations', 'inductions', 'blacklist', 'promo_reqs', 'settings']);
+const SNAPSHOT = ['users', 'documents', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'engagement', 'evidence', 'investigations', 'inductions', 'blacklist', 'promo_reqs', 'settings', 'audit'];
 
 function uid() { return (globalThis.crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`); }
 function randomToken() {

@@ -22,6 +22,7 @@ const COLUMNS = {
   engagement: ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
   evidence:   ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
   investigations: ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
+  inductions: ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
   recruits:   ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
   promo_reqs: ['id', 'org', 'data'],
   settings:   ['id', 'org', 'data'],
