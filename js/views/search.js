@@ -23,7 +23,7 @@
 
 import { users, subjects, cases, directives, recruits, operations, intel } from '../storage.js';
 import {
-  canViewSubject, canViewCase, canReadDirective,
+  canViewSubject, canViewCase, canReadDirective, canSeeDirective,
   canViewRecruitment, canViewOperation, canViewIntel,
 } from '../permissions.js';
 import {
@@ -61,7 +61,7 @@ export function searchRecords(actor, q) {
   const caseMatch = caseViewable.filter((c) => hit(ql, `${c.ref} ${c.title} ${c.summary || ''}`));
 
   const dirMatch = directives()
-    .filter((d) => !d.deleted)
+    .filter((d) => !d.deleted && canSeeDirective(actor, d)) // addressed, not broadcast
     .filter((d) => {
       const base = `${d.ref} ${d.title}`;
       const text = canReadDirective(actor, d) ? `${base} ${d.body || ''}` : base;

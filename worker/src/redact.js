@@ -14,7 +14,7 @@
 // =============================================================================
 
 import {
-  accessLevel, canReadDirective, canViewSubject, canViewCase, isCL5,
+  accessLevel, canReadDirective, canSeeDirective, canViewSubject, canViewCase, isCL5,
   compartmentClears, readIntoCompartment, canManageCompartment,
   canViewActivity, canViewRecruitment, canViewOperation, isAssignedToOperation,
   canViewIntel, isAssignedToIntel, canViewTraining,
@@ -136,6 +136,7 @@ export function redactDirective(actor, d, compMap) {
     issuedBy: d.issuedBy, status: d.status, createdAt: d.createdAt,
     updatedAt: d.updatedAt, version: d.version, deleted: !!d.deleted,
     deletedAt: d.deletedAt ?? null,
+    audience: Array.isArray(d.audience) ? d.audience : [],
   };
   if (d.compartment) {
     out.compartment = d.compartment;
@@ -199,7 +200,7 @@ export function buildSnapshot(actor, db) {
   return {
     users: (db.users || []).filter((u) => !u.deleted).map((u) => redactUser(actor, u)),
     documents: (db.documents || []).filter((d) => !d.deleted).map((d) => redactDocument(actor, d)),
-    directives: (db.directives || []).filter((d) => !d.deleted).map((d) => redactDirective(actor, d, compMap)),
+    directives: (db.directives || []).filter((d) => !d.deleted && canSeeDirective(actor, d)).map((d) => redactDirective(actor, d, compMap)),
     subjects: (db.subjects || [])
       .filter((s) => !s.deleted && canViewSubject(actor, s) && compartmentClears(actor, s, compMap))
       .map((s) => withCaveat(s, compMap)),

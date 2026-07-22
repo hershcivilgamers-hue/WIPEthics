@@ -216,13 +216,28 @@ export function canManageDirectives(actor, org) {
   return canManageOrg(actor, org);
 }
 
-// A directive carries a minimum clearance to read its body. The directive's
-// existence (reference, title, org) is open on the board; the body is gated.
-// This is the single source of truth for that gate, used by the board, the
-// memo detail view and the export.
+// A directive carries a minimum clearance to read its body. This is the single
+// source of truth for that gate, used by the board, the memo detail view and the
+// export. (Whether the order is on your board at all is canSeeDirective.)
 export function canReadDirective(actor, directive) {
   if (!actor || !directive) return false;
   return w(actor) >= clearanceWeight(directive.clearance);
+}
+
+// The board is addressed, not broadcast. An operator sees a standing order that
+// their own organisation issued, one whose author has tagged their organisation
+// into its audience, or (for managers/CL5) any order they administer. Everyone
+// else never learns it exists — the server withholds the whole record. The BODY
+// is separately gated by canReadDirective + Need-To-Know. Single source of truth
+// for the board and the snapshot alike; an empty/absent audience means home-org
+// only (older orders addressed to no one but their own unit).
+export function canSeeDirective(actor, directive) {
+  if (!actor || !directive) return false;
+  if (isCL5(actor)) return true;
+  if (actor.org === directive.org) return true;
+  if (canManageDirectives(actor, directive.org)) return true;
+  const audience = Array.isArray(directive.audience) ? directive.audience : [];
+  return audience.includes(actor.org);
 }
 
 // --- Custom documents --------------------------------------------------------

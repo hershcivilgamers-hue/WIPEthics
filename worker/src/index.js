@@ -295,6 +295,10 @@ async function writeRecord(collection, id, actor, request, repo, env) {
       && !(canReadDirective(actor, cur) && compartmentClears(actor, cur, compMap))) {
     incoming.body = cur.body; // editor manages metadata but cannot read/replace the body
   }
+  // redactDirective withholds `acks` alongside the body, so a below-clearance
+  // manager's metadata edit (e.g. retagging the audience) would round-trip
+  // without the key and silently erase every countersignature — restore it.
+  if (collection === 'directives' && cur && !('acks' in incoming)) incoming.acks = cur.acks;
   // CAIRO's interview verdict is authored only by the dedicated /assess endpoint.
   // Freeze it from `cur` so an ordinary sync write can neither forge nor blank it.
   if (collection === 'recruits' && cur) incoming.interviewAssessment = cur.interviewAssessment ?? null;

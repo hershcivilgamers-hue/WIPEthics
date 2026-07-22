@@ -9,7 +9,7 @@
 
 import { ORGS, ORG_ORDER, CLEARANCE_ORDER, CLEARANCES, clearanceWeight } from '../constants.js';
 import { directives, getDirective, upsertDirective, compartments, getCompartment, isServerMode, newId, users } from '../storage.js';
-import { canManageDirectives, canReadDirective, isCL5, readIntoCompartment } from '../permissions.js';
+import { canManageDirectives, canReadDirective, canSeeDirective, isCL5, readIntoCompartment } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { exportDirective } from '../export.js';
 import { esc, fmtDate, fmtDateTime, clearanceBadge, orgTag, monogram, toast, openModal, confirmDialog } from '../ui.js';
@@ -45,13 +45,18 @@ function fileableCompartments(actor) {
   return compartments().filter((c) => !c.deleted
     && (isCL5(actor) || c.access === 'member' || readIntoCompartment(actor, c)));
 }
+// The extra departments an order has been tagged into (beyond its home org).
+function audienceOrgs(d) {
+  return (Array.isArray(d.audience) ? d.audience : []).filter((o) => o !== d.org && ORGS[o]);
+}
 
 export function render(host, app) {
   const actor = app.user;
   const all = directives().filter((d) => !d.deleted);
 
   const groups = ORG_ORDER.map((org) => {
-    const list = all.filter((d) => d.org === org)
+    // Addressed, not broadcast: only orders this operator is an audience for.
+    const list = all.filter((d) => d.org === org && canSeeDirective(actor, d))
       .sort((a, b) => (a.status === b.status ? 0 : a.status === 'active' ? -1 : 1) || a.ref.localeCompare(b.ref));
     const canManage = canManageDirectives(actor, org);
     // Skip an org only if it has no directives AND the viewer can't issue any —
@@ -62,6 +67,7 @@ export function render(host, app) {
       const visible = bodyReadable(actor, d);
       const rescinded = d.status === 'rescinded';
       const cav = caveatName(d);
+      const aud = audienceOrgs(d);
       return `
         <article class="directive ${rescinded ? 'directive--rescinded' : ''}" data-open="${esc(d.id)}" tabindex="0">
           <div class="directive__top">
@@ -71,6 +77,7 @@ export function render(host, app) {
             ${rescinded ? '<span class="badge badge--muted">Rescinded</span>' : '<span class="badge badge--ok">Active</span>'}
           </div>
           <h3 class="directive__title">${esc(d.title)}</h3>
+          ${aud.length ? `<div class="directive__aud">Also on the board of ${aud.map((o) => orgTag(o)).join(' ')}</div>` : ''}
           ${visible
             ? `<p class="directive__body">${esc(d.body)}</p>`
             : `<p class="directive__locked">${withheldReason(d)}</p>`}
@@ -123,7 +130,10 @@ export function renderDirective(host, app, id) {
   const actor = app.user;
   const d = getDirective(id);
 
-  if (!d || d.deleted) {
+  // Not found, or not addressed to this operator \u2014 an order off your board reads
+  // as absent, never as "restricted". (In server mode the snapshot already
+  // withheld it; this is the standalone gate and defence in depth.)
+  if (!d || d.deleted || !canSeeDirective(actor, d)) {
     host.innerHTML = `
       <div class="page-head"><div><h1 class="page-title">Directive not found</h1>
       <div class="page-sub">This directive does not exist or has been rescinded from record.</div></div></div>
@@ -136,6 +146,7 @@ export function renderDirective(host, app, id) {
   const canManage = canManageDirectives(actor, d.org);
   const rescinded = d.status === 'rescinded';
   const cav = caveatName(d);
+  const aud = audienceOrgs(d);
 
   const bodyBlock = canRead
     ? `<div class="memo__body">${esc(d.body)}</div>`
@@ -193,13 +204,14 @@ export function renderDirective(host, app, id) {
     ${ackStrip}
 
     ${canManage ? `<div class="actionbar">
+      <button class="btn btn--sm" data-act="audience">Set audience</button>
       ${!rescinded ? '<button class="btn btn--sm btn--danger" data-act="rescind">Rescind</button>' : '<button class="btn btn--sm" data-act="reinstate">Reinstate</button>'}
     </div>` : ''}
 
     <section class="card memo">
       <div class="memo__head">
         <div class="memo__row"><span class="memo__k">From</span><span class="memo__v">${esc(ORGS[d.org].name)}</span></div>
-        <div class="memo__row"><span class="memo__k">To</span><span class="memo__v">All ${esc(ORGS[d.org].short)} personnel at clearance</span></div>
+        <div class="memo__row"><span class="memo__k">To</span><span class="memo__v">All ${esc(ORGS[d.org].short)} personnel at clearance${aud.length ? `, and ${aud.map((o) => esc(ORGS[o].short)).join(', ')}` : ''}</span></div>
         <div class="memo__row"><span class="memo__k">Reference</span><span class="memo__v mono">${esc(d.ref)}</span></div>
         <div class="memo__row"><span class="memo__k">Subject</span><span class="memo__v">${esc(d.title)}</span></div>
         <div class="memo__row"><span class="memo__k">Classification</span><span class="memo__v">${clearanceBadge(d.clearance)}${cav ? ` \u00b7 ${caveatChip(cav)}` : ''}</span></div>
@@ -218,8 +230,43 @@ export function renderDirective(host, app, id) {
   if (rescindBtn) rescindBtn.addEventListener('click', () => setStatus(app, d.id, 'rescinded'));
   const reinstateBtn = host.querySelector('[data-act="reinstate"]');
   if (reinstateBtn) reinstateBtn.addEventListener('click', () => setStatus(app, d.id, 'active'));
+  const audienceBtn = host.querySelector('[data-act="audience"]');
+  if (audienceBtn) audienceBtn.addEventListener('click', () => openAudience(app, d.id));
   const ackBtn = host.querySelector('[data-act="ack"]');
   if (ackBtn) ackBtn.addEventListener('click', () => acknowledge(app, d.id));
+}
+
+// Retag which other departments an order appears for. The order's home org
+// always sees it; ticking a department adds it to that department's board too
+// (the clearance floor and any Need-To-Know caveat still apply). Managers only.
+function openAudience(app, id) {
+  const d = getDirective(id);
+  if (!d || d.deleted) return;
+  if (!canManageDirectives(app.user, d.org)) { toast('You cannot manage this order.', 'error'); return; }
+  const current = new Set(Array.isArray(d.audience) ? d.audience : []);
+  const checks = ORG_ORDER.filter((o) => o !== d.org)
+    .map((o) => `<label class="check"><input type="checkbox" class="au-org" value="${esc(o)}" ${current.has(o) ? 'checked' : ''} /> <span>${esc(ORGS[o].name)}</span></label>`).join('');
+  openModal({
+    title: `Audience — ${d.ref}`,
+    body: `<p class="modal__message">${esc(ORGS[d.org].short)} personnel always see this order. Tick other departments to add it to their board too.</p>
+      <div class="check-list">${checks}</div>`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Save audience', tone: 'primary', onClick: (c, dlg) => {
+          const audience = [...dlg.querySelectorAll('.au-org:checked')].map((i) => i.value);
+          const fresh = getDirective(id);
+          if (!fresh) { c(); app.refresh(); return; }
+          fresh.audience = audience;
+          fresh.updatedAt = new Date().toISOString();
+          fresh.version = (fresh.version || 1) + 1;
+          upsertDirective(fresh);
+          logAction(app.user, 'EDIT_DIRECTIVE', `${fresh.ref}: audience updated (${audience.length ? audience.map((o) => ORGS[o].short).join(', ') : 'home org only'}).`);
+          c();
+          toast('Audience updated.', 'success');
+          app.refresh();
+        } },
+    ],
+  });
 }
 
 // Countersign an order: adds exactly the operator's own acknowledgement and
@@ -266,6 +313,8 @@ function openIssue(app, org) {
   const comps = fileableCompartments(app.user);
   const compOpts = ['<option value="">\u2014 None (uncompartmented) \u2014</option>',
     ...comps.map((c) => `<option value="${esc(c.id)}">${esc(c.name)} (${esc(c.codeword || c.name)})</option>`)].join('');
+  const audChecks = ORG_ORDER.filter((o) => o !== org)
+    .map((o) => `<label class="check"><input type="checkbox" class="di-aud" value="${esc(o)}" /> <span>${esc(ORGS[o].name)}</span></label>`).join('');
 
   openModal({
     title: `Issue directive \u2014 ${ORGS[org].short}`,
@@ -276,6 +325,8 @@ function openIssue(app, org) {
       <div class="field"><label>Minimum clearance to read</label><select id="di-clr">${clrOpts}</select></div>
       <div class="field"><label>Need-To-Know compartment</label><select id="di-comp">${compOpts}</select>
         <div class="field__hint">Only compartments you are read into are listed.</div></div>
+      <div class="field"><label>Also visible to <span class="muted-text">(optional)</span></label><div class="check-list">${audChecks}</div>
+        <div class="field__hint">By default only ${esc(ORGS[org].short)} personnel see this order. Tick other departments to put it on their board too \u2014 the clearance floor still applies.</div></div>
       <div class="field"><label>Body</label><textarea id="di-body" rows="5" placeholder="State the directive\u2026"></textarea></div>
       <div id="di-err" class="auth__error" hidden></div>
     `,
@@ -286,6 +337,7 @@ function openIssue(app, org) {
           const title = d.querySelector('#di-title').value.trim();
           const clr = d.querySelector('#di-clr').value;
           const comp = d.querySelector('#di-comp').value || null;
+          const audience = [...d.querySelectorAll('.di-aud:checked')].map((i) => i.value);
           const bodyText = d.querySelector('#di-body').value.trim();
           const err = d.querySelector('#di-err');
           err.hidden = true;
@@ -293,7 +345,7 @@ function openIssue(app, org) {
           const now = new Date().toISOString();
           upsertDirective({
             id: newId('dir'), ref, org, clearance: clr, title, body: bodyText,
-            compartment: comp,
+            compartment: comp, audience,
             issuedBy: app.user.designation, status: 'active',
             createdAt: now, updatedAt: now, version: 1, deleted: false, deletedAt: null,
           });
