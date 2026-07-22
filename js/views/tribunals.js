@@ -11,7 +11,7 @@
 // =============================================================================
 
 import {
-  CASE_KIND, CASE_KIND_ORDER, CASE_STATUS, CASE_STATUS_ORDER,
+  CASE_KIND, CASE_KIND_ORDER, CASE_STATUS, CASE_STATUS_ORDER, EXHIBIT_STATUS,
   RULING_FINDING, RULING_FINDING_ORDER, CLEARANCE_ORDER, CLEARANCES,
   ORGS, clearanceWeight, CASE_VOTE, CASE_VOTE_ORDER, tallyCaseVotes, caseTakesVote,
 } from '../constants.js';
@@ -20,7 +20,7 @@ import {
 } from '../storage.js';
 import {
   canViewCase, canManageTribunal, canRuleTribunal, canClassifyAt, canViewSubject,
-  isCL5, readIntoCompartment,
+  isCL5, readIntoCompartment, canRequestTribunal, canReviewTribunal,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { exportCase, exportSummons } from '../export.js';
@@ -174,7 +174,8 @@ export function renderList(host, app) {
         <h1 class="page-title">Case Docket</h1>
         <div class="page-sub">${visible.length} accessible${sealed.length ? ` \u00b7 ${sealed.length} sealed above your clearance` : ''}</div>
       </div>
-      ${canManageTribunal(actor) ? `<button class="btn btn--primary" id="add-case">+ New case</button>` : ''}
+      ${canManageTribunal(actor) ? `<button class="btn btn--primary" id="add-case">+ New case</button>`
+        : (canRequestTribunal(actor) ? `<button class="btn btn--primary" id="req-tribunal">⚖ Request tribunal</button>` : '')}
     </div>
 
     <div class="toolbar">
@@ -221,6 +222,8 @@ export function renderList(host, app) {
 
   const addBtn = host.querySelector('#add-case');
   if (addBtn) addBtn.addEventListener('click', () => openCreate(app));
+  const reqBtn = host.querySelector('#req-tribunal');
+  if (reqBtn) reqBtn.addEventListener('click', () => openRequestTribunal(app));
 }
 
 // ===========================================================================
@@ -257,6 +260,28 @@ export function renderCase(host, app, id) {
 
   const canManage = canManageTribunal(actor);
   const canRule = canRuleTribunal(actor);
+  const isRequest = c.status === 'requested';
+  const mayReview = canReviewTribunal(actor);           // Assistant+ or CL5
+  const mayPresent = canRequestTribunal(actor) || mayReview; // the prosecutor, or the Committee
+  const exhibitsOpen = c.status !== 'closed' && c.status !== 'dismissed';
+
+  // Court exhibits — presented by the prosecutor, ruled in/out by the Committee.
+  const exhibitItems = (c.exhibits || []).length ? (c.exhibits || []).map((x) => {
+    const m = EXHIBIT_STATUS[x.status] || { label: x.status, tone: 'muted' };
+    const rule = (mayReview && x.status === 'submitted') ? `
+      <div class="ex-item__actions">
+        <button class="btn btn--xs" data-ex-accept="${esc(x.id)}">Accept</button>
+        <button class="btn btn--xs btn--danger" data-ex-reject="${esc(x.id)}">Throw out</button>
+      </div>` : '';
+    return `<div class="ex-item">
+      <div class="ex-item__head"><span class="ex-item__title">${esc(x.title)}</span>
+        ${x.link ? `<a class="rec-link" href="${esc(x.link)}" target="_blank" rel="noopener">link ↗</a>` : ''}
+        <span class="badge badge--${m.tone}">${esc(m.label)}</span></div>
+      ${x.detail ? `<div class="ex-item__note">${linkify(esc(x.detail))}</div>` : ''}
+      <div class="ex-item__meta"><span class="mono">${esc(x.by || '—')}</span>${x.ruledBy ? ` · ruled by ${esc(x.ruledBy)}` : ''}</div>
+      ${rule}
+    </div>`;
+  }).join('') : '<div class="empty">No exhibits presented.</div>';
 
   // Panel members (links to dossiers).
   const panel = (c.panelIds || []).map((pid) => personLink(pid)).join('') || '<span class="empty-inline">No panel seated.</span>';
@@ -371,6 +396,12 @@ export function renderCase(host, app, id) {
 
     ${caveatBanner(c)}
 
+    ${isRequest ? `<div class="ntk-banner">Tribunal request from ${esc(c.createdBy || 'an operator')} — awaiting the Committee.${mayReview ? '' : ' Only the Committee may grant or throw it out.'}</div>
+      ${mayReview ? `<div class="actionbar">
+        <button class="btn btn--sm btn--primary" data-act="grant">Grant tribunal</button>
+        <button class="btn btn--sm btn--danger" data-act="throw-out">Throw out request</button>
+      </div>` : ''}` : ''}
+
     ${canManage ? `<div class="actionbar">
       <button class="btn btn--sm" data-act="entry">Add docket entry</button>
       <button class="btn btn--sm" data-act="summons">Issue summons</button>
@@ -412,6 +443,14 @@ export function renderCase(host, app, id) {
           <div class="card__title">Proceedings</div>
           <div class="card__body">${(c.entries || []).length ? `<ul class="timeline">${entryItems}</ul>` : entryItems}</div>
         </section>
+        ${(c.exhibits || []).length || mayPresent ? `
+        <section class="card">
+          <div class="card__title">Exhibits</div>
+          <div class="card__body">
+            ${mayPresent && exhibitsOpen ? '<div class="actionbar"><button class="btn btn--sm" data-act="present">Present exhibit</button></div>' : ''}
+            <div class="ex-list">${exhibitItems}</div>
+          </div>
+        </section>` : ''}
         ${voteBlock}
         ${rulingBlock}
         ${renderHistory(actor, c, 'case')}
@@ -434,8 +473,13 @@ export function renderCase(host, app, id) {
     ruling: () => openRuling(app, c),
     dismiss: () => dismissCase(app, c),
     remove: () => removeCase(app, c),
+    grant: () => decideRequest(app, c, 'open'),
+    'throw-out': () => decideRequest(app, c, 'dismissed'),
+    present: () => openPresentExhibit(app, c),
   };
   host.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => dispatch[b.dataset.act]()));
+  host.querySelectorAll('[data-ex-accept]').forEach((b) => b.addEventListener('click', () => ruleExhibit(app, c, b.dataset.exAccept, 'accepted')));
+  host.querySelectorAll('[data-ex-reject]').forEach((b) => b.addEventListener('click', () => ruleExhibit(app, c, b.dataset.exReject, 'rejected')));
   host.querySelectorAll('[data-vote]').forEach((b) => b.addEventListener('click', () => castVote(app, c, b.dataset.vote)));
   host.querySelectorAll('[data-summons-doc]').forEach((b) => b.addEventListener('click', () => {
     const m = (c.summons || []).find((x) => x.id === b.dataset.summonsDoc);
@@ -801,4 +845,133 @@ async function removeCase(app, c) {
   logAction(app.user, 'REMOVE_CASE', `${c.ref} moved to recycle bin.`);
   toast('Case moved to recycle bin.', 'success');
   app.navigate('#/tribunals');
+}
+
+// ===========================================================================
+// INTERNAL SECURITY → THE COMMITTEE: request, review, exhibits
+// ===========================================================================
+
+// Internal Security (or CL5) files a tribunal request. It opens 'requested' —
+// no panel, no votes, no ruling — at the filer's own clearance, for the
+// Committee to grant or throw out. The filer can always track what they filed.
+function openRequestTribunal(app) {
+  const actor = app.user;
+  const body = `
+    <p class="modal__message">Request that the Ethics Committee convene a tribunal. An Ethics Assistant or above must grant it before proceedings open; you may then present evidence for the Committee to rule in or out.</p>
+    <div class="field"><label>Reference</label><input id="rq-ref" type="text" value="${esc(suggestCaseRef())}" /></div>
+    <div class="field"><label>Matter (title)</label><input id="rq-title" type="text" placeholder="e.g. Conduct review — Site-19 handler" /></div>
+    ${selectField('rq-kind', 'Type', CASE_KIND_ORDER, 'inquiry', (k) => CASE_KIND[k].label)}
+    <div class="field"><label>Respondent</label><select id="rq-resp">${personnelOptions(null)}</select></div>
+    <div class="field field--split"><div><label>If external — name <span class="muted-text">(optional)</span></label><input id="rq-resp-name" type="text" placeholder="optional" /></div><div><label>Department <span class="muted-text">(optional)</span></label><input id="rq-resp-dept" type="text" placeholder="optional" /></div></div>
+    <div class="field"><label>Grounds for the request</label><textarea id="rq-summary" rows="3" placeholder="State the matter and why a tribunal is warranted…"></textarea></div>
+    <div id="rq-err" class="auth__error" hidden></div>
+  `;
+  openModal({
+    title: 'Request a tribunal',
+    wide: true,
+    body,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'File request', tone: 'primary', onClick: (c, d) => {
+          const ref = d.querySelector('#rq-ref').value.trim() || suggestCaseRef();
+          const title = d.querySelector('#rq-title').value.trim();
+          const kind = d.querySelector('#rq-kind').value;
+          const respId = d.querySelector('#rq-resp').value || null;
+          const respName = (d.querySelector('#rq-resp-name').value || '').trim();
+          const respDept = (d.querySelector('#rq-resp-dept').value || '').trim();
+          const summary = d.querySelector('#rq-summary').value.trim();
+          const err = d.querySelector('#rq-err');
+          err.hidden = true;
+          if (!title) { err.textContent = 'A matter title is required.'; err.hidden = false; return; }
+          if (!summary) { err.textContent = 'State the grounds for the request.'; err.hidden = false; return; }
+          if (cases().some((x) => !x.deleted && x.ref.toLowerCase() === ref.toLowerCase())) { err.textContent = 'That reference is already in use.'; err.hidden = false; return; }
+          const now = new Date().toISOString();
+          upsertCase({
+            id: newId('case'), ref, title, kind, clearance: actor.clearance, status: 'requested', summary,
+            respondentId: respId, respondentName: respId ? null : (respName || (respDept ? null : '[UNNAMED]')), respondentDept: respId ? null : (respDept || null),
+            panelIds: [], votes: {}, linkedSubjectIds: [], summons: [], exhibits: [],
+            compartment: null,
+            entries: [{ id: newId('ent'), ts: now, by: actor.designation, type: 'filing', text: `Tribunal requested by ${actor.designation}.` }],
+            ruling: null, createdBy: actor.designation, createdAt: now, updatedAt: now,
+            version: 1, deleted: false, deletedAt: null,
+          });
+          logAction(actor, 'REQUEST_TRIBUNAL', `Tribunal requested — ${ref} (${title}).`);
+          c();
+          toast(`Tribunal requested — ${ref}.`, 'success');
+          app.refresh();
+        } },
+    ],
+  });
+}
+
+// The Committee (Assistant and above) grants a request into 'open', or throws
+// it out into 'dismissed'. Only the status and a docket entry change.
+async function decideRequest(app, c, decision) {
+  if (!canReviewTribunal(app.user)) { toast('Only the Committee may act on a tribunal request.', 'error'); return; }
+  const grant = decision === 'open';
+  const ok = await confirmDialog({
+    title: grant ? 'Grant tribunal' : 'Throw out request',
+    message: grant
+      ? `Grant the tribunal requested in ${c.ref} · ${c.title}? It opens for proceedings.`
+      : `Throw out the tribunal request ${c.ref} · ${c.title}? It is marked dismissed.`,
+    confirmLabel: grant ? 'Grant tribunal' : 'Throw out',
+    danger: !grant,
+  });
+  if (!ok) return;
+  mutate(app, c.id, c.version, (rec) => {
+    rec.status = decision;
+    addEntry(rec, grant ? 'filing' : 'note', app.user.designation,
+      grant ? 'Tribunal request granted — case opened.' : 'Tribunal request thrown out.');
+  }, { action: grant ? 'APPROVE_TRIBUNAL' : 'REJECT_TRIBUNAL', detail: `${c.ref} ${grant ? 'granted' : 'thrown out'}.` });
+  toast(grant ? 'Tribunal granted.' : 'Request thrown out.', 'success');
+}
+
+// The prosecutor presents an exhibit — appended as 'submitted', in their own
+// name. Its substance is fixed once entered (the Worker holds the line).
+function openPresentExhibit(app, c) {
+  openModal({
+    title: `Present exhibit — ${c.ref}`,
+    body: `
+      <p class="modal__message">Enter an exhibit into the record. Once presented, its substance is fixed — the Committee rules it in or out.</p>
+      <div class="field"><label>Title</label><input id="ex-title" type="text" placeholder="e.g. Bodycam clip, 03:14" /></div>
+      <div class="field"><label>Detail</label><textarea id="ex-detail" rows="3" placeholder="Describe the evidence…"></textarea></div>
+      <div class="field"><label>Link <span class="muted-text">(optional)</span></label><input id="ex-link" type="text" placeholder="https://…" /></div>`,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (x) => x() },
+      { label: 'Present exhibit', tone: 'primary', onClick: (x, d) => {
+          const title = d.querySelector('#ex-title').value.trim();
+          const detail = d.querySelector('#ex-detail').value.trim();
+          const link = d.querySelector('#ex-link').value.trim();
+          if (!title) { toast('An exhibit title is required.', 'error'); return; }
+          const ex = { id: newId('exh'), by: app.user.designation, ts: new Date().toISOString(), title, detail: detail || null, link: link || null, status: 'submitted' };
+          const ok = mutate(app, c.id, c.version, (rec) => {
+            rec.exhibits = rec.exhibits || [];
+            rec.exhibits.push(ex);
+          }, { action: 'SUBMIT_EXHIBIT', detail: `Exhibit presented in ${c.ref}.` });
+          x();
+          if (ok) toast('Exhibit presented.', 'success');
+        } },
+    ],
+  });
+}
+
+// The Committee rules a single presented exhibit in (accepted) or out
+// (rejected). Only its status and ruling stamp change — never its substance.
+async function ruleExhibit(app, c, exId, decision) {
+  if (!canReviewTribunal(app.user)) { toast('Only the Committee may rule an exhibit.', 'error'); return; }
+  const ex = (c.exhibits || []).find((e) => e.id === exId);
+  if (!ex) { app.refresh(); return; }
+  const accept = decision === 'accepted';
+  const ok = await confirmDialog({
+    title: accept ? 'Accept exhibit' : 'Throw out exhibit',
+    message: `${accept ? 'Accept' : 'Throw out'} “${ex.title}”? This ruling is on the record.`,
+    confirmLabel: accept ? 'Accept' : 'Throw out',
+    danger: !accept,
+  });
+  if (!ok) return;
+  mutate(app, c.id, c.version, (rec) => {
+    const e = (rec.exhibits || []).find((z) => z.id === exId);
+    if (e) { e.status = decision; e.ruledBy = app.user.designation; e.ruledAt = new Date().toISOString(); }
+  }, { action: 'RULE_EXHIBIT', detail: `Exhibit ${accept ? 'accepted' : 'thrown out'} in ${c.ref}.` });
+  toast(accept ? 'Exhibit accepted.' : 'Exhibit thrown out.', 'success');
 }

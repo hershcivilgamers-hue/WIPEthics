@@ -327,6 +327,7 @@ export const CASE_KIND_ORDER = ['review', 'tribunal', 'inquiry'];
 
 // --- Ethics tribunals: case status ------------------------------------------
 export const CASE_STATUS = {
+  requested:    { code: 'requested',    label: 'Requested',     tone: 'info' },
   open:         { code: 'open',         label: 'Open',          tone: 'info' },
   'in-session': { code: 'in-session',   label: 'In Session',    tone: 'warn' },
   deliberation: { code: 'deliberation', label: 'Deliberation',  tone: 'warn' },
@@ -334,7 +335,17 @@ export const CASE_STATUS = {
   dismissed:    { code: 'dismissed',    label: 'Dismissed',     tone: 'muted' },
   closed:       { code: 'closed',       label: 'Closed',        tone: 'muted' },
 };
-export const CASE_STATUS_ORDER = ['open', 'in-session', 'deliberation', 'ruled', 'dismissed', 'closed'];
+export const CASE_STATUS_ORDER = ['requested', 'open', 'in-session', 'deliberation', 'ruled', 'dismissed', 'closed'];
+
+// Court exhibits presented to a case. Internal Security (the prosecutor) submits
+// them; the Committee rules each in (accepted) or out (rejected). Like a real
+// court, thrown-out evidence stays on the record marked rejected — nothing is
+// deleted.
+export const EXHIBIT_STATUS = {
+  submitted: { code: 'submitted', label: 'Submitted', tone: 'info' },
+  accepted:  { code: 'accepted',  label: 'Accepted',  tone: 'ok' },
+  rejected:  { code: 'rejected',  label: 'Thrown out', tone: 'bad' },
+};
 
 // --- Ethics tribunals: ruling finding ---------------------------------------
 export const RULING_FINDING = {

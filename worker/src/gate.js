@@ -17,6 +17,7 @@ import {
   canEditPersonnel, canSetClearance, canSetRank, canIssueStrike, canDeletePersonnel,
   canApproveRegistrations, canPromote, canDemote, canManagePromoReqs, canManageSettings,
   canManageDirectives, canReadDirective, canManageSubject, canManageTribunal, canRuleTribunal,
+  canRequestTribunal, canReviewTribunal,
   canComposeDocument, canViewDocument,
   compartmentClears, canManageCompartment, canReadOperatorInto,
   canManageOrg, canParticipateRecruitment, canActOnRecruit, isMemberTrack, canLogToOperation, canLogIntel, canManageTraining, isCL5,
@@ -634,6 +635,65 @@ function authorizeCase(actor, cur, next, ctx) {
       return deny('A vote cannot be combined with other changes.');
     }
     return ok('VOTE_CASE', `Vote recorded on ${ref}.`);
+  }
+
+  // --- Internal Security → the Committee: request, review, exhibits ----------
+  // A tribunal REQUEST is filed by ISD (any clearance) or CL5. It opens in the
+  // 'requested' state carrying no ruling, panel or votes — the Committee decides
+  // whether it proceeds. A normally-opened case (Ethics manager, status 'open')
+  // falls through to the manager gate below.
+  if (!cur && next.status === 'requested') {
+    if (!canRequestTribunal(actor)) return deny('A tribunal is requested by Internal Security or CL5.');
+    if (next.ruling || len(next.panelIds) || (next.votes && Object.keys(next.votes).length)) {
+      return deny('A tribunal request arrives with no ruling, panel or votes.');
+    }
+    return ok('REQUEST_TRIBUNAL', `Tribunal requested — ${ref}.`);
+  }
+
+  if (cur) {
+    // Grant or throw out a pending request — the Committee, down to an Assistant.
+    if (cur.status === 'requested' && j(next.status) !== j(cur.status)) {
+      if (!canReviewTribunal(actor)) return deny('Only the Committee may act on a tribunal request.');
+      if (next.status !== 'open' && next.status !== 'dismissed') {
+        return deny('A request is granted (open) or thrown out (dismissed).');
+      }
+      if (changedOutside(cur, next, ['status', 'entries', 'clearance', 'version', 'updatedAt'])) {
+        return deny('A request decision cannot be combined with other edits.');
+      }
+      return next.status === 'open'
+        ? ok('APPROVE_TRIBUNAL', `Tribunal ${ref} granted.`)
+        : ok('REJECT_TRIBUNAL', `Tribunal request ${ref} thrown out.`);
+    }
+
+    // Exhibits: the prosecutor presents them; the Committee rules each in or out.
+    if (j(next.exhibits || []) !== j(cur.exhibits || [])) {
+      if (changedOutside(cur, next, ['exhibits', 'version', 'updatedAt'])) {
+        return deny('An exhibit change cannot be combined with other edits.');
+      }
+      const before = cur.exhibits || []; const after = next.exhibits || [];
+      // (a) Presentation: exactly one new exhibit appended, as submitted, in the
+      // actor's own name. The existing exhibits are immutable in this write.
+      if (after.length === before.length + 1 && j(before) === j(after.slice(0, before.length))) {
+        if (!canRequestTribunal(actor) && !canReviewTribunal(actor)) return deny('You cannot present evidence in this matter.');
+        const ex = after[after.length - 1];
+        if (ex.status !== 'submitted') return deny('An exhibit is presented as submitted.');
+        if (ex.by !== actor.designation) return deny('An exhibit is presented in your own name.');
+        return ok('SUBMIT_EXHIBIT', `Exhibit presented in ${ref}.`);
+      }
+      // (b) Ruling: exactly one exhibit flips to accepted/rejected — the
+      // Committee's, and only its status/ruling stamp may change.
+      if (after.length === before.length) {
+        const changed = before.map((e, i) => (j(e) !== j(after[i]) ? i : -1)).filter((i) => i >= 0);
+        if (changed.length !== 1) return deny('Rule on one exhibit at a time.');
+        const b = before[changed[0]]; const a = after[changed[0]];
+        const strip = (e) => { const { status, ruledBy, ruledAt, ...rest } = e; return rest; };
+        if (j(strip(b)) !== j(strip(a))) return deny('An exhibit’s substance cannot be altered — only ruled on.');
+        if (!canReviewTribunal(actor)) return deny('Only the Committee may rule an exhibit in or out.');
+        if (a.status !== 'accepted' && a.status !== 'rejected') return deny('An exhibit is accepted or thrown out.');
+        return ok('RULE_EXHIBIT', `Exhibit ${a.status === 'accepted' ? 'accepted' : 'thrown out'} in ${ref}.`);
+      }
+      return deny('Exhibits are presented, then ruled — never removed or reordered.');
+    }
   }
 
   if (!canManageTribunal(actor)) return deny('You cannot manage tribunal cases.');

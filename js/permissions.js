@@ -316,15 +316,33 @@ export function canManageTribunal(actor) {
   return canManageOrg(actor, 'ethics-committee');
 }
 
+// A tribunal request may be FILED by Internal Security (any clearance) or CL5 —
+// the Department brings a matter to the Committee for trial. Distinct from
+// canManageTribunal, which runs the proceeding itself.
+export function canRequestTribunal(actor) {
+  return isCL5(actor) || isISD(actor);
+}
+// Acting on a request (grant / throw out) and ruling exhibits in or out is the
+// Committee's, down to an Assistant — the junior Committee rank — or CL5. Broader
+// than canManageTribunal (CL4·Senior+), which governs seating a panel and running
+// the hearing, so an Assistant can clerk the docket like a court officer.
+export function canReviewTribunal(actor) {
+  return isCL5(actor) || (!!actor && actor.org === 'ethics-committee');
+}
+
 // Entering a binding ruling is a stricter, CL5-only act (the Chairman or
 // Command) — the verdict carries more weight than running the proceeding.
 export function canRuleTribunal(actor) {
   return isCL5(actor);
 }
 
-// A case carries a sensitivity, gated as a hard wall like a surveillance record.
+// A case carries a sensitivity, gated as a hard wall like a surveillance record —
+// EXCEPT that the operator who filed it (its requester) may always see their own
+// matter, so an Internal Security requester can track and prosecute the tribunal
+// they brought even when its content sits above their cover clearance.
 export function canViewCase(actor, record) {
   if (!actor || !record) return false;
+  if (record.createdBy && actor.designation && record.createdBy === actor.designation) return true;
   return w(actor) >= clearanceWeight(record.clearance);
 }
 
