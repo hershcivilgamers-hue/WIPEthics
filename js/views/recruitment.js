@@ -146,7 +146,7 @@ export function renderList(host, app, org, trackArg) {
       </tr>`).join('') : '';
 
   const canCreate = isMember ? isCL5(actor) : (isCL5(actor) || canParticipateRecruitment(actor, org));
-  const eyebrow = isEthics ? 'CAIRO \u00b7 Ethics Committee' : 'CAIRO \u00b7 Omega-1';
+  const eyebrow = isEthics ? 'CAIRO \u00b7 Ethics Committee' : `CAIRO \u00b7 ${ORGS['omega-1'].short}`;
   const newLabel = isMember ? '+ Nominate Member candidate' : isEthics ? '+ New application' : '+ New scouting target';
   const sub = isMember ? 'Member onboarding \u2014 Command (CL5) nominates, votes and interviews'
     : isEthics ? 'Assistant applications \u2014 cadre review and vote; CL5 interviews'
@@ -600,7 +600,7 @@ async function approveTryout(app, r) {
   const canOpen = canInductRecruit(actor, r);
   let openFile = false; let passphrase = '';
   if (canOpen) {
-    const choice = await promptInductFile({ title: 'Approve candidate', message: `Approve ${r.name} and open their Omega-1 personnel file now? Choose "Without file" to approve now and open the file later.`, confirmLabel: 'Approve & open file' });
+    const choice = await promptInductFile({ title: 'Approve candidate', message: `Approve ${r.name} and open their ${ORGS['omega-1'].short} personnel file now? Choose "Without file" to approve now and open the file later.`, confirmLabel: 'Approve & open file' });
     openFile = choice.open; passphrase = choice.passphrase;
   } else {
     const ok = await confirmDialog({ title: 'Approve candidate', message: `Approve ${r.name} at tryout? A manager will open their personnel file.`, confirmLabel: 'Approve' });

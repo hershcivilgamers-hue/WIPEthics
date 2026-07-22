@@ -24,12 +24,23 @@ export const CLEARANCE_ORDER = ['CL3', 'CL4-J', 'CL4-S', 'CL5'];
 // --- Organisations ----------------------------------------------------------
 // `command` is the cross-org administration tier (where CAIRO itself is run
 // from). Command personnel can act across both operational organisations.
+// --- The masquerade ----------------------------------------------------------
+// Omega-1 is the covert department: its members present as Internal Security in
+// their day-to-day work, and to CL4-J and below the unit itself is branded
+// "Internal Enforcement" \u2014 ISD's SWAT arm. Only CL4-S+ and the Ethics Committee
+// know MTF Omega-1 and its true purpose. The name/short below are getters keyed
+// on a per-session flag (set from knowsOmegaTruth at render time), so every
+// call site \u2014 org tags, dropdowns, exports, search \u2014 brands itself. Default is
+// the truth: the Worker, tests and seed all operate on the high side.
+let omegaTruthVisible = true;
+export function setOmegaBranding(truth) { omegaTruthVisible = !!truth; }
+
 export const ORGS = {
   'omega-1': {
     code: 'omega-1',
-    name: 'MTF Omega-1',
-    short: 'Omega-1',
-    motto: 'Law\u2019s Left Hand',
+    get name() { return omegaTruthVisible ? 'MTF Omega-1' : 'Internal Enforcement'; },
+    get short() { return omegaTruthVisible ? 'Omega-1' : 'IE'; },
+    get motto() { return omegaTruthVisible ? 'Law\u2019s Left Hand' : 'Order Through Vigilance'; },
     tone: 'omega',
   },
   'ethics-committee': {

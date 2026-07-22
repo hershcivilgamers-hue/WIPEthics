@@ -8,8 +8,8 @@
 // =============================================================================
 
 import assert from 'node:assert';
-import { isISD, isdWeight, canManageISD, accessLevel, canManageOrg, canViewSubject } from '../js/permissions.js';
-import { RANKS, RANK_CLEARANCE, clearanceForRank,
+import { isISD, isdWeight, canManageISD, accessLevel, canManageOrg, canViewSubject, knowsOmegaTruth } from '../js/permissions.js';
+import { ORGS, setOmegaBranding, RANKS, RANK_CLEARANCE, clearanceForRank,
   ACTIVITY_REQ_DEFAULT, activityStatus, activityRequirement } from '../js/constants.js';
 import { redactUser, buildSnapshot } from '../worker/src/redact.js';
 import { authorizeWrite } from '../worker/src/gate.js';
@@ -94,6 +94,22 @@ const self = { ...inducted, id: 'u9' };
 assert.equal(usr(self, inducted, withBadge).action, 'SET_ISD_BADGE', 'an agent records their own badge number');
 assert.equal(usr(inspector, inducted, withBadge).ok, false, 'an agent cannot set someone else\'s badge');
 assert.equal(usr(commissioner, inducted, withBadge).ok, false, 'even ISD command uses the membership path, not the badge path, for others');
+
+// --- The masquerade: MTF Omega-1 vs the "Internal Enforcement" cover story ---
+// Omega-1 is the covert unit; to CL4-J and below it is branded Internal
+// Enforcement, ISD's SWAT arm. CL4-S+ and every Ethics member see the truth.
+assert.equal(knowsOmegaTruth(cl5), true);
+assert.equal(knowsOmegaTruth(omegaMgr), true, 'CL4-S command knows the unit’s true colours');
+assert.equal(knowsOmegaTruth({ org: 'ethics-committee', clearance: 'CL4-J' }), true, 'every Ethics member knows its own instrument');
+assert.equal(knowsOmegaTruth(cl3), false, 'juniors get the cover story');
+assert.equal(knowsOmegaTruth(commissioner), false, 'an ISD front alone does not read you in — the posting clearance rules');
+assert.equal(knowsOmegaTruth(null), false, 'the signed-out screen is junior');
+
+setOmegaBranding(false);
+assert.equal(ORGS['omega-1'].name, 'Internal Enforcement', 'junior branding renames the unit everywhere');
+assert.equal(ORGS['omega-1'].short, 'IE');
+setOmegaBranding(true);
+assert.equal(ORGS['omega-1'].name, 'MTF Omega-1', 'the high side (server, tests, seniors) sees the truth');
 
 // --- Sign-up ISD interest: covert flag, then normal induction ----------------
 // A prospective officer flags Internal Security at registration. The flag is as

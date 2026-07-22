@@ -116,7 +116,7 @@ const SEED_SPECS = [
     clearance: 'CL4-S', username: 'vanguard', isd: isdCaveat('Commissioner', '101'),
     awards: [{ id: 'a2', title: 'MTF Command Ribbon', date: iso(300), note: 'Assumed command of Omega-1.' }],
     events: [
-      event(600, 'transfer', 'Transferred into MTF Omega-1 from Site security.'),
+      event(600, 'transfer', 'Transferred into the task force from Site security.'),
       event(300, 'promotion', 'Promoted to Commander; assumed task-force lead.'),
       event(12, 'directive', 'Re-issued O1-SO-001 — Standing Orders, Field Conduct.'),
     ],
@@ -126,7 +126,7 @@ const SEED_SPECS = [
     clearance: 'CL4-J', username: 'warrant', isd: isdCaveat('Inspector', '114'),
     awards: [{ id: 'a7', title: 'Field Conduct Commendation', date: iso(70), note: 'Exemplary conduct during containment escort.' }],
     events: [
-      event(260, 'transfer', 'Joined Omega-1 as Specialist.'),
+      event(260, 'transfer', 'Joined the unit as Specialist.'),
       event(70, 'promotion', 'Promoted to Lieutenant; junior command authority assigned.'),
       event(5, 'deployment', 'Led containment escort under task-force command.'),
     ],
@@ -136,7 +136,7 @@ const SEED_SPECS = [
     clearance: 'CL4-J', username: 'tariff', status: 'loa',
     leave: { type: 'LoA', from: iso(9), to: iso(-12), reason: 'Recovery — field injury sustained during containment sweep.' },
     events: [
-      event(380, 'transfer', 'Joined Omega-1 as Specialist.'),
+      event(380, 'transfer', 'Joined the unit as Specialist.'),
       event(140, 'promotion', 'Promoted to Lieutenant.'),
       event(9, 'leave', 'Placed on Leave of Absence pending recovery.'),
     ],
@@ -145,7 +145,7 @@ const SEED_SPECS = [
     designation: 'O1-7', codename: 'Bailiff', org: 'omega-1', rank: 'Sergeant',
     clearance: 'CL3', username: 'bailiff', isd: isdCaveat('Investigator', '221'),
     events: [
-      event(210, 'transfer', 'Inducted into Omega-1 following recruitment review.'),
+      event(210, 'transfer', 'Inducted following recruitment review.'),
       event(54, 'training', 'Completed close-protection refresher.'),
     ],
   },
@@ -193,7 +193,7 @@ const SEED_SPECS = [
     designation: 'PEND-1', codename: 'Sentinel', org: 'omega-1', rank: null,
     clearance: null, username: 'sentinel', password: 'Aspirant-1',
     accountStatus: 'pending', requestedOrg: 'omega-1',
-    events: [event(1, 'registration', 'Submitted access request for MTF Omega-1.')],
+    events: [event(1, 'registration', 'Submitted access request for Internal Enforcement.')],
   },
 ];
 
@@ -202,7 +202,7 @@ const DIRECTIVE_SPECS = [
     ref: 'O1-SO-001', org: 'omega-1', clearance: 'CL3', status: 'active',
     title: 'Standing Orders \u2014 Field Conduct',
     issuedBy: 'O1-1', daysAgo: 12,
-    body: 'All Omega-1 operatives maintain weapons-tight posture until a containment breach is confirmed by the deployment lead. After-action reports are filed within twelve hours of return to site. Deviation is recorded as a strike.',
+    body: 'All operatives maintain weapons-tight posture until a containment breach is confirmed by the deployment lead. After-action reports are filed within twelve hours of return to site. Deviation is recorded as a strike.',
   },
   {
     ref: 'EC-DIR-014', org: 'ethics-committee', clearance: 'CL4-J', status: 'active',
@@ -242,7 +242,7 @@ const SUBJECT_SPECS = [
     createdBy: 'O1-1',
     summary: 'High-priority acquisition target linked to two containment breaches. Approach only with task-force authorisation.',
     logs: [
-      { daysAgo: 40, type: 'intel',  by: 'O1-1', text: 'Designated acquisition target by Omega-1 command.' },
+      { daysAgo: 40, type: 'intel',  by: 'O1-1', text: 'Designated acquisition target by task-force command.' },
       { daysAgo: 9,  type: 'status', by: 'O1-1', text: 'Location narrowed to depot district; surveillance assets repositioned.' },
       { daysAgo: 1,  type: 'sighting', by: 'O1-7', text: 'Probable visual confirmation pending corroboration.' },
     ],
@@ -309,10 +309,10 @@ const CASE_SPECS = [
     ref: 'EC-CASE-26-002', title: 'Operative Disciplinary Tribunal \u2014 Probate',
     kind: 'tribunal', clearance: 'CL3', status: 'ruled', daysAgo: 30,
     respondent: 'O1-9', panel: ['EC-1', 'EC-3'], subjects: [],
-    summary: 'Referral from Omega-1 command following a third active strike against the named operative. The Committee convened to determine whether the pattern warranted escalation.',
+    summary: 'Referral from unit command following a third active strike against the named operative. The Committee convened to determine whether the pattern warranted escalation.',
     summons: [{ who: 'O1-9', daysAgo: 28, reason: 'Appear before the Committee to answer for repeated conduct infractions.' }],
     entries: [
-      { daysAgo: 30, type: 'filing',    by: 'EC-1', text: 'Case opened on referral from Omega-1 command.' },
+      { daysAgo: 30, type: 'filing',    by: 'EC-1', text: 'Case opened on referral from unit command.' },
       { daysAgo: 28, type: 'testimony', by: 'EC-3', text: 'Respondent testimony heard; mitigating circumstances noted for the record.' },
       { daysAgo: 26, type: 'ruling',    by: 'EC-1', text: 'Panel ruling entered and served.' },
     ],
@@ -555,7 +555,7 @@ export function buildSeedIntel(userList, db) {
 }
 
 const TRAINING_SPECS = [
-  { code: 'O1-IND', title: 'Omega-1 Induction', org: 'omega-1', category: 'induction', validityMonths: 0, clearanceFloor: null, description: 'Baseline unit induction and standing-order familiarisation.' },
+  { code: 'O1-IND', title: 'Unit Induction', org: 'omega-1', category: 'induction', validityMonths: 0, clearanceFloor: null, description: 'Baseline unit induction and standing-order familiarisation.' },
   { code: 'O1-CQB', title: 'Close-Quarters Battle Refresher', org: 'omega-1', category: 'weapons', validityMonths: 12, clearanceFloor: 'CL3', description: 'Annual weapons handling and close-protection refresher.' },
   { code: 'O1-CON', title: 'Containment Breach Response', org: 'omega-1', category: 'containment', validityMonths: 24, clearanceFloor: 'CL3', description: 'Procedures for anomalous containment breach response.' },
   { code: 'O1-MED', title: 'Field Trauma Care', org: 'omega-1', category: 'medical', validityMonths: 24, clearanceFloor: null, description: 'Field trauma and casualty stabilisation.' },

@@ -143,7 +143,7 @@ export function renderList(host, app, org) {
       </div>
       ${canManage && !isdRoster ? `<button class="btn btn--primary" id="add-personnel">+ New personnel</button>` : ''}
     </div>
-    ${isdRoster ? '<p class="field__hint">Membership is a covert caveat, not a new record — read an operator into the Department from their own personnel file (their cover post stays intact).</p>' : ''}
+    ${isdRoster ? '<p class="field__hint">An Internal Security front is a credential, not a new record — issue it from the operator’s own personnel file (their unit posting stays intact).</p>' : ''}
 
     <div class="toolbar">
       <input id="flt-q" class="toolbar__search" type="search" placeholder="Search designation or codename\u2026" value="${esc(filter.q)}" />
@@ -340,7 +340,7 @@ function sectionISD(u, actor) {
       <div class="card__title">Internal Security ${asked ? '<span class="badge badge--warn">Requested at sign-up</span>' : ''}</div>
       <div class="card__body">
         ${asked ? `<p>${esc(u.codename)} requested Internal Security access${typeof u.requestedISD === 'string' ? ` as <strong>${esc(u.requestedISD)}</strong>` : ''} when they registered. Read them in to complete induction, or leave the request standing.</p>` : ''}
-        <p class="muted">This operator is not read into the Department. Their cover post is ${orgTag(u.org)} ${esc(u.rank || '—')}.</p>
+        <p class="muted">This operator holds no Internal Security front. Their unit posting is ${orgTag(u.org)} ${esc(u.rank || '—')}.</p>
         <div class="btn-row" style="margin-top:8px"><button class="btn btn--sm btn--primary" data-act="isd-induct">Read into Internal Security…</button></div>
         <p class="field__hint" style="margin-top:8px">Only the Department and CL5 can see this control, or that it could exist.</p>
       </div>
@@ -395,7 +395,7 @@ function sectionISD(u, actor) {
       </div>` : ''}
       ${command && !self ? '<div class="btn-row" style="margin-top:6px"><button class="btn btn--xs btn--danger" data-act="isd-remove">Read out of the Department</button></div>' : ''}
 
-      <p class="field__hint" style="margin-top:8px">Visible only to the Department and CL5. The operator’s file otherwise shows their cover post; ISD rank never touches it.</p>
+      <p class="field__hint" style="margin-top:8px">Visible only to the Department and CL5. The operator’s file otherwise shows their unit posting; the Internal Security front never touches it.</p>
     </div>
   </section>`;
 }
@@ -425,7 +425,7 @@ async function isdRankMove(app, u, dir) {
   if (!target) return;
   const ok = await confirmDialog({
     title: dir === 'up' ? 'Promote within the Department' : 'Reduce within the Department',
-    message: `${dir === 'up' ? 'Promote' : 'Reduce'} ${fresh.designation} from ${fresh.isd.rank} to ${target}? Their Internal Security checklist resets; their cover post is unaffected.`,
+    message: `${dir === 'up' ? 'Promote' : 'Reduce'} ${fresh.designation} from ${fresh.isd.rank} to ${target}? Their Internal Security checklist resets; their unit posting is unaffected.`,
     confirmLabel: dir === 'up' ? 'Promote' : 'Reduce',
     danger: dir !== 'up',
   });
@@ -453,7 +453,7 @@ function openISDInduct(app, u) {
     .map((rk) => `<option value="${esc(rk)}" ${rk === wantRank ? 'selected' : ''}>${esc(rk)} · ${esc(clearanceForRank('isd', rk))}</option>`).join('');
   openModal({
     title: `Read into Internal Security — ${u.designation}`,
-    body: `<p class="modal__message">This grants a covert Internal Security identity alongside ${esc(u.codename)}’s cover post. It is visible only to the Department and CL5.</p>
+    body: `<p class="modal__message">This issues ${esc(u.codename)} an Internal Security front — the identity they wear day-to-day — alongside their unit posting. The link is visible only to the Department and CL5.</p>
       <div class="field"><label>ISD rank</label><select id="isd-rank">${rankOpts}</select></div>
       <div class="field"><label>Badge number <span class="muted-text">(optional)</span></label><input id="isd-badge-new" type="text" placeholder="e.g. 114" autocomplete="off" /></div>`,
     actions: [
@@ -481,7 +481,7 @@ async function removeFromISD(app, u) {
   if (!canManageISD(app.user)) return;
   const ok = await confirmDialog({
     title: 'Read out of the Department',
-    message: `Remove ${u.designation}’s Internal Security membership? Their cover post is unaffected.`,
+    message: `Remove ${u.designation}’s Internal Security front? Their unit posting is unaffected.`,
     confirmLabel: 'Read out', danger: true,
   });
   if (!ok) return;

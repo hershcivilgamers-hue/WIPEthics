@@ -20,6 +20,8 @@ import * as api from './api.js';
 import * as sync from './sync.js';
 import { installPaletteShortcut, openPalette } from './command-palette.js';
 import { attachTopbarSearch } from './topbar-search.js';
+import { setOmegaBranding } from './constants.js';
+import { knowsOmegaTruth } from './permissions.js';
 
 import * as loginView from './views/login.js';
 import * as overviewView from './views/overview.js';
@@ -352,6 +354,9 @@ function updateNavBadge(user) {
 
 function renderApp() {
   const user = app.user;
+  // Brand the unit for THIS viewer before anything renders: juniors (and the
+  // signed-out screen) see "Internal Enforcement"; CL4-S+/Ethics see Omega-1.
+  setOmegaBranding(knowsOmegaTruth(user));
   if (!user) {
     loginView.render(root, app);
     return;

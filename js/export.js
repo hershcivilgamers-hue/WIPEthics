@@ -1336,7 +1336,7 @@ export function buildEngagementSummaryHTML(summary, actor) {
     classification: banner('CL4-S', 'Command'),
     inner,
     org: 'omega-1',
-    distribution: org === 'isd' ? 'Internal Security Department.' : 'Omega-1 Command; Site Command.',
+    distribution: org === 'isd' ? 'Internal Security Department.' : `${ORGS['omega-1'].short} Command; Site Command.`,
     footerRef: org === 'isd' ? 'ISD-ENG-SUMMARY' : 'O1-ENG-SUMMARY',
     actor,
   });

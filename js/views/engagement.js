@@ -137,7 +137,7 @@ export function render(host, app, org = 'omega-1') {
           ${SECTIONS.map((s) => `<th class="cell-num" title="Max ${s.max}">${esc(s.label)}</th>`).join('')}
           <th class="cell-num">Total</th><th class="cell-center" title="Total score, last 5 weeks">Trend</th><th class="cell-center" title="Weekly hours against this organisation's own threshold">Readiness</th><th class="cell-center">Reqs</th><th></th>
         </tr></thead>
-        <tbody>${list.length ? bodyRows : `<tr><td colspan="${SECTIONS.length + 6}" class="empty">${isd ? 'No active Internal Security agents.' : 'No active Omega-1 operators.'}</td></tr>`}</tbody>
+        <tbody>${list.length ? bodyRows : `<tr><td colspan="${SECTIONS.length + 6}" class="empty">${isd ? 'No active Internal Security agents.' : `No active ${esc(ORGS['omega-1'].short)} operators.`}</td></tr>`}</tbody>
       </table>
     </div>
     ${isd

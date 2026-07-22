@@ -16,6 +16,7 @@
 import {
   ACTIVITY_STATUS, ACTIVITY_REQ_SETTING_ID, mergeActivityReqs, activityStatus,
   OPERATION_KIND, INTEL_CREDIBILITY, RECRUIT_STAGE, RECRUIT_PIPELINE_OMEGA,
+  ORGS,
 } from '../constants.js';
 import {
   users, getActivityForUser, getSetting, operations, intel, recruits,
@@ -140,7 +141,7 @@ export function render(host, app) {
   host.innerHTML = `
     <div class="page-head">
       <div>
-        <div class="eyebrow">CAIRO \u00b7 Omega-1</div>
+        <div class="eyebrow">CAIRO \u00b7 ${esc(ORGS['omega-1'].short)}</div>
         <h1 class="page-title">Situation Board</h1>
         <div class="page-sub">Unit posture at a glance \u00b7 as of ${fmtDateTime(new Date(m.now).toISOString())}</div>
       </div>

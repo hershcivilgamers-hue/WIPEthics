@@ -212,6 +212,16 @@ export function canApproveRegistrations(actor) {
   return isCL5(actor);
 }
 
+// Who knows MTF Omega-1's true colours (its service to the Committee): senior
+// command — CL4-S and above — and every Ethics Committee member. Everyone else,
+// including junior members of the unit itself and ISD-front holders whose cover
+// clearance is junior, is told the cover story: "Internal Enforcement", ISD's
+// SWAT arm. Drives the per-session branding of ORGS['omega-1'].
+export function knowsOmegaTruth(actor) {
+  if (!actor) return false;
+  return actor.org === 'ethics-committee' || w(actor) >= clearanceWeight('CL4-S');
+}
+
 export function canManageDirectives(actor, org) {
   return canManageOrg(actor, org);
 }

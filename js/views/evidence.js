@@ -12,6 +12,7 @@
 
 import {
   EVIDENCE_STATUS, engagementWeekStart, engagementWeekShift, rankIndex,
+  ORGS,
 } from '../constants.js';
 import {
   users, evidenceFor, getEvidence, upsertEvidence, getUser, upsertUser, newId,
@@ -123,14 +124,14 @@ export function render(host, app) {
     reviewHTML = `
       <section class="card">
         <div class="card__title">Review — ${esc(weekLabel(viewWeek))}</div>
-        <div class="card__body">${roster().length ? rows : '<div class="empty">No active Omega-1 operators.</div>'}</div>
+        <div class="card__body">${roster().length ? rows : `<div class="empty">No active ${esc(ORGS['omega-1'].short)} operators.</div>`}</div>
       </section>`;
   }
 
   host.innerHTML = `
     <div class="page-head">
       <div>
-        <div class="eyebrow">CAIRO · Omega-1</div>
+        <div class="eyebrow">CAIRO · ${esc(ORGS['omega-1'].short)}</div>
         <h1 class="page-title">Evidence</h1>
         <div class="page-sub">Submit evidence of your weekly engagement · counted items feed the Evidence score</div>
       </div>
@@ -145,7 +146,7 @@ export function render(host, app) {
 
     ${mineHTML}
     ${reviewHTML}
-    ${!member && !reviewer ? '<div class="card"><div class="card__body"><div class="empty">Evidence submission is for Omega-1 personnel.</div></div></div>' : ''}
+    ${!member && !reviewer ? `<div class="card"><div class="card__body"><div class="empty">Evidence submission is for ${esc(ORGS['omega-1'].short)} personnel.</div></div></div>` : ''}
   `;
 
   // Week nav

@@ -14,6 +14,7 @@ import {
   INTEL_SOURCE_TYPE, INTEL_SOURCE_TYPE_ORDER, INTEL_STATUS, INTEL_STATUS_ORDER,
   INTEL_RELIABILITY, INTEL_RELIABILITY_ORDER, INTEL_CREDIBILITY, INTEL_CREDIBILITY_ORDER,
   CLEARANCE_ORDER, CLEARANCES, clearanceWeight,
+  ORGS,
 } from '../constants.js';
 import {
   intel, getIntel, upsertIntel, users, getUser, subjects, compartments, newId,
@@ -96,7 +97,7 @@ export function renderList(host, app) {
   host.innerHTML = `
     <div class="page-head">
       <div>
-        <div class="eyebrow">CAIRO \u00b7 Omega-1</div>
+        <div class="eyebrow">CAIRO \u00b7 ${esc(ORGS['omega-1'].short)}</div>
         <h1 class="page-title">Intelligence</h1>
         <div class="page-sub">Sources &amp; informants the regiment is running</div>
       </div>

@@ -145,7 +145,7 @@ export function render(host, app) {
 
     ${ORG_ORDER.map(orgBlock).join('') || '<div class="empty">No operators in your remit are subject to activity requirements.</div>'}
 
-    <p class="field__hint" style="margin-top:14px">Status reflects hours logged since Monday. Omega-1: ${reqs().omegaWeekly}h/week (+ ${reqs().omegaMonthly}h/month). Ethics Assistants: ${reqs().ethicsWeekly}h/week plus an interaction. Other roles are exempt.</p>
+    <p class="field__hint" style="margin-top:14px">Status reflects hours logged since Monday. ${esc(ORGS['omega-1'].short)}: ${reqs().omegaWeekly}h/week (+ ${reqs().omegaMonthly}h/month). Ethics Assistants: ${reqs().ethicsWeekly}h/week plus an interaction. Other roles are exempt.</p>
   `;
 
   const self = host.querySelector('#log-self');

@@ -19,9 +19,12 @@ import { trainings, getTraining, upsertTraining, users, newId } from '../storage
 import { canViewTraining, canManageTraining, isCL5 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { esc, toast, openModal, confirmDialog } from '../ui.js';
+import { ORGS as ORG_META } from '../constants.js';
 
 const ORGS = [
-  { key: 'omega-1', label: 'MTF Omega-1' },
+  // The unit label follows the per-viewer branding (juniors read "Internal
+  // Enforcement"), so read it from the shared ORGS metadata, never a literal.
+  { key: 'omega-1', get label() { return ORG_META['omega-1'].name; } },
   { key: 'ethics-committee', label: 'Ethics Committee' },
   { key: 'command', label: 'Site Command' },
 ];

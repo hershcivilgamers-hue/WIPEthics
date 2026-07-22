@@ -98,7 +98,7 @@ export function renderList(host, app) {
   host.innerHTML = `
     <div class="page-head">
       <div>
-        <div class="eyebrow">CAIRO \u00b7 Omega-1</div>
+        <div class="eyebrow">CAIRO \u00b7 ${esc(ORGS['omega-1'].short)}</div>
         <h1 class="page-title">Deployment Log</h1>
         <div class="page-sub">Operations the regiment is running</div>
       </div>

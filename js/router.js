@@ -9,6 +9,7 @@
 // =============================================================================
 
 import { CONFIG } from './config.js';
+import { ORGS } from './constants.js';
 import { canViewCommandRoster, canAccessAdmin, canManageOrg, canParticipateRecruitment, isCL5, isISD, canManageISD } from './permissions.js';
 
 // Each recruitment feed is for the unit's CL4 cadre (a stake in that org), or CL5.
@@ -57,7 +58,8 @@ export const NAV = [
     ],
   },
   {
-    group: 'MTF Omega-1',
+    // Branded per viewer: juniors read "Internal Enforcement", seniors the truth.
+    get group() { return ORGS['omega-1'].name; },
     items: [
       { name: 'dashboard',     hash: '#/dashboard',           label: 'Situation Board', feature: 'dashboard', guard: canSeeDashboard },
       { name: 'omega-1',       hash: '#/omega-1',             label: 'Personnel Files' },
