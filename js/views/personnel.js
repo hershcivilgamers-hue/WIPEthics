@@ -141,8 +141,9 @@ export function renderList(host, app, org) {
           <div class="page-sub">${esc(meta.motto)} \u00b7 ${roster.length} on roster</div>
         </div>
       </div>
-      ${canManage ? `<button class="btn btn--primary" id="add-personnel">+ New personnel</button>` : ''}
+      ${canManage && !isdRoster ? `<button class="btn btn--primary" id="add-personnel">+ New personnel</button>` : ''}
     </div>
+    ${isdRoster ? '<p class="field__hint">Membership is a covert caveat, not a new record — read an operator into the Department from their own personnel file (their cover post stays intact).</p>' : ''}
 
     <div class="toolbar">
       <input id="flt-q" class="toolbar__search" type="search" placeholder="Search designation or codename\u2026" value="${esc(filter.q)}" />

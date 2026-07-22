@@ -32,6 +32,9 @@ const canSeeISD = (u) => isCL5(u) || isISD(u);
 // ISD scoring is command-tier within the Department (Commissioner/Director).
 const canSeeISDEngagement = (u) => canManageISD(u);
 const canSeeInsight = (u) => isCL5(u);
+// The audit log and the barred register are command-tier oversight tools — not
+// something a CL3 operator acts on, so they are hidden below CL4.
+const isAtLeastCL4 = (u) => u.clearance !== 'CL3';
 
 // Sidebar structure, grouped by organisation. `feature` ties an item to a
 // CONFIG feature flag; `guard` ties it to a permission check.
@@ -49,8 +52,8 @@ export const NAV = [
       { name: 'directives',   hash: '#/directives',   label: 'Standing Orders', feature: 'directives' },
       { name: 'documents',    hash: '#/documents',    label: 'Documents', feature: 'documents' },
       { name: 'terminal',     hash: '#/terminal',     label: 'CAIRO Terminal', feature: 'terminal' },
-      { name: 'activity',     hash: '#/activity',     label: 'Activity Log',    feature: 'activityLog' },
-      { name: 'blacklist',    hash: '#/blacklist',    label: 'Blacklist',       feature: 'blacklist' },
+      { name: 'activity',     hash: '#/activity',     label: 'Activity Log',    feature: 'activityLog', guard: isAtLeastCL4 },
+      { name: 'blacklist',    hash: '#/blacklist',    label: 'Blacklist',       feature: 'blacklist', guard: isAtLeastCL4 },
     ],
   },
   {
@@ -113,6 +116,8 @@ const GUARDS = {
   docket: canSeeDocket,
   recruit: canSeeAnyRecruitment,
   insight: canSeeInsight,
+  activity: isAtLeastCL4,
+  blacklist: isAtLeastCL4,
   isd: canSeeISD,
   investigations: canSeeISD,
   'isd-engagement': canSeeISDEngagement,

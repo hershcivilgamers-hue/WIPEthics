@@ -287,6 +287,11 @@ export const canSeeLeaveReason = (actor, target) => accessLevel(actor, target) =
 // This is checked on direct access in the view, not just by hiding the menu.
 export function canViewSubject(actor, subject) {
   if (!actor || !subject) return false;
+  // Internal Security is internal-affairs, not operations: an agent is walled off
+  // from termination Targets — those are an Ethics/Omega operational matter, and
+  // the Department has no business knowing who is marked. CL5 oversight is exempt.
+  // (This applies to the whole person, so it also holds for their cover post.)
+  if (subject.kind === 'target' && !isCL5(actor) && isISD(actor)) return false;
   return w(actor) >= clearanceWeight(subject.clearance);
 }
 

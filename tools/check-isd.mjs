@@ -8,7 +8,7 @@
 // =============================================================================
 
 import assert from 'node:assert';
-import { isISD, isdWeight, canManageISD, accessLevel, canManageOrg } from '../js/permissions.js';
+import { isISD, isdWeight, canManageISD, accessLevel, canManageOrg, canViewSubject } from '../js/permissions.js';
 import { RANKS, RANK_CLEARANCE, clearanceForRank,
   ACTIVITY_REQ_DEFAULT, activityStatus, activityRequirement } from '../js/constants.js';
 import { redactUser, buildSnapshot } from '../worker/src/redact.js';
@@ -163,4 +163,14 @@ assert.deepEqual(activityRequirement(covered, ACTIVITY_REQ_DEFAULT),
   'the default scope is the operator’s own org — existing callers are unaffected');
 assert.equal(activityRequirement(null, ACTIVITY_REQ_DEFAULT, 'isd').exempt, true, 'no user = exempt');
 
-console.log('OK — ISD covert redaction, ISD-ladder authority, promotion, badge, induction gate, no-cross-org-reach and dual playtime thresholds hold.');
+// --- ISD is walled from termination Targets ----------------------------------
+// Internal affairs, not operations: an agent must not see who is marked for
+// termination, whatever their cover clearance. POIs and non-ISD are unaffected.
+const tgt = { kind: 'target', clearance: 'CL3' };
+const poiSub = { kind: 'poi', clearance: 'CL3' };
+assert.equal(canViewSubject(commissioner, tgt), false, 'an ISD agent cannot see a Target');
+assert.equal(canViewSubject(commissioner, poiSub), true, 'but still sees Persons of Interest');
+assert.equal(canViewSubject(omegaMgr, tgt), true, 'a plain Omega manager is unaffected');
+assert.equal(canViewSubject(cl5, tgt), true, 'CL5 oversight is exempt');
+
+console.log('OK — ISD covert redaction, ISD-ladder authority, promotion, badge, induction gate, no-cross-org-reach, dual playtime thresholds and target-walling hold.');
