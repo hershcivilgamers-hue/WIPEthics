@@ -19,6 +19,7 @@ import { esc, clearanceBadge, toast } from './ui.js';
 import * as api from './api.js';
 import * as sync from './sync.js';
 import { installPaletteShortcut, openPalette } from './command-palette.js';
+import { attachTopbarSearch } from './topbar-search.js';
 
 import * as loginView from './views/login.js';
 import * as overviewView from './views/overview.js';
@@ -203,7 +204,9 @@ function renderShell(user, route) {
             <button class="nav-toggle" id="nav-toggle" type="button" aria-label="Open navigation menu" aria-expanded="false">☰</button>
             <div class="topbar__title">${esc(CONFIG.systemName)} <span class="topbar__sub">${esc(CONFIG.systemSubtitle)}</span></div>
             <div class="topbar__search-wrap">
-              <input id="topbar-search" class="topbar__search" type="search" placeholder="Search records\u2026" value="${esc(searchView.getQuery())}" autocomplete="off" aria-label="Search records" />
+              <div class="topbar__search-box">
+                <input id="topbar-search" class="topbar__search" type="search" placeholder="Search records\u2026" value="${esc(searchView.getQuery())}" autocomplete="off" aria-label="Search records" />
+              </div>
               <button id="cmdk-launch" class="cmdk-launch" type="button" title="Command palette \u2014 \u2318K / Ctrl-K" aria-label="Open command palette"><kbd>\u2318K</kbd></button>
             </div>
             <div class="topbar__op">
@@ -254,15 +257,7 @@ function renderShell(user, route) {
   if (navBackdrop) navBackdrop.addEventListener('click', () => setNav(false));
 
   const topbarSearch = root.querySelector('#topbar-search');
-  if (topbarSearch) {
-    const submit = () => {
-      searchView.setQuery(topbarSearch.value);
-      if (route.name !== 'search') app.navigate('#/search');
-      else dispatch(parseHash(), user);
-    };
-    topbarSearch.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
-    topbarSearch.addEventListener('search', submit);
-  }
+  if (topbarSearch) attachTopbarSearch(topbarSearch, app);
 
   const cmdkLaunch = root.querySelector('#cmdk-launch');
   if (cmdkLaunch) cmdkLaunch.addEventListener('click', () => openPalette(app));

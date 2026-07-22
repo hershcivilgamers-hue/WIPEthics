@@ -296,9 +296,9 @@
 
 /* --- Global search box in the topbar --- */
 .topbar__search-wrap { flex: 1; display: flex; justify-content: center; align-items: center; gap: var(--s2); padding: 0 var(--s4); }
+.topbar__search-box { position: relative; width: 100%; max-width: 440px; }
 .topbar__search {
   width: 100%;
-  max-width: 440px;
   background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -309,6 +309,24 @@
 }
 .topbar__search:focus { outline: none; border-color: var(--amber); box-shadow: 0 0 0 3px rgba(200, 162, 75, .15); }
 .topbar__search::placeholder { color: var(--text-3); }
+
+/* Inline "search as you type" dropdown, anchored under the search box. Rows
+   reuse the ⌘K palette's .cmdk__* classes for a consistent look. */
+.topbar__results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0; right: 0;
+  z-index: 60;
+  max-height: 62vh;
+  overflow-y: auto;
+  padding: var(--s2);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+.topbar__results[hidden] { display: none; }
+.topbar__results-foot { position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--line); margin-top: var(--s1); }
 
 /* ===========================================================================
    Responsive — tablet/phone: the sidebar collapses to a drawer (REC-01).
