@@ -52,8 +52,9 @@ export function redactUser(actor, user) {
     ...((isCL5(actor) || isISD(actor)) && user.isd ? { isd: user.isd } : {}),
     // Interest in Internal Security, flagged at sign-up, is itself covert — shown
     // only to ISD/CL5, the same audience that can see membership. Command (CL5)
-    // sees it to activate the cover post; ISD command sees it to induct.
-    ...((isCL5(actor) || isISD(actor)) && user.requestedISD ? { requestedISD: true } : {}),
+    // sees it to activate the cover post; ISD command sees it to induct. The
+    // value is `true` or the ISD rank sought (e.g. 'Investigator').
+    ...((isCL5(actor) || isISD(actor)) && user.requestedISD ? { requestedISD: user.requestedISD } : {}),
   };
 
   if (level === 'full') {

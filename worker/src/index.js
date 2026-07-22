@@ -19,7 +19,7 @@ import { authorizeWrite } from './gate.js';
 import { assessInterview } from './interview-assess.js';
 import { buildSnapshot, redactUser, redactDirective, redactCompartment, redactDocument } from './redact.js';
 import { canReadDirective, compartmentClears, canManageOrg, isCL5, canParticipateRecruitment } from '../../js/permissions.js';
-import { CLEARANCES } from '../../js/constants.js';
+import { CLEARANCES, RANKS } from '../../js/constants.js';
 
 const WRITABLE = new Set(['users', 'documents', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'engagement', 'evidence', 'investigations', 'inductions', 'blacklist', 'promo_reqs', 'settings']);
 const SNAPSHOT = ['users', 'documents', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'engagement', 'evidence', 'investigations', 'inductions', 'blacklist', 'promo_reqs', 'settings', 'audit'];
@@ -192,6 +192,10 @@ async function register(request, repo, env) {
   if (!['omega-1', 'ethics-committee'].includes(requestedOrg)) {
     return json({ error: 'Invalid organisation.' }, 400, env);
   }
+  // requestedISD is `true` (bare interest) or the ISD rank sought.
+  const isdReq = typeof requestedISD === 'string'
+    ? ((RANKS.isd || []).includes(requestedISD) ? requestedISD : true)
+    : !!requestedISD;
   const existing = await repo.getUserByUsername(username);
   if (existing) return json({ error: 'That operator ID is already in use.' }, 409, env);
 
@@ -212,14 +216,16 @@ async function register(request, repo, env) {
     accountStatus: 'pending',
     requestedOrg,
     requestedRank: requestedRank || null,
-    // Internal Security interest, flagged at sign-up. It only marks the request;
-    // the caveat itself is granted later through ISD induction, never here.
-    ...(requestedISD ? { requestedISD: true } : {}),
+    // Internal Security interest, flagged at sign-up — optionally carrying the
+    // ISD rank sought (validated against the ISD ladder; junk collapses to a
+    // bare flag). It only marks the request; the caveat itself is granted later
+    // through ISD induction, never here.
+    ...(isdReq ? { requestedISD: isdReq } : {}),
     awards: [], strikes: [], promoChecks: [], leave: null, notes: [], events: [],
     createdAt: now, updatedAt: now, version: 1, deleted: false, deletedAt: null,
   };
   await repo.insert('users', record);
-  await repo.addAudit({ id: uid(), ts: now, actor: codename, action: 'REGISTRATION', detail: `Access requested for ${requestedISD ? 'Internal Security (Omega-1 cover)' : requestedOrg}${requestedRank ? ` (rank sought: ${requestedRank})` : ''}.` });
+  await repo.addAudit({ id: uid(), ts: now, actor: codename, action: 'REGISTRATION', detail: `Access requested for ${isdReq ? 'Internal Security (Omega-1 cover)' : requestedOrg}${typeof isdReq === 'string' ? ` (ISD rank sought: ${isdReq})` : (requestedRank ? ` (rank sought: ${requestedRank})` : '')}.` });
   return json({ ok: true }, 201, env);
 }
 

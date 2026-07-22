@@ -112,7 +112,7 @@ function drawRegistrations(panel, app) {
       <label class="req-card__check"><input type="checkbox" data-reg-check="${esc(u.id)}" ${regSel.has(u.id) ? 'checked' : ''} /></label>
       <div class="req-card__main">
         <div class="req-card__name">${esc(u.codename)} <span class="mono req-card__id">${esc(u.designation)}</span>${u.requestedISD ? ' <span class="badge badge--warn">Internal Security</span>' : ''}</div>
-        <div class="req-card__meta">Requested ${orgTag(u.requestedOrg || u.org)} ${esc(ORGS[u.requestedOrg || u.org].name)}${u.requestedISD ? ' <span class="muted-text">(ISD cover)</span>' : ''}${u.requestedRank ? ` \u00b7 rank sought <strong>${esc(u.requestedRank)}</strong>${clearanceForRank(u.requestedOrg || u.org, u.requestedRank) ? ` (${esc(clearanceForRank(u.requestedOrg || u.org, u.requestedRank))})` : ''}` : ''} \u00b7 ${fmtDate(u.createdAt)} \u00b7 operator ID <span class="mono">${esc(u.username)}</span></div>
+        <div class="req-card__meta">Requested ${orgTag(u.requestedOrg || u.org)} ${esc(ORGS[u.requestedOrg || u.org].name)}${u.requestedISD ? ' <span class="muted-text">(ISD cover)</span>' : ''}${typeof u.requestedISD === 'string' ? ` \u00b7 ISD rank sought <strong>${esc(u.requestedISD)}</strong>${clearanceForRank('isd', u.requestedISD) ? ` (${esc(clearanceForRank('isd', u.requestedISD))})` : ''}` : ''}${u.requestedRank ? ` \u00b7 rank sought <strong>${esc(u.requestedRank)}</strong>${clearanceForRank(u.requestedOrg || u.org, u.requestedRank) ? ` (${esc(clearanceForRank(u.requestedOrg || u.org, u.requestedRank))})` : ''}` : ''} \u00b7 ${fmtDate(u.createdAt)} \u00b7 operator ID <span class="mono">${esc(u.username)}</span></div>
         ${u.requestedISD ? '<div class="req-card__meta">\u21b3 Requested <strong>Internal Security</strong> access. Activate the cover post here; ISD command completes induction from the personnel file.</div>' : ''}
       </div>
       <div class="req-card__actions">
@@ -147,7 +147,9 @@ function bulkApprove(app, panel, idList) {
   const rows = applicants.map((u) => {
     const org = u.requestedOrg || u.org;
     const ranks = RANKS[org] || [];
-    const want = ranks.includes(u.requestedRank) ? u.requestedRank : ranks[0];
+    // An ISD applicant requested an ISD rank, not a cover rank — default their
+    // cover to the most junior post (a cover should be unremarkable).
+    const want = ranks.includes(u.requestedRank) ? u.requestedRank : (u.requestedISD ? ranks[ranks.length - 1] : ranks[0]);
     const opts = ranks.map((r) => `<option value="${esc(r)}" ${r === want ? 'selected' : ''}>${esc(r)}${clearanceForRank(org, r) ? ` \u2014 ${esc(clearanceForRank(org, r))}` : ''}</option>`).join('');
     return `<tr>
       <td class="cell-name">${esc(u.codename)} <span class="mono muted-text">${esc(u.username)}</span></td>
@@ -206,8 +208,10 @@ function approve(app, id) {
   const ranks = RANKS[org] || [];
   const ceiling = CLEARANCES[app.user.clearance].weight;
   const allowed = CLEARANCE_ORDER.filter((c) => CLEARANCES[c].weight <= ceiling);
-  // Pre-select what the applicant asked for, when it's valid for this org.
-  const wantRank = ranks.includes(u.requestedRank) ? u.requestedRank : ranks[0];
+  // Pre-select what the applicant asked for, when it's valid for this org. An
+  // ISD applicant asked for an ISD rank, not a cover rank — default their cover
+  // to the most junior post (a cover should be unremarkable).
+  const wantRank = ranks.includes(u.requestedRank) ? u.requestedRank : (u.requestedISD ? ranks[ranks.length - 1] : ranks[0]);
   const wantClr = clearanceForRank(org, wantRank);
   const rankOpts = ranks.map((r) => `<option value="${esc(r)}" ${r === wantRank ? 'selected' : ''}>${esc(r)}</option>`).join('');
   const clrOpts = allowed.map((c) => `<option value="${c}" ${c === wantClr ? 'selected' : ''}>${esc(CLEARANCES[c].label)}</option>`).join('');
@@ -216,7 +220,7 @@ function approve(app, id) {
     title: `Approve \u2014 ${u.codename}`,
     body: `
       <p class="modal__message">Confirm organisation, assign a rank and clearance. A permanent designation is issued on approval.</p>
-      ${u.requestedISD ? '<div class="req-card__meta" style="margin-bottom:10px">\u21b3 This applicant requested <strong>Internal Security</strong> access. You are activating their Omega-1 <em>cover post</em> \u2014 the ISD caveat is granted separately by ISD command through induction.</div>' : ''}
+      ${u.requestedISD ? `<div class="req-card__meta" style="margin-bottom:10px">\u21b3 This applicant requested <strong>Internal Security</strong> access${typeof u.requestedISD === 'string' ? ` as <strong>${esc(u.requestedISD)}</strong>` : ''}. You are activating their Omega-1 <em>cover post</em> \u2014 the ISD caveat (and rank) is granted separately by ISD command through induction.</div>` : ''}
       <div class="field"><label>Organisation</label>
         <select id="ap-org">${['omega-1', 'ethics-committee', 'command'].map((o) => `<option value="${o}" ${o === org ? 'selected' : ''}>${esc(ORGS[o].name)}</option>`).join('')}</select></div>
       <div class="field"><label>Rank</label><select id="ap-rank">${rankOpts}</select></div>

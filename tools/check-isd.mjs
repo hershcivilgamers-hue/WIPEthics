@@ -100,12 +100,12 @@ assert.equal(usr(commissioner, inducted, withBadge).ok, false, 'even ISD command
 // covert as membership (CL5/ISD only) and never itself grants the caveat — that
 // still runs through induction on an isolated write, flag and all.
 const pendISD = { id: 'p1', designation: 'PENDING', codename: 'Aspirant', org: 'omega-1', rank: null, clearance: null,
-  accountStatus: 'pending', requestedOrg: 'omega-1', requestedRank: 'Private', requestedISD: true, version: 1, deleted: false };
+  accountStatus: 'pending', requestedOrg: 'omega-1', requestedRank: null, requestedISD: 'Investigator', version: 1, deleted: false };
 
 assert.ok(!('requestedISD' in redactUser(cl3, pendISD)), 'an outsider never learns of an ISD sign-up request');
 assert.ok(!('requestedISD' in redactUser(omegaMgr, pendISD)), 'even an Omega manager does not');
-assert.equal(redactUser(cl5, pendISD).requestedISD, true, 'Command sees the request, to activate the cover');
-assert.equal(redactUser(commissioner, pendISD).requestedISD, true, 'ISD command sees it, to induct');
+assert.equal(redactUser(cl5, pendISD).requestedISD, 'Investigator', 'Command sees the request — and the ISD rank sought');
+assert.equal(redactUser(commissioner, pendISD).requestedISD, 'Investigator', 'ISD command sees it, to induct at that rank');
 
 // Approval activates the cover post; the flag rides along, ungranted.
 const activated = { ...pendISD, accountStatus: 'active', rank: 'Private', clearance: 'CL3', designation: 'O1-11', version: 2 };

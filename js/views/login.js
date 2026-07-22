@@ -178,12 +178,20 @@ function openRegister(app) {
     .join('') + `<option value="${ISD_OPTION}">Internal Security Department</option>`;
 
   const firstOrg = ORG_ORDER.filter((o) => o !== 'command')[0];
-  // Ethics Committee intake is always at Assistant — Members and the Chairman are
-  // appointed by promotion, not requested at registration. ISD rides an Omega-1
-  // cover post, so its rank list is Omega-1's.
-  const ranksForOrg = (o) => (coverOrgOf(o) === 'ethics-committee' ? ['Assistant'] : (RANKS[coverOrgOf(o)] || []));
+  // The rank list follows the ladder you are actually applying to: an ISD
+  // applicant seeks an ISD rank (Operative, Investigator, Inspector, …) — the
+  // Omega-1 cover rank is Command's to assign, not theirs to request. Ethics
+  // Committee intake is always at Assistant — Members and the Chairman are
+  // appointed by promotion, not requested at registration.
+  const ladderOrgOf = (o) => (o === ISD_OPTION ? 'isd' : o);
+  const ranksForOrg = (o) => {
+    const lo = ladderOrgOf(o);
+    if (lo === 'ethics-committee') return ['Assistant'];
+    if (lo === 'isd') return (RANKS.isd || []).slice().reverse(); // junior-first, like the induction form
+    return RANKS[lo] || [];
+  };
   const rankOptionsFor = (o) => ranksForOrg(o).map((r) => {
-    const clr = clearanceForRank(coverOrgOf(o), r);
+    const clr = clearanceForRank(ladderOrgOf(o), r);
     return `<option value="${esc(r)}">${esc(r)}${clr ? ` \u2014 ${esc(clr)}` : ''}</option>`;
   }).join('');
 
@@ -196,7 +204,7 @@ function openRegister(app) {
     <div class="field"><label>Organisation</label><select id="reg-org">${orgOptions}</select></div>
     <div class="field"><label>Rank sought</label><select id="reg-rank">${rankOptionsFor(firstOrg)}</select></div>
     <div class="field__hint">Your requested rank sets the clearance you're asking for. Command may adjust it on approval.</div>
-    <div class="field__hint" id="reg-isd-hint" hidden>Internal Security officers hold a cover post in Omega-1 — your rank above is that cover. Command activates the cover post; Internal Security command completes your induction and grants the caveat afterwards.</div>
+    <div class="field__hint" id="reg-isd-hint" hidden>The rank above is on the Internal Security ladder. Officers also hold an unremarkable Omega-1 cover post, which Command assigns on approval; Internal Security command completes your induction and grants the caveat afterwards.</div>
     <div class="field"><label>Operator ID</label><input id="reg-username" type="text" placeholder="login name" spellcheck="false" /></div>
     <div class="field"><label>Passphrase</label><input id="reg-password" type="password" placeholder="choose a passphrase" /></div>
     <div id="reg-error" class="auth__error" hidden></div>
@@ -213,9 +221,13 @@ function openRegister(app) {
         onClick: async (close, dlg) => {
           const codename = dlg.querySelector('#reg-codename').value.trim();
           const orgChoice = dlg.querySelector('#reg-org').value;
-          const requestedISD = orgChoice === ISD_OPTION;
+          const rankChoice = dlg.querySelector('#reg-rank').value || null;
+          const isISDPick = orgChoice === ISD_OPTION;
+          // For ISD the rank sought is an ISD rank and rides in requestedISD;
+          // the cover rank stays unrequested (Command assigns a modest cover).
+          const requestedISD = isISDPick ? (rankChoice || true) : false;
           const org = coverOrgOf(orgChoice); // ISD lands on its Omega-1 cover post
-          const requestedRank = dlg.querySelector('#reg-rank').value || null;
+          const requestedRank = isISDPick ? null : rankChoice;
           const username = dlg.querySelector('#reg-username').value.trim();
           const password = dlg.querySelector('#reg-password').value;
           const err = dlg.querySelector('#reg-error');
@@ -268,9 +280,9 @@ function openRegister(app) {
             accountStatus: 'pending',
             requestedOrg: org,
             requestedRank,
-            ...(requestedISD ? { requestedISD: true } : {}),
+            ...(requestedISD ? { requestedISD } : {}),
             awards: [], strikes: [], leave: null, notes: [],
-            events: [{ id: newId('evt'), date: now, type: 'registration', text: `Access request submitted for ${requestedISD ? 'Internal Security Department (Omega-1 cover)' : ORGS[org].name}${requestedRank ? ` \u2014 rank sought: ${requestedRank}` : ''}.` }],
+            events: [{ id: newId('evt'), date: now, type: 'registration', text: `Access request submitted for ${requestedISD ? 'Internal Security Department (Omega-1 cover)' : ORGS[org].name}${typeof requestedISD === 'string' ? ` \u2014 ISD rank sought: ${requestedISD}` : (requestedRank ? ` \u2014 rank sought: ${requestedRank}` : '')}.` }],
             createdAt: now, updatedAt: now, version: 1, deleted: false, deletedAt: null,
           });
           logAction(null, 'REGISTRATION', `New access request: ${codename} \u2192 ${ORGS[org].short}.`);

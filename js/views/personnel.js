@@ -339,7 +339,7 @@ function sectionISD(u, actor) {
     return `<section class="card ${asked ? 'card--alert' : ''}">
       <div class="card__title">Internal Security ${asked ? '<span class="badge badge--warn">Requested at sign-up</span>' : ''}</div>
       <div class="card__body">
-        ${asked ? `<p>${esc(u.codename)} requested Internal Security access when they registered. Read them in to complete induction, or leave the request standing.</p>` : ''}
+        ${asked ? `<p>${esc(u.codename)} requested Internal Security access${typeof u.requestedISD === 'string' ? ` as <strong>${esc(u.requestedISD)}</strong>` : ''} when they registered. Read them in to complete induction, or leave the request standing.</p>` : ''}
         <p class="muted">This operator is not read into the Department. Their cover post is ${orgTag(u.org)} ${esc(u.rank || '—')}.</p>
         <div class="btn-row" style="margin-top:8px"><button class="btn btn--sm btn--primary" data-act="isd-induct">Read into Internal Security…</button></div>
         <p class="field__hint" style="margin-top:8px">Only the Department and CL5 can see this control, or that it could exist.</p>
@@ -447,8 +447,10 @@ async function isdRankMove(app, u, dir) {
 function openISDInduct(app, u) {
   const actor = app.user;
   if (!canManageISD(actor)) { toast('Internal Security membership is set by ISD command.', 'error'); return; }
-  const rankOpts = RANKS.isd.slice().reverse() // offer junior-first
-    .map((rk) => `<option value="${esc(rk)}">${esc(rk)} · ${esc(clearanceForRank('isd', rk))}</option>`).join('');
+  // Junior-first; preselect the rank the operator asked for at sign-up, if any.
+  const wantRank = RANKS.isd.includes(u.requestedISD) ? u.requestedISD : null;
+  const rankOpts = RANKS.isd.slice().reverse()
+    .map((rk) => `<option value="${esc(rk)}" ${rk === wantRank ? 'selected' : ''}>${esc(rk)} · ${esc(clearanceForRank('isd', rk))}</option>`).join('');
   openModal({
     title: `Read into Internal Security — ${u.designation}`,
     body: `<p class="modal__message">This grants a covert Internal Security identity alongside ${esc(u.codename)}’s cover post. It is visible only to the Department and CL5.</p>
