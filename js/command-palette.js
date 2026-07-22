@@ -31,6 +31,9 @@ function navTargets(user) {
 
 export function openPalette(app) {
   if (overlay || !app || !app.user) return;
+  // Never open over a dialog — Ctrl-K mid-form would let the palette navigate
+  // the page beneath an open modal and strand (or appear to swallow) the form.
+  if (document.querySelector('.modal-backdrop')) return;
   lastFocus = document.activeElement;
 
   overlay = document.createElement('div');

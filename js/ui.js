@@ -209,7 +209,13 @@ export function openModal({ title, body, actions = [], wide = false }) {
     if (e.key === 'Escape') { closeModal(); return; }
     trapTab(e, dialog);
   };
-  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeModal(); });
+  // Close on a backdrop click only when the press STARTED there too. A click's
+  // target is the common ancestor of mousedown and mouseup — so selecting text
+  // inside the dialog (to copy/paste) and releasing past its edge used to land
+  // a "click" on the backdrop and swallow the form. Track the press instead.
+  let pressOnBackdrop = false;
+  backdrop.addEventListener('mousedown', (e) => { pressOnBackdrop = e.target === backdrop; });
+  backdrop.addEventListener('click', (e) => { if (pressOnBackdrop && e.target === backdrop) closeModal(); pressOnBackdrop = false; });
   dialog.querySelector('[data-close]').addEventListener('click', closeModal);
   document.addEventListener('keydown', onKey);
 

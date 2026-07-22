@@ -81,14 +81,6 @@ export const NAV = [
     ],
   },
   {
-    group: 'Site Command',
-    items: [
-      { name: 'command', hash: '#/command', label: 'Personnel Files', guard: canViewCommandRoster },
-      { name: 'insight', hash: '#/insight', label: 'Insight',         guard: canSeeInsight },
-      { name: 'admin',   hash: '#/admin',   label: 'Administration',  guard: canAccessAdmin },
-    ],
-  },
-  {
     // Covert: the whole group is absent unless the viewer is ISD (or CL5). An
     // operator who is not read in sees no trace that the department exists.
     group: 'Internal Security',
@@ -97,6 +89,15 @@ export const NAV = [
       { name: 'investigations', hash: '#/investigations', label: 'Investigations', feature: 'investigations', guard: canSeeISD },
       { name: 'isd-engagement', hash: '#/isd/engagement', label: 'Engagement', feature: 'engagement', guard: canSeeISDEngagement },
       { name: 'isd-induction', hash: '#/isd/induction', label: 'Induction', feature: 'inductions', guard: canSeeISD },
+    ],
+  },
+  {
+    // Last on the sidebar by design: Command's own tools sit below the units.
+    group: 'Site Command',
+    items: [
+      { name: 'command', hash: '#/command', label: 'Personnel Files', guard: canViewCommandRoster },
+      { name: 'insight', hash: '#/insight', label: 'Insight',         guard: canSeeInsight },
+      { name: 'admin',   hash: '#/admin',   label: 'Administration',  guard: canAccessAdmin },
     ],
   },
 ];

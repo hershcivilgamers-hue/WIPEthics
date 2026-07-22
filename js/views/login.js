@@ -189,8 +189,7 @@ function openRegister(app) {
   const ranksForOrg = (o) => {
     const lo = ladderOrgOf(o);
     if (lo === 'ethics-committee') return ['Assistant'];
-    if (lo === 'isd') return (RANKS.isd || []).slice().reverse(); // junior-first, like the induction form
-    return RANKS[lo] || [];
+    return RANKS[lo] || []; // ladder order, senior first — Director atop ISD like Commander atop Omega
   };
   const rankOptionsFor = (o) => ranksForOrg(o).map((r) => {
     const clr = clearanceForRank(ladderOrgOf(o), r);

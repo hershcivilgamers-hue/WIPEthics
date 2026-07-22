@@ -91,8 +91,10 @@ export function init({ refresh: r, toast: t, onAuthLost: a } = {}) {
 //   • stays silent on network failures (the write path already reports real
 //     errors loudly) — only a dead session (401) is surfaced, once.
 // ---------------------------------------------------------------------------
-const AUTO_REFRESH_MS = 120000;    // slow tick while the tab is visible
-const REFRESH_MIN_GAP_MS = 20000;  // focus events can arrive in bursts
+// ponytail: 30s polling, not live push — WebSockets/Durable Objects if a
+// same-page edit ever needs to appear in under half a minute.
+const AUTO_REFRESH_MS = 30000;     // tick while the tab is visible
+const REFRESH_MIN_GAP_MS = 10000;  // focus events can arrive in bursts
 let refreshTimer = null;
 let lastTickAt = 0;
 let lastSnapshotJson = null;
