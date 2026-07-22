@@ -111,8 +111,9 @@ function drawRegistrations(panel, app) {
     <div class="card req-card">
       <label class="req-card__check"><input type="checkbox" data-reg-check="${esc(u.id)}" ${regSel.has(u.id) ? 'checked' : ''} /></label>
       <div class="req-card__main">
-        <div class="req-card__name">${esc(u.codename)} <span class="mono req-card__id">${esc(u.designation)}</span></div>
-        <div class="req-card__meta">Requested ${orgTag(u.requestedOrg || u.org)} ${esc(ORGS[u.requestedOrg || u.org].name)}${u.requestedRank ? ` \u00b7 rank sought <strong>${esc(u.requestedRank)}</strong>${clearanceForRank(u.requestedOrg || u.org, u.requestedRank) ? ` (${esc(clearanceForRank(u.requestedOrg || u.org, u.requestedRank))})` : ''}` : ''} \u00b7 ${fmtDate(u.createdAt)} \u00b7 operator ID <span class="mono">${esc(u.username)}</span></div>
+        <div class="req-card__name">${esc(u.codename)} <span class="mono req-card__id">${esc(u.designation)}</span>${u.requestedISD ? ' <span class="badge badge--warn">Internal Security</span>' : ''}</div>
+        <div class="req-card__meta">Requested ${orgTag(u.requestedOrg || u.org)} ${esc(ORGS[u.requestedOrg || u.org].name)}${u.requestedISD ? ' <span class="muted-text">(ISD cover)</span>' : ''}${u.requestedRank ? ` \u00b7 rank sought <strong>${esc(u.requestedRank)}</strong>${clearanceForRank(u.requestedOrg || u.org, u.requestedRank) ? ` (${esc(clearanceForRank(u.requestedOrg || u.org, u.requestedRank))})` : ''}` : ''} \u00b7 ${fmtDate(u.createdAt)} \u00b7 operator ID <span class="mono">${esc(u.username)}</span></div>
+        ${u.requestedISD ? '<div class="req-card__meta">\u21b3 Requested <strong>Internal Security</strong> access. Activate the cover post here; ISD command completes induction from the personnel file.</div>' : ''}
       </div>
       <div class="req-card__actions">
         <button class="btn btn--primary btn--sm" data-approve="${esc(u.id)}">Approve</button>
@@ -215,6 +216,7 @@ function approve(app, id) {
     title: `Approve \u2014 ${u.codename}`,
     body: `
       <p class="modal__message">Confirm organisation, assign a rank and clearance. A permanent designation is issued on approval.</p>
+      ${u.requestedISD ? '<div class="req-card__meta" style="margin-bottom:10px">\u21b3 This applicant requested <strong>Internal Security</strong> access. You are activating their Omega-1 <em>cover post</em> \u2014 the ISD caveat is granted separately by ISD command through induction.</div>' : ''}
       <div class="field"><label>Organisation</label>
         <select id="ap-org">${['omega-1', 'ethics-committee', 'command'].map((o) => `<option value="${o}" ${o === org ? 'selected' : ''}>${esc(ORGS[o].name)}</option>`).join('')}</select></div>
       <div class="field"><label>Rank</label><select id="ap-rank">${rankOpts}</select></div>

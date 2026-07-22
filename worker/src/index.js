@@ -183,9 +183,14 @@ async function login(request, repo, env) {
 
 async function register(request, repo, env) {
   const body = await request.json().catch(() => ({}));
-  const { codename, username, password, requestedOrg, requestedRank } = body;
+  const { codename, username, password, requestedOrg, requestedRank, requestedISD } = body;
   if (!codename || !username || !password || !requestedOrg) {
     return json({ error: 'Codename, username, password and organisation are required.' }, 400, env);
+  }
+  // A cover org must be a real, self-registerable organisation. Internal Security
+  // is a caveat, not an org — it arrives as requestedISD on an Omega-1 cover.
+  if (!['omega-1', 'ethics-committee'].includes(requestedOrg)) {
+    return json({ error: 'Invalid organisation.' }, 400, env);
   }
   const existing = await repo.getUserByUsername(username);
   if (existing) return json({ error: 'That operator ID is already in use.' }, 409, env);
@@ -207,11 +212,14 @@ async function register(request, repo, env) {
     accountStatus: 'pending',
     requestedOrg,
     requestedRank: requestedRank || null,
+    // Internal Security interest, flagged at sign-up. It only marks the request;
+    // the caveat itself is granted later through ISD induction, never here.
+    ...(requestedISD ? { requestedISD: true } : {}),
     awards: [], strikes: [], promoChecks: [], leave: null, notes: [], events: [],
     createdAt: now, updatedAt: now, version: 1, deleted: false, deletedAt: null,
   };
   await repo.insert('users', record);
-  await repo.addAudit({ id: uid(), ts: now, actor: codename, action: 'REGISTRATION', detail: `Access requested for ${requestedOrg}${requestedRank ? ` (rank sought: ${requestedRank})` : ''}.` });
+  await repo.addAudit({ id: uid(), ts: now, actor: codename, action: 'REGISTRATION', detail: `Access requested for ${requestedISD ? 'Internal Security (Omega-1 cover)' : requestedOrg}${requestedRank ? ` (rank sought: ${requestedRank})` : ''}.` });
   return json({ ok: true }, 201, env);
 }
 

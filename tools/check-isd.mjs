@@ -95,6 +95,28 @@ assert.equal(usr(self, inducted, withBadge).action, 'SET_ISD_BADGE', 'an agent r
 assert.equal(usr(inspector, inducted, withBadge).ok, false, 'an agent cannot set someone else\'s badge');
 assert.equal(usr(commissioner, inducted, withBadge).ok, false, 'even ISD command uses the membership path, not the badge path, for others');
 
+// --- Sign-up ISD interest: covert flag, then normal induction ----------------
+// A prospective officer flags Internal Security at registration. The flag is as
+// covert as membership (CL5/ISD only) and never itself grants the caveat — that
+// still runs through induction on an isolated write, flag and all.
+const pendISD = { id: 'p1', designation: 'PENDING', codename: 'Aspirant', org: 'omega-1', rank: null, clearance: null,
+  accountStatus: 'pending', requestedOrg: 'omega-1', requestedRank: 'Private', requestedISD: true, version: 1, deleted: false };
+
+assert.ok(!('requestedISD' in redactUser(cl3, pendISD)), 'an outsider never learns of an ISD sign-up request');
+assert.ok(!('requestedISD' in redactUser(omegaMgr, pendISD)), 'even an Omega manager does not');
+assert.equal(redactUser(cl5, pendISD).requestedISD, true, 'Command sees the request, to activate the cover');
+assert.equal(redactUser(commissioner, pendISD).requestedISD, true, 'ISD command sees it, to induct');
+
+// Approval activates the cover post; the flag rides along, ungranted.
+const activated = { ...pendISD, accountStatus: 'active', rank: 'Private', clearance: 'CL3', designation: 'O1-11', version: 2 };
+assert.equal(usr(cl5, pendISD, activated).action, 'APPROVE_REGISTRATION', 'Command approves the cover post');
+assert.ok(!('isd' in activated), 'approval grants NO caveat — the account is a plain cover post');
+
+// Induction afterwards is the usual isolated isd write; the standing flag does not trip changedOutside.
+const activeFlagged = { id: 'p1', designation: 'O1-11', org: 'omega-1', rank: 'Private', clearance: 'CL3', accountStatus: 'active', requestedISD: true, version: 2, deleted: false };
+const inductedFlagged = { ...activeFlagged, isd: { rank: 'Operative', clearance: 'CL3', standing: 'active', badgeNumber: null }, version: 3 };
+assert.equal(usr(commissioner, activeFlagged, inductedFlagged).action, 'SET_ISD_MEMBERSHIP', 'induction still passes with the sign-up flag present');
+
 // --- Promotion on the ISD ladder ---------------------------------------------
 // Rank moves realign the ISD clearance and reset the ISD checklist, and must
 // leave the cover post completely alone.
@@ -173,4 +195,4 @@ assert.equal(canViewSubject(commissioner, poiSub), true, 'but still sees Persons
 assert.equal(canViewSubject(omegaMgr, tgt), true, 'a plain Omega manager is unaffected');
 assert.equal(canViewSubject(cl5, tgt), true, 'CL5 oversight is exempt');
 
-console.log('OK — ISD covert redaction, ISD-ladder authority, promotion, badge, induction gate, no-cross-org-reach, dual playtime thresholds and target-walling hold.');
+console.log('OK — ISD covert redaction, ISD-ladder authority, promotion, badge, induction gate, sign-up interest flag, no-cross-org-reach, dual playtime thresholds and target-walling hold.');

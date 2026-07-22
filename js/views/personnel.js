@@ -335,9 +335,11 @@ function sectionISD(u, actor) {
   // create an agent in-app; the record `isd` is otherwise stripped for everyone.
   if (!u.isd) {
     if (!canManageISD(actor) || u.accountStatus !== 'active') return '';
-    return `<section class="card">
-      <div class="card__title">Internal Security</div>
+    const asked = !!u.requestedISD; // flagged their interest at sign-up
+    return `<section class="card ${asked ? 'card--alert' : ''}">
+      <div class="card__title">Internal Security ${asked ? '<span class="badge badge--warn">Requested at sign-up</span>' : ''}</div>
       <div class="card__body">
+        ${asked ? `<p>${esc(u.codename)} requested Internal Security access when they registered. Read them in to complete induction, or leave the request standing.</p>` : ''}
         <p class="muted">This operator is not read into the Department. Their cover post is ${orgTag(u.org)} ${esc(u.rank || '—')}.</p>
         <div class="btn-row" style="margin-top:8px"><button class="btn btn--sm btn--primary" data-act="isd-induct">Read into Internal Security…</button></div>
         <p class="field__hint" style="margin-top:8px">Only the Department and CL5 can see this control, or that it could exist.</p>

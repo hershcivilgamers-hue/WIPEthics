@@ -167,17 +167,23 @@ export function render(host, app) {
 
 // --- Access request (self-registration) -------------------------------------
 function openRegister(app) {
+  // Internal Security is listed openly, but it isn't a fourth organisation — an
+  // officer holds a cover post in Omega-1. Picking it requests that cover plus
+  // the ISD caveat; Command activates the cover, ISD command inducts afterwards.
+  const ISD_OPTION = '__isd';
+  const coverOrgOf = (o) => (o === ISD_OPTION ? 'omega-1' : o);
   const orgOptions = ORG_ORDER
     .filter((o) => o !== 'command') // you don't self-register into Command
     .map((o) => `<option value="${o}">${esc(ORGS[o].name)}</option>`)
-    .join('');
+    .join('') + `<option value="${ISD_OPTION}">Internal Security Department</option>`;
 
   const firstOrg = ORG_ORDER.filter((o) => o !== 'command')[0];
   // Ethics Committee intake is always at Assistant — Members and the Chairman are
-  // appointed by promotion, not requested at registration.
-  const ranksForOrg = (o) => (o === 'ethics-committee' ? ['Assistant'] : (RANKS[o] || []));
+  // appointed by promotion, not requested at registration. ISD rides an Omega-1
+  // cover post, so its rank list is Omega-1's.
+  const ranksForOrg = (o) => (coverOrgOf(o) === 'ethics-committee' ? ['Assistant'] : (RANKS[coverOrgOf(o)] || []));
   const rankOptionsFor = (o) => ranksForOrg(o).map((r) => {
-    const clr = clearanceForRank(o, r);
+    const clr = clearanceForRank(coverOrgOf(o), r);
     return `<option value="${esc(r)}">${esc(r)}${clr ? ` \u2014 ${esc(clr)}` : ''}</option>`;
   }).join('');
 
@@ -190,6 +196,7 @@ function openRegister(app) {
     <div class="field"><label>Organisation</label><select id="reg-org">${orgOptions}</select></div>
     <div class="field"><label>Rank sought</label><select id="reg-rank">${rankOptionsFor(firstOrg)}</select></div>
     <div class="field__hint">Your requested rank sets the clearance you're asking for. Command may adjust it on approval.</div>
+    <div class="field__hint" id="reg-isd-hint" hidden>Internal Security officers hold a cover post in Omega-1 — your rank above is that cover. Command activates the cover post; Internal Security command completes your induction and grants the caveat afterwards.</div>
     <div class="field"><label>Operator ID</label><input id="reg-username" type="text" placeholder="login name" spellcheck="false" /></div>
     <div class="field"><label>Passphrase</label><input id="reg-password" type="password" placeholder="choose a passphrase" /></div>
     <div id="reg-error" class="auth__error" hidden></div>
@@ -205,7 +212,9 @@ function openRegister(app) {
         tone: 'primary',
         onClick: async (close, dlg) => {
           const codename = dlg.querySelector('#reg-codename').value.trim();
-          const org = dlg.querySelector('#reg-org').value;
+          const orgChoice = dlg.querySelector('#reg-org').value;
+          const requestedISD = orgChoice === ISD_OPTION;
+          const org = coverOrgOf(orgChoice); // ISD lands on its Omega-1 cover post
           const requestedRank = dlg.querySelector('#reg-rank').value || null;
           const username = dlg.querySelector('#reg-username').value.trim();
           const password = dlg.querySelector('#reg-password').value;
@@ -222,7 +231,7 @@ function openRegister(app) {
           // pending account for Command to approve later. No local write.
           if (api.serverMode()) {
             try {
-              await api.register({ codename, username, password, requestedOrg: org, requestedRank });
+              await api.register({ codename, username, password, requestedOrg: org, requestedRank, requestedISD });
             } catch (e) {
               err.textContent = e && e.status === 409
                 ? 'That operator ID is already in use.'
@@ -259,8 +268,9 @@ function openRegister(app) {
             accountStatus: 'pending',
             requestedOrg: org,
             requestedRank,
+            ...(requestedISD ? { requestedISD: true } : {}),
             awards: [], strikes: [], leave: null, notes: [],
-            events: [{ id: newId('evt'), date: now, type: 'registration', text: `Access request submitted for ${ORGS[org].name}${requestedRank ? ` \u2014 rank sought: ${requestedRank}` : ''}.` }],
+            events: [{ id: newId('evt'), date: now, type: 'registration', text: `Access request submitted for ${requestedISD ? 'Internal Security Department (Omega-1 cover)' : ORGS[org].name}${requestedRank ? ` \u2014 rank sought: ${requestedRank}` : ''}.` }],
             createdAt: now, updatedAt: now, version: 1, deleted: false, deletedAt: null,
           });
           logAction(null, 'REGISTRATION', `New access request: ${codename} \u2192 ${ORGS[org].short}.`);
@@ -271,11 +281,16 @@ function openRegister(app) {
     ],
   });
 
-  // Keep the rank-sought list in step with the chosen organisation.
+  // Keep the rank-sought list in step with the chosen organisation, and reveal
+  // the cover-post note when Internal Security is chosen.
   const regOrg = dialog.querySelector('#reg-org');
   const regRank = dialog.querySelector('#reg-rank');
+  const isdHint = dialog.querySelector('#reg-isd-hint');
   if (regOrg && regRank) {
-    regOrg.addEventListener('change', () => { regRank.innerHTML = rankOptionsFor(regOrg.value); });
+    regOrg.addEventListener('change', () => {
+      regRank.innerHTML = rankOptionsFor(regOrg.value);
+      if (isdHint) isdHint.hidden = regOrg.value !== ISD_OPTION;
+    });
   }
 
   return dialog;
