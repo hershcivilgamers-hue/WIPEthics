@@ -78,9 +78,11 @@
 }
 .rec-link .mono { color: var(--text-2); }
 
-/* Small helper text under a form field. */
+/* Small helper text under a form field. The bottom margin keeps a loose hint
+   (one placed between fields, not inside one) from gluing to the next field. */
 .field__hint {
   margin-top: 5px;
+  margin-bottom: var(--s2);
   color: var(--text-3);
   font-size: 11.5px;
   line-height: 1.4;

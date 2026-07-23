@@ -3,7 +3,7 @@
 // =============================================================================
 
 import { CONFIG } from '../config.js';
-import { ORGS, ORG_ORDER, RANKS, clearanceForRank } from '../constants.js';
+import { ORGS, ORG_ORDER, RANKS, CLEARANCES, clearanceForRank } from '../constants.js';
 import { users, upsertUser, newId, applyServerSnapshot } from '../storage.js';
 import { verifyPassword, makeCredential } from '../crypto.js';
 import { startSession, setServerUser } from '../state.js';
@@ -193,7 +193,8 @@ function openRegister(app) {
   };
   const rankOptionsFor = (o) => ranksForOrg(o).map((r) => {
     const clr = clearanceForRank(ladderOrgOf(o), r);
-    return `<option value="${esc(r)}">${esc(r)}${clr ? ` \u2014 ${esc(clr)}` : ''}</option>`;
+    const clrLabel = clr ? (CLEARANCES[clr]?.label || clr) : '';
+    return `<option value="${esc(r)}">${esc(r)}${clrLabel ? ` \u2014 ${esc(clrLabel)}` : ''}</option>`;
   }).join('');
 
   const body = `

@@ -220,8 +220,8 @@ function renderShell(user, route) {
               <select id="theme-select" class="theme-select js-theme-select" aria-label="Display theme" title="Display theme">
                 ${THEMES.map((t) => `<option value="${t.id}" ${t.id === getTheme() ? 'selected' : ''}>${t.label}</option>`).join('')}
               </select>
-              <button class="btn btn--ghost btn--sm" id="tour-btn" data-act="tour" title="Re-run the system tour">Tour</button>
-              <button class="btn btn--ghost btn--sm" id="change-pass" data-act="change-pass">Change passphrase</button>
+              <button class="btn btn--ghost btn--sm topbar__iconbtn" id="tour-btn" data-act="tour" title="Re-run the system tour" aria-label="Re-run the system tour"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.3a3 3 0 0 1 5.6 1.2c0 2-3 2.5-3 2.5"/><path d="M12 17h.01"/></svg></button>
+              <button class="btn btn--ghost btn--sm topbar__iconbtn" id="change-pass" data-act="change-pass" title="Change passphrase" aria-label="Change passphrase"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M10.85 12.15 20 3"/><path d="M17 6l2.5 2.5"/><path d="M14.5 8.5 17 11"/></svg></button>
               <button class="btn btn--ghost btn--sm" id="logout" data-act="logout">Sign out</button>
             </div>
           </header>

@@ -130,7 +130,7 @@ export function render(host, app, org = 'omega-1') {
 
     ${atRisk.length ? `<div class="readiness-banner readiness-banner--warn"><strong>${atRisk.length}</strong> of ${list.length} operator${list.length === 1 ? '' : 's'} below the weekly engagement requirement this week.</div>` : ''}
 
-    <div class="card">
+    <div class="card card--scrollx">
       <table class="table eng-table">
         <thead><tr>
           <th>Operator</th>

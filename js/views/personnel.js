@@ -128,9 +128,9 @@ export function renderList(host, app, org) {
   const rows = roster.length ? roster.map((u) => `
     <tr data-id="${esc(u.id)}" tabindex="0">
       ${canManage ? `<td class="cell-check"><input type="checkbox" data-row-check="${esc(u.id)}" ${rosterSel.has(u.id) ? 'checked' : ''} /></td>` : ''}
-      <td class="mono">${esc(isdRoster ? (u.isd?.badgeNumber ? `#${u.isd.badgeNumber}` : '\u2014') : u.designation)}</td>
+      <td class="mono">${isdRoster ? (u.isd?.badgeNumber ? `#${esc(u.isd.badgeNumber)}` : '<span class="muted-text">\u2014</span>') : esc(u.designation)}</td>
       <td class="cell-name">${esc(u.codename)}${u.accountStatus === 'suspended' ? ' <span class="badge badge--bad">Suspended</span>' : ''}${tagChips(u, { compact: true })}</td>
-      <td>${isdRoster ? `${rankInsignia('isd', u.isd?.rank)} ${esc(u.isd?.rank || '\u2014')}` : `${rankInsignia(u.org, u.rank)} ${esc(u.rank || '\u2014')}`}</td>
+      <td>${isdRoster ? `${esc(u.isd?.rank || '')}${u.isd?.rank ? '' : '<span class="muted-text">\u2014</span>'}` : `${rankInsignia(u.org, u.rank)} ${esc(u.rank || '\u2014')}`}</td>
       <td>${clearanceBadge(isdRoster ? u.isd?.clearance : u.clearance)}</td>
       <td>${statusBadge(u.status)}</td>
       <td class="cell-right"><span class="row-go">Open \u2192</span></td>

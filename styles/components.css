@@ -9,6 +9,9 @@
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
+/* A card whose content is wider than the column (e.g. the engagement grid)
+   scrolls horizontally within its own bounds instead of clipping. */
+.card--scrollx { overflow-x: auto; }
 .card__title {
   padding: var(--s3) var(--s4);
   border-bottom: 1px solid var(--line);
@@ -705,6 +708,11 @@
   .table thead th, .table tbody td, .data-table th, .data-table td { white-space: nowrap; }
   .cmdk-backdrop { padding: 8vh var(--s3) var(--s3); }
   .modal-backdrop { padding: var(--s3); align-items: flex-start; }
+  /* A tab strip scrolls sideways rather than blowing out the viewport; the
+     file-action buttons wrap onto a second row instead of overflowing. */
+  .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tabs .tab { flex: 0 0 auto; white-space: nowrap; }
+  .file-actions { flex-wrap: wrap; }
 }
 
 /* ===========================================================================

@@ -275,7 +275,7 @@ export function renderCase(host, app, id) {
       </div>` : '';
     return `<div class="ex-item">
       <div class="ex-item__head"><span class="ex-item__title">${esc(x.title)}</span>
-        ${x.link ? `<a class="rec-link" href="${esc(x.link)}" target="_blank" rel="noopener">link ↗</a>` : ''}
+        ${x.link ? `<a class="ex-item__link" href="${esc(x.link)}" target="_blank" rel="noopener">link ↗</a>` : ''}
         <span class="badge badge--${m.tone}">${esc(m.label)}</span></div>
       ${x.detail ? `<div class="ex-item__note">${linkify(esc(x.detail))}</div>` : ''}
       <div class="ex-item__meta"><span class="mono">${esc(x.by || '—')}</span>${x.ruledBy ? ` · ruled by ${esc(x.ruledBy)}` : ''}</div>

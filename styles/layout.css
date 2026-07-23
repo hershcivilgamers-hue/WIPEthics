@@ -148,9 +148,20 @@
   background: var(--surface);
   border-bottom: 1px solid var(--line);
 }
-.topbar__title { font-weight: 700; letter-spacing: .03em; }
+.topbar__title { font-weight: 700; letter-spacing: .03em; flex: 0 0 auto; }
 .topbar__sub { color: var(--text-3); font-weight: 400; font-size: 12px; letter-spacing: .04em; margin-left: var(--s2); }
-.topbar__op { display: flex; align-items: center; gap: var(--s3); }
+.topbar__op { display: flex; align-items: center; gap: var(--s3); flex: 0 0 auto; }
+/* The persistent chip is "who am I" — codename + clearance. The mono
+   designation is on every dossier and roster, so it needn't crowd the bar
+   here; it returns in the mobile account drawer. Reclaiming it lets the
+   global search box keep a usable width instead of collapsing. */
+.topbar__op .op-chip__id { display: none; }
+.topbar__op .theme-select { max-width: 128px; }
+/* Secondary account actions ride as compact icons so the global search keeps a
+   usable width; each carries a title + aria-label, and the full-text versions
+   live in the mobile account drawer. */
+.topbar__iconbtn { padding: 6px 8px; }
+.topbar__iconbtn svg { display: block; }
 
 .op-chip {
   display: flex;
@@ -295,8 +306,8 @@
 }
 
 /* --- Global search box in the topbar --- */
-.topbar__search-wrap { flex: 1; display: flex; justify-content: center; align-items: center; gap: var(--s2); padding: 0 var(--s4); }
-.topbar__search-box { position: relative; width: 100%; max-width: 440px; }
+.topbar__search-wrap { flex: 1 1 auto; min-width: 0; display: flex; justify-content: center; align-items: center; gap: var(--s2); padding: 0 var(--s4); }
+.topbar__search-box { position: relative; width: 100%; max-width: 520px; }
 .topbar__search {
   width: 100%;
   background: var(--surface-2);
@@ -367,7 +378,8 @@
   .topbar__title { font-size: 14px; }
   .topbar__sub { display: none; }
   .topbar__search-wrap { flex: 1; justify-content: flex-end; padding: 0; }
-  .topbar__search { display: none; }              /* the palette is mobile search */
+  .topbar__search-box { min-width: 0; display: none; } /* the palette is mobile search */
+  .topbar__search { display: none; }
   .op-chip { padding: var(--s1) var(--s2); }
   .op-chip__id, .op-chip__name { display: none; } /* keep just the clearance badge */
   .topbar__op .theme-select,
