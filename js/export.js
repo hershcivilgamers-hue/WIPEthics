@@ -672,6 +672,86 @@ export function buildSubjectDocumentHTML(subject, actor) {
 }
 
 // ===========================================================================
+// SURVEILLANCE SUBJECT — OPENING REPORT
+// The formal notice dispatched when a POI/Target file is opened: a memorandum
+// to the owning organisation's authority (and, for a Target, the Ethics
+// Committee) recording who opened the file, on what grounds, and how product
+// is to be handled. The email of record for the thread's first day.
+// ===========================================================================
+export function buildOpeningReportHTML(subject, actor) {
+  const kind = SUBJECT_CLASS[subject.kind]?.label || subject.kind;
+  const threat = THREAT_LEVELS[subject.threat]?.label || subject.threat || '—';
+  const isTarget = subject.kind === 'target';
+  const auth = subject.authorization || null;
+  const opener = subject.createdBy || (auth && auth.requestedBy) || 'SYSTEM';
+
+  const toLine = isTarget
+    ? `${authorityBody(subject.org)}; the Ethics Committee (oversight)`
+    : authorityBody(subject.org);
+
+  const fields = [
+    ['Reference', esc(subject.ref)],
+    ['Designation', `“${esc(subject.alias)}”`],
+    ['Identity on File', esc(subject.realName || '[UNIDENTIFIED]')],
+    ['Category', esc(kind)],
+    ['Threat Assessment', esc(threat)],
+    ['Last Known Location', esc(subject.lastKnownLocation || '—')],
+    ['Sensitivity', esc(clrLabel(subject.clearance))],
+    ['Caveat', subject.compartment ? esc(subject.compartmentName || '[COMPARTMENTED]') : '—'],
+  ];
+
+  // A Target's opening report always states where the termination authority
+  // stands — granted, refused, or awaiting the Committee.
+  let authBlock = '';
+  if (isTarget) {
+    const st = auth && auth.status;
+    if (st === 'authorised') {
+      authBlock = `<div class="notice"><strong>TERMINATION AUTHORISATION.</strong> Authorised by ${esc((auth && auth.by) || 'the Ethics Committee')}${auth && auth.at ? ` on ${longDate(auth.at)}` : ''}. Action against the subject is lawful only within the terms of that authorisation.</div>`;
+    } else if (st === 'refused') {
+      authBlock = '<div class="notice"><strong>AUTHORISATION REFUSED.</strong> The Ethics Committee has refused termination authority. The file continues as surveillance only.</div>';
+    } else {
+      authBlock = `<div class="notice"><strong>AUTHORISATION PENDING.</strong> Termination authority has been requested${auth && auth.requestedBy ? ` by ${esc(auth.requestedBy)}` : ''} and awaits the Ethics Committee’s ruling. No action is authorised until it is granted.</div>`;
+    }
+  }
+
+  const inner = `
+    ${letterhead(subject.org, 'Surveillance Section')}
+    <hr class="rule" />
+    <div class="memo-title">Memorandum</div>
+    <div class="doc-sub">Opening of Surveillance File</div>
+    <hr class="rule" />
+    <table class="memo-h"><tbody>
+      <tr><td class="ml">To</td><td>${esc(toLine)}</td></tr>
+      <tr><td class="ml">From</td><td>Surveillance Section, ${esc(ORGS[subject.org]?.name || subject.org)}</td></tr>
+      <tr><td class="ml">Date</td><td>${longDate(subject.createdAt)}</td></tr>
+      <tr><td class="ml">Reference</td><td>${esc(subject.ref)}</td></tr>
+      <tr><td class="ml">Subject</td><td>Opening of surveillance file — ${esc(kind)} “${esc(subject.alias)}”</td></tr>
+      <tr><td class="ml">Classification</td><td>${esc(clrLabel(subject.clearance))} — Restricted</td></tr>
+    </tbody></table>
+    <hr class="rule" />
+    <div class="jhead">1.&nbsp;&nbsp;Purpose</div>
+    <p>A surveillance file has been opened under the reference above, effective ${longDate(subject.createdAt)}. The particulars of the subject as recorded at opening are as follows:</p>
+    <div class="fieldgrid">${fields.map(([k, v]) => `<div class="field"><span class="fl">${esc(k)}</span><span class="fv">${v}</span></div>`).join('')}</div>
+    <div class="jhead">2.&nbsp;&nbsp;Grounds</div>
+    ${paras(subject.summary || 'No initial assessment was recorded at opening.')}
+    ${authBlock}
+    <div class="jhead">3.&nbsp;&nbsp;Handling</div>
+    <p>All product concerning the subject is to be entered in the surveillance log under this reference. Distribution is restricted to the addressees${subject.compartment ? ' and to personnel read into the caveat above' : ''}; further dissemination requires the originating section’s consent.</p>
+    ${signBlock({ name: esc(opener), role: `Originating officer, Surveillance Section, ${authorityBody(subject.org)}`, dated: `Opened ${longDate(subject.createdAt)}` })}
+  `;
+
+  return frameDoc({
+    title: 'Opening Report',
+    classification: banner(subject.clearance, 'Surveillance'),
+    inner,
+    org: subject.org,
+    distribution: isTarget ? 'Originating section; the Ethics Committee.' : 'Originating surveillance section.',
+    footerRef: subject.ref,
+    actor,
+  });
+}
+
+// ===========================================================================
 // SOURCE FILE — intelligence source dossier (handler's working copy)
 // ===========================================================================
 export function buildSourceFileHTML(src, actor) {
@@ -1374,6 +1454,10 @@ export function exportCase(app, record) {
 export function exportSubject(app, subject) {
   logAction(app.user, 'EXPORT_SUBJECT', `Generated surveillance record for ${subject.ref}.`);
   openDocument(buildSubjectDocumentHTML(subject, app.user), `${subject.ref}-surveillance-report.html`);
+}
+export function exportOpeningReport(app, subject) {
+  logAction(app.user, 'EXPORT_SUBJECT', `Generated opening report for ${subject.ref}.`);
+  openDocument(buildOpeningReportHTML(subject, app.user), `${subject.ref}-opening-report.html`);
 }
 export function exportPersonnel(app, user) {
   logAction(app.user, 'EXPORT_PERSONNEL', `Generated personnel file for ${user.designation}.`);

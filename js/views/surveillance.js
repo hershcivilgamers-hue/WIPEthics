@@ -19,7 +19,7 @@ import {
   isCL5, readIntoCompartment, canManageTribunal, canViewCase,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
-import { exportSubject } from '../export.js';
+import { exportSubject, exportOpeningReport } from '../export.js';
 import { stalenessBadge } from '../staleness.js';
 import { renderHistory } from '../record-history.js';
 import {
@@ -277,6 +277,7 @@ export function renderSubject(host, app, id) {
   host.innerHTML = `
     <div class="file-actions">
       <button class="btn btn--ghost btn--sm" id="back">\u2190 Registry</button>
+      <button class="btn btn--sm" id="export-opening" title="The memorandum of record for this file's opening">\u2399 Opening report</button>
       <button class="btn btn--sm" id="export-subject">\u2913 Export record</button>
     </div>
 
@@ -351,6 +352,7 @@ export function renderSubject(host, app, id) {
 
   host.querySelector('#back').addEventListener('click', () => app.navigate('#/surveillance'));
   host.querySelector('#export-subject').addEventListener('click', () => exportSubject(app, s));
+  host.querySelector('#export-opening').addEventListener('click', () => exportOpeningReport(app, s));
 
   const dispatch = {
     log: () => openLog(app, s),
@@ -532,17 +534,22 @@ function openCreate(app) {
           const authorization = kind === 'target'
             ? { status: 'authorised', by: actor.designation, at: now, requestedBy: actor.designation, note: 'Opened directly by Ethics member.' }
             : null;
-          upsertSubject({
+          const record = {
             id: newId('sub'), ref, alias, realName: '[UNIDENTIFIED]', kind, org,
             threat, clearance: clr, status: 'active', summary, lastKnownLocation: loc,
             compartment: comp, images: [], authorization,
             logs: [{ id: newId('log'), ts: now, by: actor.designation, type: 'intel', text: `Record opened by ${actor.designation}.` }],
             createdBy: actor.designation, createdAt: now, updatedAt: now,
             version: 1, deleted: false, deletedAt: null,
-          });
+          };
+          upsertSubject(record);
           logAction(actor, 'CREATE_SUBJECT', `Opened ${ref} (${alias}) under ${ORGS[org].short}.`);
           c();
           toast(`Subject ${ref} opened.`, 'success');
+          // The instrument itself: the memorandum of record notifying command
+          // (and, for a Target, the Committee) that the file is open — mirrors
+          // how issuing a summons presents its formal document for service.
+          exportOpeningReport(app, record);
           app.refresh();
         } },
     ],
