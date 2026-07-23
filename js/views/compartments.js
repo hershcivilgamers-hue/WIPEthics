@@ -24,6 +24,7 @@ import {
   canManageOrg, isCL5,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
+import { moderationBar, wireModerationBar } from '../moderation.js';
 import {
   esc, fmtDate, fmtDateTime, clearanceBadge, orgTag, monogram,
   toast, openModal, confirmDialog,
@@ -250,6 +251,7 @@ export function renderCompartment(host, app, id) {
       </div>
     </header>
 
+    ${moderationBar(actor, { already: isAdmin })}
     ${isAdmin ? `<div class="actionbar">
       ${sealed
         ? '<button class="btn btn--sm" data-act="unseal">Unseal</button>'
@@ -294,6 +296,7 @@ export function renderCompartment(host, app, id) {
   `;
 
   host.querySelector('#back').addEventListener('click', () => app.navigate('#/compartments'));
+  wireModerationBar(host, app, { label: `compartment ${c.ref || c.name}`, get: () => getCompartment(c.id), upsert: upsertCompartment, backHash: '#/compartments' });
 
   const dispatch = {
     readin: () => openReadIn(app, c),

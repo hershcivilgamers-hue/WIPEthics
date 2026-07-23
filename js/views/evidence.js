@@ -21,7 +21,7 @@ import {
 } from '../storage.js';
 import {
   isCL5, canManageOrg, canManageSubject, canLogIntel, canLogToOperation,
-  canManageTribunal, canViewCase,
+  canManageTribunal, canViewCase, canModerate,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { esc, fmtDate, toast, openModal, confirmDialog } from '../ui.js';
@@ -76,6 +76,9 @@ function itemRow(e, controls) {
 export function render(host, app) {
   const actor = app.user;
   const reviewer = isReviewer(actor);
+  // An Administrator with no review authority still gets a read + remove view,
+  // so evidence someone shouldn't have posted can be pulled.
+  const staffOnly = !reviewer && canModerate(actor);
   const member = actor.org === ORG;
 
   // --- my own submissions (any Omega operator) ---
@@ -96,7 +99,7 @@ export function render(host, app) {
 
   // --- reviewer roster ---
   let reviewHTML = '';
-  if (reviewer) {
+  if (reviewer || staffOnly) {
     const rows = roster().map((u) => {
       const items = evidenceFor(u.id, viewWeek).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
       const counted = items.filter((e) => e.status === 'counted').length;
@@ -104,8 +107,9 @@ export function render(host, app) {
       const reviewChip = u.evidenceReviewRequired ? '<span class="badge badge--warn">review required</span>' : '';
       const itemsHTML = items.length ? items.map((e) => {
         const btns = [];
-        if (e.status !== 'counted') btns.push(`<button class="btn btn--xs" data-ev-count="${esc(e.id)}">Count</button>`);
-        if (e.status !== 'rejected') btns.push(`<button class="btn btn--xs btn--danger" data-ev-reject="${esc(e.id)}">Reject</button>`);
+        if (reviewer && e.status !== 'counted') btns.push(`<button class="btn btn--xs" data-ev-count="${esc(e.id)}">Count</button>`);
+        if (reviewer && e.status !== 'rejected') btns.push(`<button class="btn btn--xs btn--danger" data-ev-reject="${esc(e.id)}">Reject</button>`);
+        if (staffOnly) btns.push(`<button class="btn btn--xs btn--danger" data-ev-modremove="${esc(e.id)}" title="Administrator moderation — removes this submission">⚑ Remove (staff)</button>`);
         return itemRow(e, btns.join(' '));
       }).join('') : '<div class="empty">No submissions.</div>';
       return `
@@ -114,8 +118,8 @@ export function render(host, app) {
             <div><span class="mono">${esc(u.designation)}</span> ${esc(u.codename || '')} ${reviewChip}</div>
             <div class="ev-op__right">
               <span class="muted-text">${counted} counted${pending ? ` · ${pending} in review` : ''}</span>
-              <button class="btn btn--xs" data-ev-file="${esc(u.id)}">File for…</button>
-              <button class="btn btn--xs" data-ev-toggle="${esc(u.id)}">${u.evidenceReviewRequired ? 'Clear review' : 'Require review'}</button>
+              ${reviewer ? `<button class="btn btn--xs" data-ev-file="${esc(u.id)}">File for…</button>
+              <button class="btn btn--xs" data-ev-toggle="${esc(u.id)}">${u.evidenceReviewRequired ? 'Clear review' : 'Require review'}</button>` : ''}
             </div>
           </div>
           <div class="ev-list">${itemsHTML}</div>
@@ -160,6 +164,22 @@ export function render(host, app) {
   const addMine = host.querySelector('#ev-add-mine');
   if (addMine) addMine.addEventListener('click', () => openSubmit(app, meFull));
   host.querySelectorAll('[data-ev-withdraw]').forEach((b) => b.addEventListener('click', () => withdraw(app, b.dataset.evWithdraw)));
+  host.querySelectorAll('[data-ev-modremove]').forEach((b) => b.addEventListener('click', async () => {
+    const item = getEvidence(b.dataset.evModremove);
+    if (!item) { app.refresh(); return; }
+    const ok = await confirmDialog({
+      title: 'Remove as staff',
+      message: `Remove “${item.title}” to the recycle bin? This is an Administrator action and is written to the audit log.`,
+      confirmLabel: 'Remove', danger: true,
+    });
+    if (!ok) return;
+    const cur = getEvidence(item.id);
+    if (!cur) { app.refresh(); return; }
+    upsertEvidence({ ...cur, deleted: true, deletedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), version: (cur.version || 1) + 1 });
+    logAction(app.user, 'MODERATE_REMOVE', `Evidence “${cur.title}” removed by an Administrator.`);
+    toast('Removed to the recycle bin.', 'success');
+    app.refresh();
+  }));
 
   // Reviewer actions
   host.querySelectorAll('[data-ev-count]').forEach((b) => b.addEventListener('click', () => review(app, b.dataset.evCount, 'counted')));

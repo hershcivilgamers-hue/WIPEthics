@@ -13,7 +13,7 @@ import {
   EXTERNAL_BLACKLIST_SETTING_ID, normalizeSheetSources, toSheetCsvUrl, parseCsv, mapSheetRows,
 } from '../constants.js';
 import { blacklist, getBlacklistEntry, upsertBlacklistEntry, newId, getSetting, upsertSetting } from '../storage.js';
-import { canManageOrg, isCL5, canManageSettings } from '../permissions.js';
+import { canManageOrg, isCL5, canManageSettings, canModerate } from '../permissions.js';
 import { esc, fmtDate, orgTag, toast, openModal, confirmDialog } from '../ui.js';
 import { logAction } from '../audit.js';
 
@@ -179,12 +179,24 @@ function openEntry(app, id) {
       toast(lifted ? 'Entry reinstated.' : 'Entry lifted.', 'success');
       app.refresh();
     } });
-    actions.push({ label: 'Remove', tone: 'danger', onClick: async (c) => {
+  }
+  // Removal is the raising org's manager — or an Administrator moderating an
+  // entry they have no ordinary authority over.
+  const asStaff = !canManage && canModerate(actor);
+  if (canManage || asStaff) {
+    actions.push({ label: asStaff ? '⚑ Remove (staff)' : 'Remove', tone: 'danger', onClick: async (c) => {
       c();
-      const ok = await confirmDialog({ title: 'Remove entry', message: `Remove the blacklist entry for ${b.name}?`, confirmLabel: 'Remove', danger: true });
+      const ok = await confirmDialog({
+        title: asStaff ? 'Remove as staff' : 'Remove entry',
+        message: asStaff
+          ? `Remove the blacklist entry for ${b.name} to the recycle bin? This is an Administrator action and is written to the audit log.`
+          : `Remove the blacklist entry for ${b.name}?`,
+        confirmLabel: 'Remove', danger: true,
+      });
       if (!ok) return;
       const cur = getBlacklistEntry(id);
       upsertBlacklistEntry({ ...cur, deleted: true, deletedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), version: (cur.version || 1) + 1 });
+      logAction(actor, asStaff ? 'MODERATE_REMOVE' : 'REMOVE_BLACKLIST', `Blacklist entry ${b.name} removed${asStaff ? ' by an Administrator' : ''}.`);
       toast('Entry removed.', 'success');
       app.refresh();
     } });

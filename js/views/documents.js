@@ -12,6 +12,7 @@
 
 import { ORGS, CLEARANCE_ORDER, CLEARANCES, clearanceWeight } from '../constants.js';
 import { documents, getDocument, upsertDocument, newId } from '../storage.js';
+import { moderationBar, wireModerationBar } from '../moderation.js';
 import { canComposeDocument, canViewDocument, canManageOrg, isCL5 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { exportCustomDocument, buildCustomDocumentHTML } from '../export.js';
@@ -111,11 +112,13 @@ function renderReadonly(host, app, doc) {
         <button class="btn btn--primary" id="doc-export">Export</button>
       </div>
     </div>
+    ${moderationBar(actor, { already: false })}
     <div class="card"><div class="card__body"><iframe class="doc-preview" title="Document preview"></iframe></div></div>`;
   const frame = host.querySelector('.doc-preview');
   if (frame) frame.srcdoc = buildCustomDocumentHTML(doc, app.user);
   host.querySelector('#doc-back').addEventListener('click', () => app.navigate('#/documents'));
   host.querySelector('#doc-export').addEventListener('click', () => exportCustomDocument(app, doc));
+  wireModerationBar(host, app, { label: `document ${doc.ref}`, get: () => getDocument(doc.id), upsert: upsertDocument, backHash: '#/documents' });
 }
 
 const BLOCK_LABELS = {

@@ -32,6 +32,7 @@ import { exportCSV } from '../csv.js';
 import { exportInterviewScript, exportInterviewInvite, exportFeedbackSheet } from '../export.js';
 import * as api from '../api.js';
 import { logAction } from '../audit.js';
+import { moderationBar, wireModerationBar } from '../moderation.js';
 import {
   esc, fmtDate, fmtDateTime, relTime, orgTag, monogram,
   toast, openModal, confirmDialog,
@@ -416,6 +417,7 @@ export function renderRecruit(host, app, id) {
     </header>
 
     ${actions.length ? `<div class="actionbar">${actions.join('')}</div>` : ''}
+    ${moderationBar(actor, { already: false })}
     ${tagRow}
 
     <div class="dossier-grid">
@@ -454,6 +456,7 @@ export function renderRecruit(host, app, id) {
   `;
 
   host.querySelector('#back').addEventListener('click', () => app.navigate(backHash(r)));
+  wireModerationBar(host, app, { label: `candidate ${r.ref || r.name}`, get: () => getRecruit(r.id), upsert: upsertRecruit, backHash: backHash(r) });
 
   const dispatch = {
     greenlight: () => advance(app, r, 'greenlit'),

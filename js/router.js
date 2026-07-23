@@ -10,7 +10,7 @@
 
 import { CONFIG } from './config.js';
 import { ORGS } from './constants.js';
-import { canViewCommandRoster, canAccessAdmin, canManageOrg, canParticipateRecruitment, isCL5, isISD, canManageISD } from './permissions.js';
+import { canViewCommandRoster, canAccessAdmin, canManageOrg, canParticipateRecruitment, isCL5, isISD, canManageISD, isAdmin } from './permissions.js';
 
 // Each recruitment feed is for the unit's CL4 cadre (a stake in that org), or CL5.
 const canSeeOmegaRecruitment = (u) => isCL5(u) || canParticipateRecruitment(u, 'omega-1');
@@ -214,8 +214,16 @@ export function parseHash() {
 }
 
 // May this user reach this route?
+// Administration is CL5's alone even for staff: it holds clearance assignment,
+// the grant of the Administrator power itself, and the permanent purge.
+const STAFF_BARRED = new Set(['admin']);
+
 export function isRouteAllowed(name, user) {
   if (featureBlocked(name)) return false;
+  // An Administrator can reach any page they may have to moderate — the data
+  // layer already grants them read-through, so the route must not stop them
+  // short of the content. Their extra POWER is still only remove/restore.
+  if (isAdmin(user) && !STAFF_BARRED.has(name)) return true;
   const guard = GUARDS[name];
   if (guard && !guard(user)) return false;
   return true;
