@@ -79,6 +79,24 @@ assert.equal(usr(cl5, plain, inducted).action, 'SET_ISD_MEMBERSHIP', 'CL5 induct
 assert.equal(usr(omegaMgr, plain, inducted).ok, false, 'an Omega manager cannot induct into the ISD');
 assert.equal(usr(inspector, plain, inducted).ok, false, 'an Inspector cannot induct');
 
+// --- Minting: a record BORN with a front (the ISD intake path) ---------------
+// Needs both halves — posting-org creation authority AND ISD command — and the
+// front obeys induction integrity. Also the closed hole: an org manager cannot
+// quietly embed `isd` in an ordinary personnel creation.
+const covComm = { id: 'i5', designation: 'O1-2', org: 'omega-1', rank: 'Commander', clearance: 'CL4-S',
+  isd: { rank: 'Commissioner', clearance: 'CL4-S', standing: 'active' } };
+const born = { id: 'nb', designation: 'O1-12', org: 'omega-1', rank: 'Private', clearance: 'CL3',
+  accountStatus: 'active', version: 1, deleted: false,
+  isd: { rank: 'Investigator', clearance: 'CL3', standing: 'active', badgeNumber: null, promoChecks: [] } };
+assert.equal(usr(cl5, null, born).action, 'CREATE_PERSONNEL', 'CL5 mints an agent in one write');
+assert.equal(usr(covComm, null, born).ok, false, 'even an ISD Commissioner cannot mint — assigning the posting clearance is CL5’s (canSetClearance)');
+assert.equal(usr(commissioner, null, born).ok, false, 'ISD command on a junior cover cannot mint postings');
+// The closed hole: with no clearance set, the clearance rule stays silent — the
+// front check alone must still stop an org manager embedding `isd` at creation.
+assert.equal(usr(omegaMgr, null, { ...born, clearance: null }).ok, false, 'an org manager cannot embed a front in an ordinary creation');
+assert.equal(usr(cl5, null, { ...born, isd: { ...born.isd, rank: 'Overlord' } }).ok, false, 'invalid front rank refused at birth');
+assert.equal(usr(cl5, null, { ...born, isd: { ...born.isd, clearance: 'CL5' } }).ok, false, 'front clearance must match the front rank at birth');
+
 // Reading an agent OUT (isd -> null) is the same authority as reading in.
 const readOut = { ...inducted, isd: null, version: 3 };
 assert.equal(usr(commissioner, inducted, readOut).action, 'SET_ISD_MEMBERSHIP', 'ISD command reads an agent out');

@@ -81,6 +81,16 @@ function authorizeUser(actor, cur, next) {
   if (!cur) {
     if (!canEditPersonnel(actor, next)) return deny('You cannot create personnel in that organisation.');
     if (next.clearance && !canSetClearance(actor, next, next.clearance)) return deny('You cannot assign that clearance.');
+    // A record may be BORN with an Internal Security front (the ISD intake path)
+    // — but only by ISD command or CL5, under the same rank/clearance integrity
+    // as an induction. Without this check, any org manager could quietly mint an
+    // agent by embedding `isd` in an ordinary personnel creation.
+    if (next.isd) {
+      if (!canManageISD(actor)) return deny('Internal Security membership is set by ISD command.');
+      if (!(RANKS.isd || []).includes(next.isd.rank)) return deny('That is not a valid Internal Security rank.');
+      const tier = clearanceForRank('isd', next.isd.rank);
+      if (tier && next.isd.clearance !== tier) return deny('Internal Security clearance must match the ISD rank.');
+    }
     return ok('CREATE_PERSONNEL', `Created ${next.designation || 'operator'}.`);
   }
 

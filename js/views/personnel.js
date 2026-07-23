@@ -87,6 +87,10 @@ export function renderList(host, app, org) {
   // and authority is judged on the ISD ladder, not the agent's cover clearance.
   const isdRoster = org === 'isd';
   const canManage = isdRoster ? canManageISD(actor) : canEditPersonnel(actor, { org });
+  // Minting a NEW agent needs posting-org creation authority, ISD command, and
+  // the right to assign the posting clearance — which canSetClearance reserves
+  // to CL5 (the same rule that governs every personnel creation server-side).
+  const canMintAgent = isdRoster && isCL5(actor);
   // Bulk selection is scoped to the viewed org.
   if (rosterSelOrg !== org) { rosterSel.clear(); rosterSelOrg = org; }
 
@@ -94,9 +98,13 @@ export function renderList(host, app, org) {
     .filter((u) => (isdRoster ? isISD(u) : u.org === org) && !u.deleted && u.accountStatus !== 'pending')
     .filter((u) => {
       if (filter.status && u.status !== filter.status) return false;
-      if (filter.clearance && u.clearance !== filter.clearance) return false;
+      // The ISD roster reads like the Department's own board: filter and search
+      // on the agent's ISD identity (rank, clearance, badge), not the posting.
+      if (filter.clearance && (isdRoster ? u.isd?.clearance : u.clearance) !== filter.clearance) return false;
       if (filter.q) {
-        const hay = `${u.designation} ${u.codename} ${u.rank || ''}`.toLowerCase();
+        const hay = (isdRoster
+          ? `${u.designation} ${u.codename} ${u.isd?.rank || ''} ${u.isd?.badgeNumber || ''}`
+          : `${u.designation} ${u.codename} ${u.rank || ''}`).toLowerCase();
         if (!hay.includes(filter.q.toLowerCase())) return false;
       }
       return true;
@@ -120,10 +128,10 @@ export function renderList(host, app, org) {
   const rows = roster.length ? roster.map((u) => `
     <tr data-id="${esc(u.id)}" tabindex="0">
       ${canManage ? `<td class="cell-check"><input type="checkbox" data-row-check="${esc(u.id)}" ${rosterSel.has(u.id) ? 'checked' : ''} /></td>` : ''}
-      <td class="mono">${esc(u.designation)}</td>
+      <td class="mono">${esc(isdRoster ? (u.isd?.badgeNumber ? `#${u.isd.badgeNumber}` : '\u2014') : u.designation)}</td>
       <td class="cell-name">${esc(u.codename)}${u.accountStatus === 'suspended' ? ' <span class="badge badge--bad">Suspended</span>' : ''}${tagChips(u, { compact: true })}</td>
-      <td>${rankInsignia(u.org, u.rank)} ${esc(u.rank || '\u2014')}</td>
-      <td>${clearanceBadge(u.clearance)}</td>
+      <td>${isdRoster ? `${rankInsignia('isd', u.isd?.rank)} ${esc(u.isd?.rank || '\u2014')}` : `${rankInsignia(u.org, u.rank)} ${esc(u.rank || '\u2014')}`}</td>
+      <td>${clearanceBadge(isdRoster ? u.isd?.clearance : u.clearance)}</td>
       <td>${statusBadge(u.status)}</td>
       <td class="cell-right"><span class="row-go">Open \u2192</span></td>
     </tr>
@@ -142,8 +150,9 @@ export function renderList(host, app, org) {
         </div>
       </div>
       ${canManage && !isdRoster ? `<button class="btn btn--primary" id="add-personnel">+ New personnel</button>` : ''}
+      ${canMintAgent ? `<button class="btn btn--primary" id="add-agent">+ New agent</button>` : ''}
     </div>
-    ${isdRoster ? '<p class="field__hint">An Internal Security front is a credential, not a new record — issue it from the operator’s own personnel file (their unit posting stays intact).</p>' : ''}
+    ${isdRoster ? `<p class="field__hint">A new agent receives a ${esc(ORGS['omega-1'].name)} posting alongside their Internal Security front; you can also read an existing operator in from their own personnel file.</p>` : ''}
 
     <div class="toolbar">
       <input id="flt-q" class="toolbar__search" type="search" placeholder="Search designation or codename\u2026" value="${esc(filter.q)}" />
@@ -166,7 +175,7 @@ export function renderList(host, app, org) {
         <thead>
           <tr>
             ${canManage ? '<th class="cell-check"><input type="checkbox" id="roster-all" /></th>' : ''}
-            <th>Designation</th><th>Codename</th><th>Rank</th>
+            <th>${isdRoster ? 'Badge' : 'Designation'}</th><th>Codename</th><th>Rank</th>
             <th>Clearance</th><th>Status</th><th></th>
           </tr>
         </thead>
@@ -176,7 +185,13 @@ export function renderList(host, app, org) {
   `;
 
   host.querySelector('#export-csv')?.addEventListener('click', () => {
-    exportCSV(`${org}-roster.csv`, [
+    exportCSV(`${org}-roster.csv`, isdRoster ? [
+      { header: 'Badge', value: (u) => u.isd?.badgeNumber || '' },
+      { header: 'Codename', value: (u) => u.codename },
+      { header: 'Rank', value: (u) => u.isd?.rank || '' },
+      { header: 'Clearance', value: (u) => u.isd?.clearance || '' },
+      { header: 'Status', value: (u) => u.status || '' },
+    ] : [
       { header: 'Designation', value: (u) => u.designation },
       { header: 'Codename', value: (u) => u.codename },
       { header: 'Rank', value: (u) => u.rank || '' },
@@ -223,6 +238,83 @@ export function renderList(host, app, org) {
 
   const addBtn = host.querySelector('#add-personnel');
   if (addBtn) addBtn.addEventListener('click', () => openCreate(app, org));
+  const agentBtn = host.querySelector('#add-agent');
+  if (agentBtn) agentBtn.addEventListener('click', () => openISDCreate(app));
+}
+
+// Mint a NEW agent in one step: a personnel record (their unit posting, an
+// unremarkable junior post by default) born with an Internal Security front.
+// The Worker authorises both halves — posting-org creation authority AND ISD
+// command — and holds the front to the same rank/clearance integrity as an
+// induction. The record's visible events stay bland: the front never appears
+// in event text a partial viewer could read.
+function openISDCreate(app) {
+  const actor = app.user;
+  // CL5 in effect: creating a record with a clearance is canSetClearance's rule,
+  // and CL5 always holds ISD authority. The Worker enforces the same.
+  if (!isCL5(actor)) {
+    toast('Minting an agent is a CL5 action.', 'error');
+    return;
+  }
+  const postRanks = RANKS['omega-1'] || [];
+  const isdRanks = RANKS.isd.slice().reverse(); // junior-first, like induction
+  const postOpts = postRanks.map((r) => `<option value="${esc(r)}" ${r === postRanks[postRanks.length - 1] ? 'selected' : ''}>${esc(r)} — ${esc(clearanceForRank('omega-1', r) || '')}</option>`).join('');
+  const isdOpts = isdRanks.map((r) => `<option value="${esc(r)}">${esc(r)} · ${esc(clearanceForRank('isd', r))}</option>`).join('');
+  const body = `
+    <p class="modal__message">Create a new agent: a ${esc(ORGS['omega-1'].name)} personnel record born with an Internal Security front. The posting is what the wider system sees; the front is visible only to the Department and CL5.</p>
+    <div class="field"><label>Codename</label><input id="ag-codename" type="text" placeholder="e.g. Ledger" /></div>
+    <div class="field"><label>Legal name</label><input id="ag-real" type="text" placeholder="optional" /></div>
+    <div class="field"><label>Unit posting rank</label><select id="ag-post">${postOpts}</select>
+      <div class="field__hint">An agent's posting should be unremarkable — the posting clearance follows this rank.</div></div>
+    <div class="field"><label>Internal Security rank</label><select id="ag-rank">${isdOpts}</select></div>
+    <div class="field"><label>Badge number <span class="muted-text">(optional)</span></label><input id="ag-badge" type="text" placeholder="e.g. 114" autocomplete="off" /></div>
+    <div class="field"><label>Operator ID</label><input id="ag-user" type="text" placeholder="login name" spellcheck="false" /></div>
+    <div class="field"><label>Passphrase</label><input id="ag-pass" type="text" placeholder="initial passphrase" /></div>
+    <div id="ag-err" class="auth__error" hidden></div>
+  `;
+  openModal({
+    title: 'New agent',
+    body,
+    actions: [
+      { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
+      { label: 'Create agent', tone: 'primary', onClick: async (c, d) => {
+          const codename = d.querySelector('#ag-codename').value.trim();
+          const real = d.querySelector('#ag-real').value.trim() || '[REDACTED]';
+          const postRank = d.querySelector('#ag-post').value;
+          const isdRank = d.querySelector('#ag-rank').value;
+          const badge = d.querySelector('#ag-badge').value.trim() || null;
+          const username = d.querySelector('#ag-user').value.trim();
+          const pass = d.querySelector('#ag-pass').value;
+          const err = d.querySelector('#ag-err');
+          err.hidden = true;
+          if (!codename || !username || !pass) { err.textContent = 'Codename, operator ID and passphrase are required.'; err.hidden = false; return; }
+          if (users().some((x) => (x.username || '').toLowerCase() === username.toLowerCase())) { err.textContent = 'That operator ID is already in use.'; err.hidden = false; return; }
+          const clr = clearanceForRank('omega-1', postRank);
+          if (!canSetClearance(actor, { id: '_new', org: 'omega-1' }, clr) && !isCL5(actor)) {
+            err.textContent = 'That posting rank sits above your own clearance.'; err.hidden = false; return;
+          }
+          const { makeCredential } = await import('../crypto.js');
+          const { salt, hash } = await makeCredential(pass);
+          const now = new Date().toISOString();
+          const designation = nextDesignationFor('omega-1');
+          upsertUser({
+            id: newId('usr'), designation, codename, realName: real,
+            org: 'omega-1', rank: postRank, clearance: clr, status: 'active', username, salt, passwordHash: hash,
+            accountStatus: 'active', requestedOrg: null,
+            awards: [], strikes: [], leave: null, notes: [],
+            // Bland on purpose: partial viewers can read events, so the front is
+            // never named here. The audit log (CL5-only) carries the truth.
+            events: [{ id: newId('evt'), date: now, type: 'appointment', text: `Record created by ${actor.designation}.` }],
+            isd: { rank: isdRank, clearance: clearanceForRank('isd', isdRank), standing: 'active', badgeNumber: badge, promoChecks: [] },
+            createdAt: now, updatedAt: now, version: 1, deleted: false, deletedAt: null,
+          });
+          logAction(actor, 'SET_ISD_MEMBERSHIP', `Minted ${designation} (${codename}): posting + Internal Security front (${isdRank}).`);
+          c();
+          toast(`Agent ${designation} created.`, 'success');
+          app.refresh();
+        } },
+    ],
+  });
 }
 
 // --- Bulk roster actions ----------------------------------------------------
