@@ -291,6 +291,16 @@ async function writeRecord(collection, id, actor, request, repo, env) {
     // ordinary edit silently erase an agent's record. A payload that DOES carry
     // the key came from an ISD/CL5 client, and the gate already authorised it.
     if (cur && !('isd' in incoming) && cur.isd !== undefined) incoming.isd = cur.isd;
+    // The Administrator grant is server-owned too: preserve it unless this very
+    // write is the CL5 grant/revoke that the gate just authorised.
+    if (cur && !('admin' in incoming) && cur.admin !== undefined) incoming.admin = cur.admin;
+    // The ISD rank/clearance are derived from the cover post, never stored, so a
+    // membership record carries only standing, badge and checklist. Strip the
+    // rest on the way in — nothing reads it, and stale copies only mislead.
+    if (incoming.isd && typeof incoming.isd === 'object') {
+      const { standing, badgeNumber, promoChecks } = incoming.isd;
+      incoming.isd = { standing, badgeNumber: badgeNumber ?? null, promoChecks: promoChecks ?? [] };
+    }
     else if (!incoming.salt || !incoming.passwordHash) {
       const { salt, hash } = await makeCredential(randomToken());
       incoming.salt = salt; incoming.passwordHash = hash;

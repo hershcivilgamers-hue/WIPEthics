@@ -29,11 +29,12 @@ assert.equal(scoreInduction(all).passed, false, 'blanket-selecting everything fa
 assert.equal(scoreInduction({ q1: ['a'] }).score, 0, 'a wrong single is 0, not -1');
 
 // --- Cast --------------------------------------------------------------------
-const isd = (rank, clearance, id) => ({ id, designation: `O1-${id}`, org: 'omega-1', rank: 'Sergeant', clearance: 'CL3',
-  isd: { rank, clearance, standing: 'active' } });
-const operative    = isd('Operative',    'CL3',   'p1');
-const investigator = isd('Investigator', 'CL3',   'v1');
-const commissioner = isd('Commissioner', 'CL4-S', 'c1');
+// The mask derives from the cover post, so the cast is built from cover ranks.
+const isd = (coverRank, coverClearance, id) => ({ id, designation: `O1-${id}`, org: 'omega-1', rank: coverRank, clearance: coverClearance,
+  isd: { standing: 'active' } });
+const operative    = isd('Private',  'CL3',   'p1'); // → Operative
+const investigator = isd('Sergeant', 'CL3',   'v1'); // → Investigator
+const commissioner = isd('Captain',  'CL4-J', 'c1'); // → Commissioner
 const outsider = { id: 'o1', designation: 'O1-2', org: 'omega-1', rank: 'Major', clearance: 'CL4-S' };
 const cl5      = { id: 'd1', designation: 'CMD-1', org: 'command', rank: 'Director', clearance: 'CL5' };
 

@@ -18,11 +18,34 @@
 //   • Nobody may grant a clearance higher than their own.
 // =============================================================================
 
-import { clearanceWeight, rankIndex, rankUp, rankDown } from './constants.js';
+import { clearanceWeight, rankIndex, rankUp, rankDown, isdRankFor, isdClearanceFor } from './constants.js';
 
 const w = (user) => clearanceWeight(user?.clearance);
 
 export const isCL5 = (user) => user?.clearance === 'CL5';
+
+// --- Administrator (staff) ---------------------------------------------------
+// A moderation grant handed out through Command Administration, revocable at
+// any time. It is deliberately NOT a clearance: an Administrator can SEE any
+// record (to find what needs removing) and REMOVE or RESTORE any post, but it
+// buys none of Command's other authority — no granting clearances, approving
+// access requests, or authorising Targets. Those stay with real CL5, so a
+// staffer can clean up the board without becoming Command. Because it is not a
+// clearance, isCL5() stays false for them and every CL5-only gate holds.
+export function isAdmin(user) {
+  return !!(user && user.admin && user.admin.standing === 'active');
+}
+// Read-through for moderation: an Administrator sees every record, so nothing
+// can hide from the people who have to police it. Paired with canModerate below.
+export function adminSees(user) {
+  return isCL5(user) || isAdmin(user);
+}
+// The moderation power itself: remove (or restore) any record in any collection,
+// regardless of org, clearance or ownership. The self-override block still
+// applies elsewhere; this is only ever additive to an existing delete gate.
+export function canModerate(user) {
+  return isCL5(user) || isAdmin(user);
+}
 
 // Command personnel act across both operational organisations.
 // Internal Security membership is an orthogonal caveat, NOT an org: an agent's
@@ -33,12 +56,16 @@ export function isISD(actor) {
   return !!(actor && actor.isd && actor.isd.standing === 'active');
 }
 
-// ISD authority is judged on the agent's ISD clearance, NEVER their cover one —
-// an Inspector may be a CL3 Private on paper. Commissioner/Director sit at CL4·S
-// on the ISD ladder and run the department; CL5 always overrides. There is no
-// CL5 inside the ISD, so it can never outrank the Committee it answers to.
+// An agent's ISD rank is DERIVED from their Omega-1 cover rank — the unit wears
+// the mask, so the two ladders are one. Nothing reads a stored rank, so a forged
+// or stale `isd.rank` cannot buy authority. Commissioner/Director sit at CL4·S
+// and run the department; CL5 always overrides. There is no CL5 inside the ISD,
+// so it can never outrank the Committee it answers to.
+export function isdRank(actor) {
+  return isISD(actor) ? isdRankFor(actor) : null;
+}
 export function isdWeight(actor) {
-  return isISD(actor) ? clearanceWeight(actor.isd.clearance) : 0;
+  return isISD(actor) ? clearanceWeight(isdClearanceFor(actor)) : 0;
 }
 export function canManageISD(actor) {
   return isCL5(actor) || isdWeight(actor) >= 5;
@@ -51,7 +78,7 @@ export function canManageISD(actor) {
 export function isdAtLeast(actor, rank) {
   if (isCL5(actor)) return true;
   if (!isISD(actor)) return false;
-  const mine = rankIndex('isd', actor.isd.rank);
+  const mine = rankIndex('isd', isdRankFor(actor));
   const need = rankIndex('isd', rank);
   return mine >= 0 && need >= 0 && mine <= need;
 }
@@ -63,7 +90,7 @@ export function isdAtLeast(actor, rank) {
 // an ACTIVE investigation is an Inspector's call; adjudication, disposition and
 // closure belong to ISD command.
 export function canViewInvestigation(actor) {
-  return isCL5(actor) || isISD(actor);
+  return isCL5(actor) || isISD(actor) || isAdmin(actor);
 }
 export function canFileInvestigation(actor) {
   return isdAtLeast(actor, 'Investigator');
@@ -79,7 +106,7 @@ export function canAdjudicateInvestigation(actor) {
 // A recruiter (Investigator and above) files and scores an induction; the final
 // outcome — and reading a passing candidate in — is ISD command's.
 export function canViewInduction(actor) {
-  return isCL5(actor) || isISD(actor);
+  return isCL5(actor) || isISD(actor) || isAdmin(actor);
 }
 export function canFileInduction(actor) {
   return isdAtLeast(actor, 'Investigator');
@@ -204,7 +231,7 @@ export function canIssueStrike(actor, target) {
 }
 
 export function canDeletePersonnel(actor, target) {
-  if (!isCL5(actor)) return false;
+  if (!canModerate(actor)) return false; // CL5, or staff moderating
   return actor.id !== target.id;
 }
 
@@ -219,6 +246,7 @@ export function canApproveRegistrations(actor) {
 // SWAT arm. Drives the per-session branding of ORGS['omega-1'].
 export function knowsOmegaTruth(actor) {
   if (!actor) return false;
+  if (isAdmin(actor)) return true; // staff see ISD records, so the branding must match
   return actor.org === 'ethics-committee' || w(actor) >= clearanceWeight('CL4-S');
 }
 
@@ -231,6 +259,7 @@ export function canManageDirectives(actor, org) {
 // export. (Whether the order is on your board at all is canSeeDirective.)
 export function canReadDirective(actor, directive) {
   if (!actor || !directive) return false;
+  if (adminSees(actor)) return true; // staff read-through, for moderation
   return w(actor) >= clearanceWeight(directive.clearance);
 }
 
@@ -243,7 +272,7 @@ export function canReadDirective(actor, directive) {
 // only (older orders addressed to no one but their own unit).
 export function canSeeDirective(actor, directive) {
   if (!actor || !directive) return false;
-  if (isCL5(actor)) return true;
+  if (adminSees(actor)) return true; // staff read-through, for moderation
   if (actor.org === directive.org) return true;
   if (canManageDirectives(actor, directive.org)) return true;
   const audience = Array.isArray(directive.audience) ? directive.audience : [];
@@ -263,6 +292,7 @@ export function canComposeDocument(actor, org) {
 // managers of the issuing org — an unpublished document is not yet a record.
 export function canViewDocument(actor, doc) {
   if (!actor || !doc) return false;
+  if (adminSees(actor)) return true; // staff read-through, for moderation
   if (w(actor) < clearanceWeight(doc.classification)) return false;
   const inScope = actor.org === doc.org || canManageOrg(actor, doc.org);
   if (!inScope) return false;
@@ -291,7 +321,7 @@ export function canUseRecycleBin(actor) {
 //   name-only — designation, codename, org and clearance label only.
 export function accessLevel(actor, target) {
   if (!actor || !target) return 'name-only';
-  if (isCL5(actor)) return 'full';
+  if (adminSees(actor)) return 'full'; // staff read-through, for moderation
   if (actor.id === target.id) return 'full';
 
   const sameChain = hasStakeIn(actor, target.org);
@@ -312,6 +342,7 @@ export const canSeeLeaveReason = (actor, target) => accessLevel(actor, target) =
 // This is checked on direct access in the view, not just by hiding the menu.
 export function canViewSubject(actor, subject) {
   if (!actor || !subject) return false;
+  if (adminSees(actor)) return true; // staff read-through, for moderation
   // Internal Security is internal-affairs, not operations: an agent is walled off
   // from termination Targets — those are an Ethics/Omega operational matter, and
   // the Department has no business knowing who is marked. CL5 oversight is exempt.
@@ -367,6 +398,7 @@ export function canRuleTribunal(actor) {
 // they brought even when its content sits above their cover clearance.
 export function canViewCase(actor, record) {
   if (!actor || !record) return false;
+  if (adminSees(actor)) return true; // staff read-through, for moderation
   if (record.createdBy && actor.designation && record.createdBy === actor.designation) return true;
   return w(actor) >= clearanceWeight(record.clearance);
 }
@@ -389,7 +421,7 @@ export function canViewCase(actor, record) {
 // Is this operator read into the compartment?
 export function readIntoCompartment(actor, compartment) {
   if (!actor || !compartment) return false;
-  if (isCL5(actor)) return true;
+  if (adminSees(actor)) return true; // staff read-through, for moderation
   return Array.isArray(compartment.members) && compartment.members.includes(actor.id);
 }
 
@@ -416,7 +448,7 @@ export function canReadOperatorInto(actor, compartment, target) {
 export function compartmentClears(actor, record, compartmentsById) {
   const cid = record?.compartment;
   if (!cid) return true;
-  if (isCL5(actor)) return true;
+  if (adminSees(actor)) return true; // staff read-through, for moderation
   let c = null;
   if (compartmentsById) {
     c = typeof compartmentsById.get === 'function' ? compartmentsById.get(cid) : compartmentsById[cid];
@@ -445,7 +477,7 @@ export function canOverrideActivity(actor, record) {
 }
 export function canViewActivity(actor, record) {
   if (!actor || !record) return false;
-  if (isCL5(actor)) return true;
+  if (adminSees(actor)) return true; // staff read-through, for moderation
   if (record.userId === actor.id) return true;
   return actor.org === record.org || actor.org === 'command';
 }
@@ -467,8 +499,8 @@ export function isMemberTrack(record) {
 }
 export function canViewRecruitment(actor, record) {
   if (!actor || !record) return false;
-  if (isMemberTrack(record)) return isCL5(actor); // Member track: CL5 only
-  if (isCL5(actor)) return true;
+  if (isMemberTrack(record)) return adminSees(actor); // Member track: CL5 (or staff, to moderate)
+  if (adminSees(actor)) return true; // staff read-through, for moderation
   return canParticipateRecruitment(actor, record.org);
 }
 // Whether this actor may ACT on a candidate — open it, comment, vote, advance,
@@ -498,7 +530,7 @@ export function isAssignedToOperation(actor, op) {
 }
 export function canViewOperation(actor, op) {
   if (!actor || !op) return false;
-  if (isCL5(actor)) return true;
+  if (adminSees(actor)) return true; // staff read-through, for moderation
   if (isAssignedToOperation(actor, op)) return true;
   // Org-scoped: only operators with a stake in the owning unit (or Command) see
   // its operations, and then only at or above the operation's clearance.
@@ -524,7 +556,7 @@ export function isAssignedToIntel(actor, src) {
 }
 export function canViewIntel(actor, src) {
   if (!actor || !src) return false;
-  if (isCL5(actor)) return true;
+  if (adminSees(actor)) return true; // staff read-through, for moderation
   if (isAssignedToIntel(actor, src)) return true;
   const stake = actor.org === src.org || actor.org === 'command';
   return stake && w(actor) >= clearanceWeight(src.clearance);
@@ -544,7 +576,7 @@ export function canLogIntel(actor, src) {
 // personnel gate — this is only about the catalogue itself.
 export function canViewTraining(actor, course) {
   if (!actor || !course) return false;
-  if (isCL5(actor)) return true;
+  if (adminSees(actor)) return true; // staff read-through, for moderation
   return actor.org === course.org || actor.org === 'command';
 }
 export function canManageTraining(actor, org) {

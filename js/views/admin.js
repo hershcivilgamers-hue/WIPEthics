@@ -16,7 +16,7 @@ import {
   promoReqs, getPromoReq, upsertPromoReq,
   deletePromoReq, getSetting, upsertSetting, newId, loadDb, saveDb, clearDb, storageBackend,
 } from '../storage.js';
-import { canSetClearance, canManagePromoReqs, canManageSettings, isCL5 } from '../permissions.js';
+import { canSetClearance, canManagePromoReqs, canManageSettings, isCL5, isAdmin } from '../permissions.js';
 import { ensureSeeded } from '../seed.js';
 import { logAction } from '../audit.js';
 import {
@@ -36,6 +36,7 @@ export function render(host, app) {
   const tabs = [
     ['registrations', 'Registrations'],
     ['clearance', 'Clearance'],
+    ['staff', 'Administrators'],
     ['promotions', 'Promotion Reqs'],
     ['activity', 'Activity Reqs'],
     ['tags', 'Personnel Tags'],
@@ -77,6 +78,7 @@ export function render(host, app) {
 function drawPanel(panel, app) {
   if (activeTab === 'registrations') return drawRegistrations(panel, app);
   if (activeTab === 'clearance') return drawClearance(panel, app);
+  if (activeTab === 'staff') return drawStaff(panel, app);
   if (activeTab === 'promotions') return drawPromoReqs(panel, app);
   if (activeTab === 'activity') return drawActivityReqs(panel, app);
   if (activeTab === 'tags') return drawTags(panel, app);
@@ -289,6 +291,72 @@ async function reject(app, id) {
 }
 
 // --- Clearance management ---------------------------------------------------
+// --- Administrators (staff) --------------------------------------------------
+// Command classes an operator as staff, granting moderation: they can see every
+// record and remove or restore any post, but gain none of Command's other
+// authority. Revocable here at any time; the Worker re-checks CL5 on the write.
+function drawStaff(panel, app) {
+  const roster = users().filter((u) => !u.deleted && u.accountStatus === 'active' && u.id !== app.user.id)
+    .sort((a, b) => (isAdmin(b) ? 1 : 0) - (isAdmin(a) ? 1 : 0)
+      || a.org.localeCompare(b.org) || (a.designation || '').localeCompare(b.designation || ''));
+
+  const rows = roster.map((u) => {
+    const on = isAdmin(u);
+    const g = u.admin || null;
+    return `
+      <tr>
+        <td class="mono">${esc(u.designation)}</td>
+        <td>${esc(u.codename)}</td>
+        <td>${orgTag(u.org)} ${clearanceBadge(u.clearance)}</td>
+        <td>${on ? '<span class="badge badge--warn">Administrator</span>' : '<span class="muted-text">—</span>'}</td>
+        <td class="muted-text">${on && g ? `${esc(g.grantedBy || '')}${g.grantedAt ? ` · ${fmtDate(g.grantedAt)}` : ''}` : ''}</td>
+        <td class="cell-right">
+          <button class="btn btn--xs ${on ? 'btn--danger' : ''}" data-staff="${esc(u.id)}">${on ? 'Revoke' : 'Grant'}</button>
+        </td>
+      </tr>`;
+  }).join('');
+
+  const current = roster.filter(isAdmin).length;
+  panel.innerHTML = `
+    <div class="card">
+      <div class="card__title">Administrators <span class="muted-text">(${current} active)</span></div>
+      <div class="card__body">
+        <p class="modal__message" style="margin:0">An Administrator is staff: they can read every record in the system and <strong>remove or restore any post</strong> — for content that should never have been published. They cannot grant clearances, approve access requests, or authorise Targets; that authority stays with Command. Grants are revocable here at any time and every removal is written to the audit log.</p>
+      </div>
+      <table class="table">
+        <thead><tr><th>Designation</th><th>Codename</th><th>Post</th><th>Status</th><th>Granted</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6" class="empty">No other active operators.</td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  panel.querySelectorAll('[data-staff]').forEach((b) => b.addEventListener('click', async () => {
+    const target = getUser(b.dataset.staff);
+    if (!target) return;
+    const on = isAdmin(target);
+    const ok = await confirmDialog({
+      title: on ? 'Revoke Administrator access' : 'Grant Administrator access',
+      message: on
+        ? `Revoke ${target.designation} (${target.codename})'s Administrator access? They lose moderation immediately.`
+        : `Class ${target.designation} (${target.codename}) as staff? They will be able to read every record and remove or restore any post. They will NOT gain Command's other authority.`,
+      confirmLabel: on ? 'Revoke' : 'Grant',
+      danger: on,
+    });
+    if (!ok) return;
+    const fresh = getUser(target.id);
+    if (!fresh) { app.refresh(); return; }
+    fresh.admin = on ? null : { standing: 'active', grantedBy: app.user.designation, grantedAt: new Date().toISOString() };
+    fresh.events = fresh.events || [];
+    fresh.events.unshift({ id: newId('evt'), date: new Date().toISOString(), type: 'appointment',
+      text: on ? `Administrator access revoked by ${app.user.designation}.` : `Classed as staff (Administrator) by ${app.user.designation}.` });
+    fresh.version = (fresh.version || 1) + 1;
+    fresh.updatedAt = new Date().toISOString();
+    upsertUser(fresh);
+    logAction(app.user, on ? 'REVOKE_ADMIN' : 'GRANT_ADMIN', `${fresh.designation}: Administrator access ${on ? 'revoked' : 'granted'}.`);
+    toast(on ? 'Administrator access revoked.' : 'Administrator access granted.', 'success');
+    app.refresh();
+  }));
+}
+
 function drawClearance(panel, app) {
   const roster = users().filter((u) => !u.deleted && u.accountStatus === 'active')
     .sort((a, b) => a.org.localeCompare(b.org) || (CLEARANCES[b.clearance]?.weight || 0) - (CLEARANCES[a.clearance]?.weight || 0));

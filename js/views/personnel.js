@@ -9,7 +9,7 @@
 
 import {
   ORGS, RANKS, STATUS_ORDER, CLEARANCE_ORDER, CLEARANCES, STRIKE_LIMIT, strikeActive, activeStrikeCount, strikeVoided,
-  rankUp, rankDown, clearanceForRank, rankIndex,
+  rankUp, rankDown, clearanceForRank, rankIndex, ISD_RANK_BY_COVER, isdRankFor, isdClearanceFor,
   TRAINING_CATEGORY, TRAINING_CURRENCY, trainingCurrency, trainingExpiry,
   PERSONNEL_TAGS_SETTING_ID, normalizeTagCatalog,
   MEDALS_SETTING_ID, normalizeMedalCatalog,
@@ -100,10 +100,10 @@ export function renderList(host, app, org) {
       if (filter.status && u.status !== filter.status) return false;
       // The ISD roster reads like the Department's own board: filter and search
       // on the agent's ISD identity (rank, clearance, badge), not the posting.
-      if (filter.clearance && (isdRoster ? u.isd?.clearance : u.clearance) !== filter.clearance) return false;
+      if (filter.clearance && (isdRoster ? isdClearanceFor(u) : u.clearance) !== filter.clearance) return false;
       if (filter.q) {
         const hay = (isdRoster
-          ? `${u.designation} ${u.codename} ${u.isd?.rank || ''} ${u.isd?.badgeNumber || ''}`
+          ? `${u.designation} ${u.codename} ${isdRankFor(u) || ''} ${u.isd?.badgeNumber || ''}`
           : `${u.designation} ${u.codename} ${u.rank || ''}`).toLowerCase();
         if (!hay.includes(filter.q.toLowerCase())) return false;
       }
@@ -111,7 +111,7 @@ export function renderList(host, app, org) {
     })
     .sort(isdRoster
       // Seniority on the ISD ladder (lower index = more senior), not the cover clearance.
-      ? (a, b) => rankIndex('isd', a.isd?.rank) - rankIndex('isd', b.isd?.rank)
+      ? (a, b) => rankIndex('isd', isdRankFor(a)) - rankIndex('isd', isdRankFor(b))
         || a.designation.localeCompare(b.designation)
       : (a, b) => (b.clearance ? CLEARANCES[b.clearance].weight : 0) - (a.clearance ? CLEARANCES[a.clearance].weight : 0)
         || a.designation.localeCompare(b.designation));
@@ -130,8 +130,8 @@ export function renderList(host, app, org) {
       ${canManage ? `<td class="cell-check"><input type="checkbox" data-row-check="${esc(u.id)}" ${rosterSel.has(u.id) ? 'checked' : ''} /></td>` : ''}
       <td class="mono">${isdRoster ? (u.isd?.badgeNumber ? `#${esc(u.isd.badgeNumber)}` : '<span class="muted-text">\u2014</span>') : esc(u.designation)}</td>
       <td class="cell-name">${esc(u.codename)}${u.accountStatus === 'suspended' ? ' <span class="badge badge--bad">Suspended</span>' : ''}${tagChips(u, { compact: true })}</td>
-      <td>${isdRoster ? `${esc(u.isd?.rank || '')}${u.isd?.rank ? '' : '<span class="muted-text">\u2014</span>'}` : `${rankInsignia(u.org, u.rank)} ${esc(u.rank || '\u2014')}`}</td>
-      <td>${clearanceBadge(isdRoster ? u.isd?.clearance : u.clearance)}</td>
+      <td>${isdRoster ? `${esc(isdRankFor(u) || '')}${isdRankFor(u) ? '' : '<span class="muted-text">\u2014</span>'}` : `${rankInsignia(u.org, u.rank)} ${esc(u.rank || '\u2014')}`}</td>
+      <td>${clearanceBadge(isdRoster ? isdClearanceFor(u) : u.clearance)}</td>
       <td>${statusBadge(u.status)}</td>
       <td class="cell-right"><span class="row-go">Open \u2192</span></td>
     </tr>
@@ -188,8 +188,8 @@ export function renderList(host, app, org) {
     exportCSV(`${org}-roster.csv`, isdRoster ? [
       { header: 'Badge', value: (u) => u.isd?.badgeNumber || '' },
       { header: 'Codename', value: (u) => u.codename },
-      { header: 'Rank', value: (u) => u.isd?.rank || '' },
-      { header: 'Clearance', value: (u) => u.isd?.clearance || '' },
+      { header: 'Rank', value: (u) => isdRankFor(u) || '' },
+      { header: 'Clearance', value: (u) => isdClearanceFor(u) || '' },
       { header: 'Status', value: (u) => u.status || '' },
     ] : [
       { header: 'Designation', value: (u) => u.designation },
@@ -257,16 +257,13 @@ function openISDCreate(app) {
     return;
   }
   const postRanks = RANKS['omega-1'] || [];
-  const isdRanks = RANKS.isd.slice().reverse(); // junior-first, like induction
-  const postOpts = postRanks.map((r) => `<option value="${esc(r)}" ${r === postRanks[postRanks.length - 1] ? 'selected' : ''}>${esc(r)} — ${esc(clearanceForRank('omega-1', r) || '')}</option>`).join('');
-  const isdOpts = isdRanks.map((r) => `<option value="${esc(r)}">${esc(r)} · ${esc(clearanceForRank('isd', r))}</option>`).join('');
+  const postOpts = postRanks.map((r) => `<option value="${esc(r)}" ${r === postRanks[postRanks.length - 1] ? 'selected' : ''}>${esc(r)} — ${esc(clearanceForRank('omega-1', r) || '')} · presents as ${esc(ISD_RANK_BY_COVER[r] || '—')}</option>`).join('');
   const body = `
     <p class="modal__message">Create a new agent: a ${esc(ORGS['omega-1'].name)} personnel record born with an Internal Security front. The posting is what the wider system sees; the front is visible only to the Department and CL5.</p>
     <div class="field"><label>Codename</label><input id="ag-codename" type="text" placeholder="e.g. Ledger" /></div>
     <div class="field"><label>Legal name</label><input id="ag-real" type="text" placeholder="optional" /></div>
     <div class="field"><label>Unit posting rank</label><select id="ag-post">${postOpts}</select>
-      <div class="field__hint">An agent's posting should be unremarkable — the posting clearance follows this rank.</div></div>
-    <div class="field"><label>Internal Security rank</label><select id="ag-rank">${isdOpts}</select></div>
+      <div class="field__hint">An agent's posting should be unremarkable. The posting clearance follows this rank — and so does the Internal Security rank they present as.</div></div>
     <div class="field"><label>Badge number <span class="muted-text">(optional)</span></label><input id="ag-badge" type="text" placeholder="e.g. 114" autocomplete="off" /></div>
     <div class="field"><label>Operator ID</label><input id="ag-user" type="text" placeholder="login name" spellcheck="false" /></div>
     <div class="field"><label>Passphrase</label><input id="ag-pass" type="text" placeholder="initial passphrase" /></div>
@@ -281,7 +278,6 @@ function openISDCreate(app) {
           const codename = d.querySelector('#ag-codename').value.trim();
           const real = d.querySelector('#ag-real').value.trim() || '[REDACTED]';
           const postRank = d.querySelector('#ag-post').value;
-          const isdRank = d.querySelector('#ag-rank').value;
           const badge = d.querySelector('#ag-badge').value.trim() || null;
           const username = d.querySelector('#ag-user').value.trim();
           const pass = d.querySelector('#ag-pass').value;
@@ -305,10 +301,10 @@ function openISDCreate(app) {
             // Bland on purpose: partial viewers can read events, so the front is
             // never named here. The audit log (CL5-only) carries the truth.
             events: [{ id: newId('evt'), date: now, type: 'appointment', text: `Record created by ${actor.designation}.` }],
-            isd: { rank: isdRank, clearance: clearanceForRank('isd', isdRank), standing: 'active', badgeNumber: badge, promoChecks: [] },
+            isd: { standing: 'active', badgeNumber: badge, promoChecks: [] },
             createdAt: now, updatedAt: now, version: 1, deleted: false, deletedAt: null,
           });
-          logAction(actor, 'SET_ISD_MEMBERSHIP', `Minted ${designation} (${codename}): posting + Internal Security front (${isdRank}).`);
+          logAction(actor, 'SET_ISD_MEMBERSHIP', `Minted ${designation} (${codename}): posting + Internal Security front (${ISD_RANK_BY_COVER[postRank] || 'no mask'}).`);
           c();
           toast(`Agent ${designation} created.`, 'success');
           app.refresh();
@@ -444,92 +440,27 @@ function sectionISD(u, actor) {
     ? '<span class="badge badge--ok">Active</span>'
     : `<span class="badge badge--muted">${esc(m.standing || 'inactive')}</span>`;
   const command = canManageISD(actor);
-
-  // Promotion on the ISD ladder — entirely separate from the cover-post ladder.
-  // Requirements come from promo_reqs keyed (org:'isd', fromRank), and progress
-  // is tracked in isd.promoChecks so it never collides with the cover checklist.
-  const next = rankUp('isd', m.rank);
-  const down = rankDown('isd', m.rank);
-  const set = next ? promoReqs().find((r) => r.org === 'isd' && r.fromRank === m.rank) : null;
-  const items = set?.items || [];
-  const checked = new Set(m.promoChecks || []);
-  const metCount = items.filter((it) => checked.has(it.id)).length;
-  const allMet = items.length > 0 && metCount === items.length;
-
-  let reqHTML;
-  if (!next) reqHTML = '<p class="muted">This agent holds the most senior rank in the Department.</p>';
-  else if (!items.length) reqHTML = '<p class="muted">No requirements are defined for this transition.</p>';
-  else {
-    reqHTML = `<ul class="reqs">${items.map((it) => {
-      const done = checked.has(it.id);
-      const control = command
-        ? `<input type="checkbox" class="req__box" data-isd-req="${esc(it.id)}" ${done ? 'checked' : ''} aria-label="Mark requirement met" />`
-        : `<span class="req__mark ${done ? 'req__mark--done' : ''}">${done ? '✓' : '○'}</span>`;
-      return `<li class="req ${done ? 'req--done' : ''}">${control}<span class="req__text">${esc(it.text)}</span></li>`;
-    }).join('')}</ul>`;
-  }
+  // The mask follows the post: an agent's ISD rank is derived from their cover
+  // rank, so there is no separate ISD ladder to climb — promotion in Omega-1 IS
+  // promotion in the Department.
+  const rank = isdRankFor(u);
+  const nextCover = rankUp(u.org, u.rank);
+  const nextMask = nextCover ? (ISD_RANK_BY_COVER[nextCover] || null) : null;
 
   return `<section class="card">
     <div class="card__title">Internal Security ${standing}</div>
     <div class="card__body">
-      <div class="kv"><span class="kv__k">ISD rank</span><span class="kv__v">${esc(m.rank || '—')} ${clearanceBadge(m.clearance)}</span></div>
+      <div class="kv"><span class="kv__k">ISD rank</span><span class="kv__v">${rank ? `${esc(rank)} ${clearanceBadge(isdClearanceFor(u))}` : '<span class="muted-text">— (this post carries no mask)</span>'}</span></div>
       <div class="kv"><span class="kv__k">Badge number</span><span class="kv__v mono">${m.badgeNumber ? esc(m.badgeNumber) : '<span class="muted-text">not recorded</span>'}</span></div>
       <div class="kv"><span class="kv__k">Cover post</span><span class="kv__v">${orgTag(u.org)} ${esc(u.rank || '—')}</span></div>
       ${self ? '<div class="btn-row" style="margin-top:10px"><button class="btn btn--sm" data-act="isd-badge">Record badge number</button></div>' : ''}
 
-      <div class="modal__divider"></div>
-      <div class="card__subtitle">Advancement${next ? ` — <span class="mono">${esc(m.rank)}</span> → <span class="mono">${esc(next)}</span>` : ''}
-        ${items.length ? `<span class="muted-text"> · ${metCount}/${items.length} met</span>` : ''}</div>
-      ${reqHTML}
-      ${command && (next || down) ? `<div class="btn-row" style="margin-top:10px">
-        ${next ? `<button class="btn btn--sm btn--primary" data-act="isd-promote" ${allMet ? '' : 'disabled title="Requirements are not all met"'}>Promote to ${esc(next)}</button>` : ''}
-        ${down ? `<button class="btn btn--sm btn--danger" data-act="isd-demote">Reduce to ${esc(down)}</button>` : ''}
-      </div>` : ''}
-      ${command && !self ? '<div class="btn-row" style="margin-top:6px"><button class="btn btn--xs btn--danger" data-act="isd-remove">Read out of the Department</button></div>' : ''}
+      <p class="field__hint" style="margin-top:10px">The Department's rank structure follows the unit's: this agent presents as <strong>${esc(rank || '—')}</strong> because their post is ${esc(u.rank || '—')}.${nextMask && nextMask !== rank ? ` Promotion to ${esc(nextCover)} would present them as ${esc(nextMask)}.` : ''}</p>
+      ${command && !self ? '<div class="btn-row" style="margin-top:10px"><button class="btn btn--xs btn--danger" data-act="isd-remove">Read out of the Department</button></div>' : ''}
 
       <p class="field__hint" style="margin-top:8px">Visible only to the Department and CL5. The operator’s file otherwise shows their unit posting; the Internal Security front never touches it.</p>
     </div>
   </section>`;
-}
-
-// Tick an ISD requirement. Kept in isd.promoChecks so the cover-post checklist
-// is untouched; ISD command (Commissioner/Director, or CL5) manages it.
-function toggleISDRequirement(app, u, itemId) {
-  const fresh = getUser(u.id);
-  if (!fresh || !fresh.isd) return;
-  const checks = new Set(fresh.isd.promoChecks || []);
-  if (checks.has(itemId)) checks.delete(itemId); else checks.add(itemId);
-  fresh.isd = { ...fresh.isd, promoChecks: [...checks] };
-  fresh.updatedAt = new Date().toISOString();
-  fresh.version = (fresh.version || 1) + 1;
-  upsertUser(fresh);
-  logAction(app.user, 'SET_ISD_MEMBERSHIP', `Updated ${fresh.designation}’s Internal Security checklist.`);
-  app.refresh();
-}
-
-// Move an agent on the ISD ladder. Clearance is realigned from the ISD ladder
-// (the gate re-checks this) and the checklist resets, mirroring a cover-post
-// rank change. The agent's org/rank/clearance are deliberately untouched.
-async function isdRankMove(app, u, dir) {
-  const fresh = getUser(u.id);
-  if (!fresh || !fresh.isd) return;
-  const target = dir === 'up' ? rankUp('isd', fresh.isd.rank) : rankDown('isd', fresh.isd.rank);
-  if (!target) return;
-  const ok = await confirmDialog({
-    title: dir === 'up' ? 'Promote within the Department' : 'Reduce within the Department',
-    message: `${dir === 'up' ? 'Promote' : 'Reduce'} ${fresh.designation} from ${fresh.isd.rank} to ${target}? Their Internal Security checklist resets; their unit posting is unaffected.`,
-    confirmLabel: dir === 'up' ? 'Promote' : 'Reduce',
-    danger: dir !== 'up',
-  });
-  if (!ok) return;
-  const latest = getUser(u.id);
-  latest.isd = { ...latest.isd, rank: target, clearance: clearanceForRank('isd', target), promoChecks: [] };
-  latest.updatedAt = new Date().toISOString();
-  latest.version = (latest.version || 1) + 1;
-  upsertUser(latest);
-  logAction(app.user, 'SET_ISD_MEMBERSHIP', `${latest.designation}: Internal Security rank → ${target}.`);
-  toast(`Internal Security rank set to ${target}.`, 'success');
-  app.refresh();
 }
 
 // An agent records their own badge number. The gate accepts a badge-only change
@@ -539,27 +470,26 @@ async function isdRankMove(app, u, dir) {
 function openISDInduct(app, u) {
   const actor = app.user;
   if (!canManageISD(actor)) { toast('Internal Security membership is set by ISD command.', 'error'); return; }
-  // Junior-first; preselect the rank the operator asked for at sign-up, if any.
-  const wantRank = RANKS.isd.includes(u.requestedISD) ? u.requestedISD : null;
-  const rankOpts = RANKS.isd.slice().reverse()
-    .map((rk) => `<option value="${esc(rk)}" ${rk === wantRank ? 'selected' : ''}>${esc(rk)} · ${esc(clearanceForRank('isd', rk))}</option>`).join('');
+  // No rank to choose: the front's rank follows the operator's cover post.
+  const rank = isdRankFor(u);
   openModal({
     title: `Read into Internal Security — ${u.designation}`,
     body: `<p class="modal__message">This issues ${esc(u.codename)} an Internal Security front — the identity they wear day-to-day — alongside their unit posting. The link is visible only to the Department and CL5.</p>
-      <div class="field"><label>ISD rank</label><select id="isd-rank">${rankOpts}</select></div>
+      <div class="field"><label>ISD rank</label>
+        <p class="kv__v">${rank ? `${esc(rank)} ${clearanceBadge(isdClearanceFor(u))}` : '<span class="muted-text">— this post carries no mask</span>'}</p>
+        <div class="field__hint">Derived from their ${esc(u.rank || 'post')} posting — the Department's ladder follows the unit's, so it moves when they are promoted.</div></div>
       <div class="field"><label>Badge number <span class="muted-text">(optional)</span></label><input id="isd-badge-new" type="text" placeholder="e.g. 114" autocomplete="off" /></div>`,
     actions: [
       { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
       { label: 'Read in', tone: 'primary', onClick: (c, d) => {
-          const rank = d.querySelector('#isd-rank').value;
           const badge = d.querySelector('#isd-badge-new').value.trim() || null;
           const fresh = getUser(u.id);
           if (!fresh) { c(); return; }
-          fresh.isd = { rank, clearance: clearanceForRank('isd', rank), standing: 'active', badgeNumber: badge, promoChecks: [] };
+          fresh.isd = { standing: 'active', badgeNumber: badge, promoChecks: [] };
           fresh.updatedAt = new Date().toISOString();
           fresh.version = (fresh.version || 1) + 1;
           upsertUser(fresh);
-          logAction(app.user, 'SET_ISD_MEMBERSHIP', `${fresh.designation} read into Internal Security (${rank}).`);
+          logAction(app.user, 'SET_ISD_MEMBERSHIP', `${fresh.designation} read into Internal Security (${isdRankFor(fresh) || 'no mask'}).`);
           c();
           toast('Read into the Department.', 'success');
           app.refresh();
@@ -895,8 +825,6 @@ export function renderDossier(host, app, id) {
     'isd-badge': () => openISDBadge(app, u),
     'isd-induct': () => openISDInduct(app, u),
     'isd-remove': () => removeFromISD(app, u),
-    'isd-promote': () => isdRankMove(app, u, 'up'),
-    'isd-demote': () => isdRankMove(app, u, 'down'),
     tags: () => openTags(app, u),
     medal: () => openAward(app, u),
     transfer: () => openTransfer(app, u),
@@ -942,7 +870,6 @@ export function renderDossier(host, app, id) {
     if (a) exportMedalCertificate(app, u, a);
   }));
   host.querySelectorAll('[data-req]').forEach((b) => b.addEventListener('change', () => toggleRequirement(app, u, b.dataset.req)));
-  host.querySelectorAll('[data-isd-req]').forEach((b) => b.addEventListener('change', () => toggleISDRequirement(app, u, b.dataset.isdReq)));
 }
 
 // --- Dossier sub-sections ---------------------------------------------------

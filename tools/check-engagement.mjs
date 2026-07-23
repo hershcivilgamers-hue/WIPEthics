@@ -113,13 +113,15 @@ assert.deepEqual(engagementReqs({}, 'isd'), { req1: false, req2: false }, 'an em
 assert.equal(engagementReqs({ caseworkCount: 1 }, 'isd').req1, true, 'one contribution meets req1');
 assert.equal(engagementReqs({ contrib3wk: 1 }, 'isd').req2, true, 'a matter carried meets req2');
 
-// Gate: ISD scoring answers to ISD command, judged on the ISD ladder.
-const isdCmd = { id: 'x1', designation: 'O1-7', org: 'omega-1', rank: 'Private', clearance: 'CL3',
-  isd: { rank: 'Commissioner', clearance: 'CL4-S', standing: 'active' } };
-const isdInspector = { id: 'x2', designation: 'O1-8', org: 'omega-1', rank: 'Private', clearance: 'CL3',
-  isd: { rank: 'Inspector', clearance: 'CL4-J', standing: 'active' } };
+// Gate: ISD scoring answers to ISD command, judged on the ISD ladder — which is
+// derived from the cover post, so a Captain is a Commissioner (CL4-S) while the
+// cover itself is only CL4-J.
+const isdCmd = { id: 'x1', designation: 'O1-7', org: 'omega-1', rank: 'Captain', clearance: 'CL4-J',
+  isd: { standing: 'active' } };
+const isdInspector = { id: 'x2', designation: 'O1-8', org: 'omega-1', rank: 'Lieutenant', clearance: 'CL4-J',
+  isd: { standing: 'active' } };
 const isdRec = { id: 'eng2', org: 'isd', userId: 'u1', manual: {}, overrides: {}, version: 1, deleted: false };
-assert.equal(eng(isdCmd, null, isdRec).action, 'CREATE_ENGAGEMENT', 'ISD command scores, despite a CL3 cover post');
+assert.equal(eng(isdCmd, null, isdRec).action, 'CREATE_ENGAGEMENT', 'ISD command scores — CL4-S on the ISD ladder, above their CL4-J cover');
 assert.equal(eng(isdInspector, null, isdRec).ok, false, 'an Inspector does not score');
 assert.equal(eng(srCL4, null, isdRec).ok, false, 'an Omega CL4-S cannot score ISD agents');
 assert.equal(eng(cl5, null, isdRec).action, 'CREATE_ENGAGEMENT', 'CL5 always may');

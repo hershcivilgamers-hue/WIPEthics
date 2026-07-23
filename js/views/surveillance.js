@@ -17,6 +17,7 @@ import { subjects, getSubject, upsertSubject, compartments, getCompartment, newI
 import {
   canViewSubject, canManageSubject, canClassifySubjectAt, canManageSubjectsIn,
   isCL5, readIntoCompartment, canManageTribunal, canViewCase,
+  canModerate,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { exportSubject, exportOpeningReport } from '../export.js';
@@ -307,7 +308,9 @@ export function renderSubject(host, app, id) {
       <button class="btn btn--sm" data-act="edit">Edit</button>
       ${s.status !== 'closed' ? '<button class="btn btn--sm" data-act="close">Close watch</button>' : ''}
       <button class="btn btn--sm btn--danger" data-act="remove">Remove</button>
-    </div>` : ''}
+    </div>` : (canModerate(actor) ? `<div class="actionbar">
+      <button class="btn btn--sm btn--danger" data-act="remove" title="Administrator moderation — removes the record to the recycle bin">⚑ Remove (staff)</button>
+    </div>` : '')}
 
     <div class="dossier-grid">
       <section class="card">

@@ -23,11 +23,11 @@ import {
   canManageOrg, canParticipateRecruitment, canActOnRecruit, isMemberTrack, canLogToOperation, canLogIntel, canManageTraining, isCL5,
   canDischarge, canManageLeave, isISD, canManageISD,
   canViewInvestigation, canFileInvestigation, canAdvanceInvestigation, canAdjudicateInvestigation,
-  canViewInduction, canFileInduction,
+  canViewInduction, canFileInduction, canModerate,
 } from '../../js/permissions.js';
 import { investigationNextStage, INVESTIGATION_DISPOSITION } from '../../js/constants.js';
 import { scoreInduction } from '../../js/isd-induction.js';
-import { rankUp, rankDown, clearanceForRank, clearanceWeight, tallyVotes, RANKS, caseTakesVote, strikeActive } from '../../js/constants.js';
+import { rankUp, rankDown, clearanceForRank, clearanceWeight, tallyVotes, RANKS, caseTakesVote, strikeActive, isdRankFor } from '../../js/constants.js';
 
 const deny = (msg) => ({ ok: false, status: 403, error: msg || 'Not permitted.' });
 const ok = (action, detail) => ({ ok: true, action, detail });
@@ -50,6 +50,8 @@ const SERVER_OWNED = new Set([
   // this, an ordinary edit by a non-ISD manager would look like it blanked the
   // field and be refused. Its own writes go through the dedicated branch below.
   'isd',
+  // The Administrator (staff) grant, likewise: CL5-only, through its own branch.
+  'admin',
 ]);
 
 function changedOutside(cur, next, allowed) {
@@ -82,15 +84,10 @@ function authorizeUser(actor, cur, next) {
     if (!canEditPersonnel(actor, next)) return deny('You cannot create personnel in that organisation.');
     if (next.clearance && !canSetClearance(actor, next, next.clearance)) return deny('You cannot assign that clearance.');
     // A record may be BORN with an Internal Security front (the ISD intake path)
-    // — but only by ISD command or CL5, under the same rank/clearance integrity
-    // as an induction. Without this check, any org manager could quietly mint an
-    // agent by embedding `isd` in an ordinary personnel creation.
-    if (next.isd) {
-      if (!canManageISD(actor)) return deny('Internal Security membership is set by ISD command.');
-      if (!(RANKS.isd || []).includes(next.isd.rank)) return deny('That is not a valid Internal Security rank.');
-      const tier = clearanceForRank('isd', next.isd.rank);
-      if (tier && next.isd.clearance !== tier) return deny('Internal Security clearance must match the ISD rank.');
-    }
+    // — but only by ISD command or CL5. Without this check, any org manager could
+    // quietly mint an agent by embedding `isd` in an ordinary personnel creation.
+    // The front's rank is derived from the cover post, so there is none to vet.
+    if (next.isd && !canManageISD(actor)) return deny('Internal Security membership is set by ISD command.');
     return ok('CREATE_PERSONNEL', `Created ${next.designation || 'operator'}.`);
   }
 
@@ -320,12 +317,29 @@ function authorizeUser(actor, cur, next) {
     }
     if (!canManageISD(actor)) return deny('Internal Security membership is set by ISD command.');
     if (after) {
-      if (!(RANKS.isd || []).includes(after.rank)) return deny('That is not a valid Internal Security rank.');
-      const tier = clearanceForRank('isd', after.rank);
-      if (tier && after.clearance !== tier) return deny('Internal Security clearance must match the ISD rank.');
-      return ok('SET_ISD_MEMBERSHIP', `${cur.designation}: Internal Security ${before ? 'record updated' : 'induction'} (${after.rank}).`);
+      // No rank to validate: the ISD rank is derived from the cover post
+      // (isdRankFor), so membership carries only standing and a badge. A rank
+      // smuggled in here is inert — nothing reads it — and is stripped on write.
+      return ok('SET_ISD_MEMBERSHIP', `${cur.designation}: Internal Security ${before ? 'record updated' : 'induction'} (${isdRankFor(cur) || 'no mask'}).`);
     }
     return ok('SET_ISD_MEMBERSHIP', `${cur.designation} removed from Internal Security.`);
+  }
+
+  // Administrator (staff) grant. `admin` is SERVER_OWNED, so this branch is the
+  // ONLY lawful way it moves, and it is CL5's alone — the whole point is that
+  // Command hands out moderation, so an Administrator must not be able to mint
+  // more Administrators (including re-granting themselves after a revoke).
+  // Isolated: nothing but the grant, events and the version stamp may change.
+  if (j(next.admin ?? null) !== j(cur.admin ?? null)
+      && !changedOutside(cur, next, ['events', 'version', 'updatedAt'])) {
+    if (!isCL5(actor)) return deny('Administrator access is granted by Command Administration.');
+    if (actor.id === cur.id) return deny('You cannot grant or revoke your own Administrator access.');
+    const after = next.admin ?? null;
+    if (after) {
+      if (after.standing !== 'active') return deny('An Administrator grant is active or absent.');
+      return ok('GRANT_ADMIN', `${cur.designation} granted Administrator access.`);
+    }
+    return ok('REVOKE_ADMIN', `${cur.designation}: Administrator access revoked.`);
   }
 
   // Discharge is DUAL CONTROL (REC-10): the status → 'discharged' transition is
@@ -1243,9 +1257,33 @@ function authorizeEvidence(actor, cur, next) {
   return ok('EDIT_EVIDENCE', 'Evidence updated.');
 }
 
+// Moderation: an Administrator (staff, granted through Command Administration)
+// may remove or restore ANY record in ANY collection, whatever its org,
+// clearance or owner — the point of the grant is to pull something that should
+// never have been posted. It is deliberately narrow: the write must be nothing
+// BUT the delete flag flipping, so the same grant can never be used to edit a
+// record's substance, and it is checked before the per-collection gate so an
+// ordinary lack of authority over that org doesn't block the cleanup. Removal is
+// the soft, restorable kind every other path uses — nothing is destroyed.
+function moderationRemoval(collection, actor, cur, next) {
+  if (!cur || !next || !canModerate(actor)) return null;
+  if (!!next.deleted === !!cur.deleted) return null;
+  if (changedOutside(cur, next, ['deleted', 'deletedAt', 'version', 'updatedAt'])) return null;
+  // A self-removal is still barred; the self-override block is not moderation.
+  if (collection === 'users' && cur.id === actor.id) return deny('You cannot remove your own record.');
+  const label = cur.ref || cur.designation || cur.title || cur.name || 'record';
+  return next.deleted
+    ? ok('MODERATE_REMOVE', `${label} removed from ${collection} by an Administrator.`)
+    : ok('MODERATE_RESTORE', `${label} restored to ${collection} by an Administrator.`);
+}
+
 export function authorizeWrite(collection, actor, cur, next, ctx) {
   const fn = AUTHORIZERS[collection];
   if (!fn) return { ok: false, status: 404, error: 'Unknown collection.' };
   if (!actor) return { ok: false, status: 401, error: 'Not authenticated.' };
-  return fn(actor, cur, next, ctx);
+  // Try the ordinary gate first, so a manager acting within their own authority
+  // is logged as themselves; fall back to the moderation grant only if refused.
+  const verdict = fn(actor, cur, next, ctx);
+  if (verdict && verdict.ok) return verdict;
+  return moderationRemoval(collection, actor, cur, next) || verdict;
 }

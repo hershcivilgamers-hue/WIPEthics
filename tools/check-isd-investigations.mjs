@@ -12,14 +12,15 @@ import { authorizeWrite } from '../worker/src/gate.js';
 import { buildSnapshot } from '../worker/src/redact.js';
 import { INVESTIGATION_PIPELINE, investigationNextStage } from '../js/constants.js';
 
-const isd = (rank, clearance, id) => ({
-  id, designation: `O1-${id}`, org: 'omega-1', rank: 'Sergeant', clearance: 'CL3',
-  isd: { rank, clearance, standing: 'active' },
+// The mask derives from the cover post, so the cast is built from cover ranks.
+const isd = (coverRank, coverClearance, id) => ({
+  id, designation: `O1-${id}`, org: 'omega-1', rank: coverRank, clearance: coverClearance,
+  isd: { standing: 'active' },
 });
-const operative    = isd('Operative',    'CL3',   'p1');
-const investigator = isd('Investigator', 'CL3',   'v1');
-const inspector    = isd('Inspector',    'CL4-J', 'i1');
-const commissioner = isd('Commissioner', 'CL4-S', 'c1');
+const operative    = isd('Private',    'CL3',   'p1'); // → Operative
+const investigator = isd('Sergeant',   'CL3',   'v1'); // → Investigator
+const inspector    = isd('Lieutenant', 'CL4-J', 'i1'); // → Inspector
+const commissioner = isd('Captain',    'CL4-J', 'c1'); // → Commissioner
 const outsider  = { id: 'o1', designation: 'O1-2', org: 'omega-1', rank: 'Major', clearance: 'CL4-S' };
 const cl5       = { id: 'd1', designation: 'CMD-1', org: 'command', rank: 'Director', clearance: 'CL5' };
 

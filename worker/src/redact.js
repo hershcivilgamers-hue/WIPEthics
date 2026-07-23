@@ -18,7 +18,7 @@ import {
   compartmentClears, readIntoCompartment, canManageCompartment,
   canViewActivity, canViewRecruitment, canViewOperation, isAssignedToOperation,
   canViewIntel, isAssignedToIntel, canViewTraining,
-  canViewDocument, canManageOrg, isISD, canViewInvestigation, canViewInduction, canManageISD,
+  canViewDocument, canManageOrg, isISD, isAdmin, canViewInvestigation, canViewInduction, canManageISD,
 } from '../../js/permissions.js';
 import { strikeVoided } from '../../js/constants.js';
 
@@ -49,12 +49,15 @@ export function redactUser(actor, user) {
     // unless the VIEWER is ISD or CL5 — the key is absent, not nulled, so a
     // non-ISD snapshot is indistinguishable from one where the department does
     // not exist. The agent still appears normally under their cover post.
-    ...((isCL5(actor) || isISD(actor)) && user.isd ? { isd: user.isd } : {}),
+    ...((isCL5(actor) || isISD(actor) || isAdmin(actor)) && user.isd ? { isd: user.isd } : {}),
+    // The Administrator (staff) grant is open — being able to see who holds
+    // moderation is the accountability half of handing it out.
+    ...(user.admin ? { admin: user.admin } : {}),
     // Interest in Internal Security, flagged at sign-up, is itself covert — shown
     // only to ISD/CL5, the same audience that can see membership. Command (CL5)
     // sees it to activate the cover post; ISD command sees it to induct. The
     // value is `true` or the ISD rank sought (e.g. 'Investigator').
-    ...((isCL5(actor) || isISD(actor)) && user.requestedISD ? { requestedISD: user.requestedISD } : {}),
+    ...((isCL5(actor) || isISD(actor) || isAdmin(actor)) && user.requestedISD ? { requestedISD: user.requestedISD } : {}),
   };
 
   if (level === 'full') {
@@ -239,6 +242,6 @@ export function buildSnapshot(actor, db) {
     blacklist: (db.blacklist || []).filter((b) => !b.deleted),
     promoReqs: db.promoReqs || [],
     settings: db.settings || [],
-    audit: isCL5(actor) ? (db.audit || []) : [],
+    audit: (isCL5(actor) || isAdmin(actor)) ? (db.audit || []) : [],
   };
 }

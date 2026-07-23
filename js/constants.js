@@ -95,8 +95,9 @@ export const RANKS = {
   ],
   'command': ['Director', 'Liaison'],
   // ISD ladder. Tops out at CL4·S — there is deliberately no CL5 in the ISD, so
-  // it can never outrank the Committee it answers to. Used against user.isd.rank
-  // (NOT user.rank, which stays the agent's cover post).
+  // it can never outrank the Committee it answers to. An agent's rank on this
+  // ladder is DERIVED from their Omega-1 cover rank (see isdRankFor), never
+  // stored, so the mask and the post can never drift apart.
   'isd': [
     'Director',          // Sr CL4
     'Commissioner',      // Sr CL4
@@ -105,6 +106,33 @@ export const RANKS = {
     'Operative',         // CL3
   ],
 };
+
+// Omega-1 wears the ISD mask, so the unit sits inside ISD's rank structure: an
+// operative's public Internal Security rank follows their cover rank. Derived,
+// never stored — a stored rank could be forged or drift after a promotion, and
+// promotion on the cover ladder IS promotion on the ISD one.
+export const ISD_RANK_BY_COVER = {
+  'Commander': 'Director',
+  'Major': 'Commissioner',
+  'Captain': 'Commissioner',
+  'Lieutenant': 'Inspector',
+  'Command Sergeant': 'Investigator',
+  'Sergeant': 'Investigator',
+  'Corporal': 'Investigator',
+  'Lance Corporal': 'Operative',
+  'Specialist': 'Operative',
+  'Private': 'Operative',
+};
+// The ISD rank an operator presents, or null if their post carries no mask.
+export function isdRankFor(user) {
+  if (!user || user.org !== 'omega-1') return null;
+  return ISD_RANK_BY_COVER[user.rank] || null;
+}
+// The clearance that ISD rank carries (the ladder's own tier, not the cover's).
+export function isdClearanceFor(user) {
+  const rank = isdRankFor(user);
+  return rank ? (RANK_CLEARANCE.isd[rank] || null) : null;
+}
 
 // The clearance tier each rank carries. Promotion/demotion keeps an operator's
 // clearance aligned to their rank's tier. (Command ranks are administrative and

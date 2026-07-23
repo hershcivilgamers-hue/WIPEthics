@@ -16,7 +16,7 @@
 import {
   INDUCTION_QUESTIONS, INDUCTION_MAX, INDUCTION_PASS_MARK, scoreInduction,
 } from '../isd-induction.js';
-import { clearanceForRank } from '../constants.js';
+import { isdRankFor } from '../constants.js';
 import {
   inductions, getInduction, upsertInduction, users, getUser, upsertUser, newId,
 } from '../storage.js';
@@ -123,7 +123,7 @@ function openAssessment(app, id) {
       <div class="ind-admin">
         <div class="field"><label>Candidate name</label><input id="ind-name" type="text" value="${esc((rec && rec.candidateName) || '')}" ${readOnly ? 'disabled' : ''} /></div>
         <div class="field"><label>Candidate SteamID</label><input id="ind-steam" type="text" value="${esc((rec && rec.candidateSteamId) || '')}" placeholder="STEAM_0:…" ${readOnly ? 'disabled' : ''} /></div>
-        <div class="field"><label>Recruiter rank</label><input id="ind-rrank" type="text" value="${esc((rec && rec.recruiterRank) || actor.isd?.rank || '')}" ${readOnly ? 'disabled' : ''} /></div>
+        <div class="field"><label>Recruiter rank</label><input id="ind-rrank" type="text" value="${esc((rec && rec.recruiterRank) || isdRankFor(actor) || '')}" ${readOnly ? 'disabled' : ''} /></div>
         <div class="field"><label>Recruiter name</label><input id="ind-rname" type="text" value="${esc((rec && rec.recruiterName) || actor.designation)}" ${readOnly ? 'disabled' : ''} /></div>
       </div>
       <div class="card__subtitle" style="margin-top:10px">Section 2 — assessment
@@ -276,7 +276,7 @@ async function readCandidateIn(app, id, userId) {
   if (!ok) return;
   const now = new Date().toISOString();
   const fresh = getUser(userId);
-  fresh.isd = { rank: 'Operative', clearance: clearanceForRank('isd', 'Operative'), standing: 'active', badgeNumber: null, promoChecks: [] };
+  fresh.isd = { standing: 'active', badgeNumber: null, promoChecks: [] };
   fresh.updatedAt = now; fresh.version = (fresh.version || 1) + 1;
   upsertUser(fresh);
   logAction(app.user, 'SET_ISD_MEMBERSHIP', `${fresh.designation} read into Internal Security from induction ${rec.ref}.`);

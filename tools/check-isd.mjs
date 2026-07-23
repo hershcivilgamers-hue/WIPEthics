@@ -8,8 +8,8 @@
 // =============================================================================
 
 import assert from 'node:assert';
-import { isISD, isdWeight, canManageISD, accessLevel, canManageOrg, canViewSubject, knowsOmegaTruth } from '../js/permissions.js';
-import { ORGS, setOmegaBranding, RANKS, RANK_CLEARANCE, clearanceForRank,
+import { isISD, isdRank, isdWeight, canManageISD, accessLevel, canManageOrg, canViewSubject, knowsOmegaTruth } from '../js/permissions.js';
+import { ORGS, setOmegaBranding, RANKS, RANK_CLEARANCE, clearanceForRank, clearanceWeight, isdRankFor,
   ACTIVITY_REQ_DEFAULT, activityStatus, activityRequirement } from '../js/constants.js';
 import { redactUser, buildSnapshot } from '../worker/src/redact.js';
 import { authorizeWrite } from '../worker/src/gate.js';
@@ -24,15 +24,21 @@ assert.ok(!Object.values(RANK_CLEARANCE.isd).includes('CL5'),
   'there is deliberately no CL5 in the ISD — it cannot outrank the Committee');
 
 // --- Cast --------------------------------------------------------------------
-// An ISD Commissioner whose COVER post is a lowly CL3 Omega private. Authority
-// must follow the ISD ladder, not the cover clearance.
+// The mask follows the post, so a member's cover rank fixes their ISD rank. A
+// Captain is a Commissioner (CL4-S on the ISD ladder) while their cover post is
+// only CL4-J — ISD authority still exceeds cover clearance, it is just derived.
 const commissioner = {
-  id: 'i1', designation: 'O1-7', org: 'omega-1', rank: 'Private', clearance: 'CL3',
-  isd: { rank: 'Commissioner', clearance: 'CL4-S', standing: 'active', badgeNumber: '114' },
+  id: 'i1', designation: 'O1-7', org: 'omega-1', rank: 'Captain', clearance: 'CL4-J',
+  isd: { standing: 'active', badgeNumber: '114' },
 };
 const inspector = {
-  id: 'i2', designation: 'O1-8', org: 'omega-1', rank: 'Sergeant', clearance: 'CL3',
-  isd: { rank: 'Inspector', clearance: 'CL4-J', standing: 'active', badgeNumber: '221' },
+  id: 'i2', designation: 'O1-8', org: 'omega-1', rank: 'Lieutenant', clearance: 'CL4-J',
+  isd: { standing: 'active', badgeNumber: '221' },
+};
+// A CL3-covered member, for the "no cross-org reach" checks.
+const operative = {
+  id: 'i3', designation: 'O1-9', org: 'omega-1', rank: 'Private', clearance: 'CL3',
+  isd: { standing: 'active', badgeNumber: '9' },
 };
 const omegaMgr = { id: 'o1', designation: 'O1-2', org: 'omega-1', rank: 'Major', clearance: 'CL4-S' };
 const cl3      = { id: 'c1', designation: 'O1-9', org: 'omega-1', rank: 'Private', clearance: 'CL3' };
@@ -46,7 +52,8 @@ assert.equal(isISD({ ...inspector, isd: { ...inspector.isd, standing: 'revoked' 
 
 assert.equal(isdWeight(commissioner), 5, 'Commissioner weighs CL4-S on the ISD ladder');
 assert.equal(isdWeight(omegaMgr), 0, 'a non-member has no ISD weight');
-assert.equal(canManageISD(commissioner), true, 'ISD authority uses the ISD clearance, NOT the CL3 cover');
+assert.equal(canManageISD(commissioner), true, 'a Captain derives Commissioner (CL4-S) and runs the department');
+assert.equal(canManageISD(operative), false, 'a Private derives Operative — no ISD command');
 assert.equal(canManageISD(inspector), false, 'an Inspector (CL4-J) does not run the department');
 assert.equal(canManageISD(omegaMgr), false, 'an Omega CL4-S manager has no ISD authority');
 assert.equal(canManageISD(cl5), true, 'CL5 always overrides');
@@ -84,27 +91,21 @@ assert.equal(usr(inspector, plain, inducted).ok, false, 'an Inspector cannot ind
 // front obeys induction integrity. Also the closed hole: an org manager cannot
 // quietly embed `isd` in an ordinary personnel creation.
 const covComm = { id: 'i5', designation: 'O1-2', org: 'omega-1', rank: 'Commander', clearance: 'CL4-S',
-  isd: { rank: 'Commissioner', clearance: 'CL4-S', standing: 'active' } };
+  isd: { standing: 'active' } };
 const born = { id: 'nb', designation: 'O1-12', org: 'omega-1', rank: 'Private', clearance: 'CL3',
   accountStatus: 'active', version: 1, deleted: false,
-  isd: { rank: 'Investigator', clearance: 'CL3', standing: 'active', badgeNumber: null, promoChecks: [] } };
+  isd: { standing: 'active', badgeNumber: null, promoChecks: [] } };
 assert.equal(usr(cl5, null, born).action, 'CREATE_PERSONNEL', 'CL5 mints an agent in one write');
 assert.equal(usr(covComm, null, born).ok, false, 'even an ISD Commissioner cannot mint — assigning the posting clearance is CL5’s (canSetClearance)');
 assert.equal(usr(commissioner, null, born).ok, false, 'ISD command on a junior cover cannot mint postings');
 // The closed hole: with no clearance set, the clearance rule stays silent — the
 // front check alone must still stop an org manager embedding `isd` at creation.
 assert.equal(usr(omegaMgr, null, { ...born, clearance: null }).ok, false, 'an org manager cannot embed a front in an ordinary creation');
-assert.equal(usr(cl5, null, { ...born, isd: { ...born.isd, rank: 'Overlord' } }).ok, false, 'invalid front rank refused at birth');
-assert.equal(usr(cl5, null, { ...born, isd: { ...born.isd, clearance: 'CL5' } }).ok, false, 'front clearance must match the front rank at birth');
 
 // Reading an agent OUT (isd -> null) is the same authority as reading in.
 const readOut = { ...inducted, isd: null, version: 3 };
 assert.equal(usr(commissioner, inducted, readOut).action, 'SET_ISD_MEMBERSHIP', 'ISD command reads an agent out');
 assert.equal(usr(omegaMgr, inducted, readOut).ok, false, 'an Omega manager cannot read an agent out');
-
-// Rank/clearance integrity.
-assert.equal(usr(commissioner, plain, { ...plain, isd: { rank: 'Overlord', clearance: 'CL4-S', standing: 'active' }, version: 2 }).ok, false, 'invalid ISD rank refused');
-assert.equal(usr(commissioner, plain, { ...plain, isd: { rank: 'Operative', clearance: 'CL5', standing: 'active' }, version: 2 }).ok, false, 'ISD clearance must match the ISD rank');
 
 // Badge: an agent records only their OWN.
 const withBadge = { ...inducted, isd: { ...inducted.isd, badgeNumber: '404' }, version: 3 };
@@ -148,36 +149,46 @@ assert.ok(!('isd' in activated), 'approval grants NO caveat — the account is a
 
 // Induction afterwards is the usual isolated isd write; the standing flag does not trip changedOutside.
 const activeFlagged = { id: 'p1', designation: 'O1-11', org: 'omega-1', rank: 'Private', clearance: 'CL3', accountStatus: 'active', requestedISD: true, version: 2, deleted: false };
-const inductedFlagged = { ...activeFlagged, isd: { rank: 'Operative', clearance: 'CL3', standing: 'active', badgeNumber: null }, version: 3 };
+const inductedFlagged = { ...activeFlagged, isd: { standing: 'active', badgeNumber: null }, version: 3 };
 assert.equal(usr(commissioner, activeFlagged, inductedFlagged).action, 'SET_ISD_MEMBERSHIP', 'induction still passes with the sign-up flag present');
 
-// --- Promotion on the ISD ladder ---------------------------------------------
-// Rank moves realign the ISD clearance and reset the ISD checklist, and must
-// leave the cover post completely alone.
+// --- The mask follows the post -----------------------------------------------
+// Omega-1 sits inside ISD's rank structure, so an agent's ISD rank is DERIVED
+// from their cover rank. There is no separate ISD ladder to climb: promotion in
+// the unit IS promotion in the Department, and the two can never drift.
+const maskOf = (rank) => isdRankFor({ org: 'omega-1', rank });
+assert.equal(maskOf('Private'), 'Operative');
+assert.equal(maskOf('Specialist'), 'Operative');
+assert.equal(maskOf('Lance Corporal'), 'Operative');
+assert.equal(maskOf('Corporal'), 'Investigator');
+assert.equal(maskOf('Sergeant'), 'Investigator');
+assert.equal(maskOf('Command Sergeant'), 'Investigator');
+assert.equal(maskOf('Lieutenant'), 'Inspector');
+assert.equal(maskOf('Captain'), 'Commissioner');
+assert.equal(maskOf('Major'), 'Commissioner');
+assert.equal(maskOf('Commander'), 'Director');
+assert.equal(isdRankFor({ org: 'ethics-committee', rank: 'Member' }), null, 'only Omega-1 wears the mask');
+
 const agent = {
   id: 'u8', designation: 'O1-8', org: 'omega-1', rank: 'Sergeant', clearance: 'CL3',
-  accountStatus: 'active', version: 1, deleted: false,
-  isd: { rank: 'Operative', clearance: 'CL3', standing: 'active', badgeNumber: '9', promoChecks: ['a', 'b'] },
+  accountStatus: 'active', promoChecks: [], version: 1, deleted: false,
+  isd: { standing: 'active', badgeNumber: '9' },
 };
-const promoted = {
-  ...agent, version: 2,
-  isd: { rank: 'Investigator', clearance: clearanceForRank('isd', 'Investigator'), standing: 'active', badgeNumber: '9', promoChecks: [] },
-};
-assert.equal(usr(commissioner, agent, promoted).action, 'SET_ISD_MEMBERSHIP', 'ISD command promotes on the ISD ladder');
-assert.equal(usr(inspector, agent, promoted).ok, false, 'an Inspector cannot promote');
-assert.equal(promoted.org, agent.org, 'cover org untouched');
-assert.equal(promoted.rank, agent.rank, 'cover rank untouched');
-assert.equal(promoted.clearance, agent.clearance, 'cover clearance untouched');
+assert.equal(isdRank(agent), 'Investigator', 'a Sergeant presents as an Investigator');
+const liftedToLt = { ...agent, rank: 'Lieutenant', clearance: 'CL4-J' };
+assert.equal(isdRank(liftedToLt), 'Inspector', 'promoting the cover post promotes the mask');
+assert.equal(isdWeight(liftedToLt), clearanceWeight('CL4-J'), 'and carries the mask rank’s clearance');
 
-// An ISD move may NOT ride along with a cover-post rank change.
-const both = { ...promoted, rank: 'Command Sergeant', clearance: 'CL3' };
-assert.notEqual(usr(commissioner, agent, both).action, 'SET_ISD_MEMBERSHIP',
-  'an ISD rank change cannot be combined with a cover-post rank change');
+// The security property: a forged stored rank buys NOTHING, because nothing
+// reads it — authority is recomputed from the cover post every time.
+const forged = { ...agent, isd: { standing: 'active', badgeNumber: '9', rank: 'Director', clearance: 'CL4-S' } };
+assert.equal(isdRank(forged), 'Investigator', 'a smuggled isd.rank is ignored');
+assert.equal(canManageISD(forged), false, 'and cannot buy ISD command');
 
-// Ticking the ISD checklist is ISD command's, and touches only isd.
-const ticked = { ...agent, version: 2, isd: { ...agent.isd, promoChecks: ['a', 'b', 'c'] } };
-assert.equal(usr(commissioner, agent, ticked).action, 'SET_ISD_MEMBERSHIP', 'ISD command ticks the ISD checklist');
-assert.equal(usr(omegaMgr, agent, ticked).ok, false, 'an Omega manager cannot tick an ISD checklist');
+// Membership itself is still ISD command's to grant or revoke.
+const readOut2 = { ...agent, isd: null, version: 2 };
+assert.equal(usr(commissioner, agent, readOut2).action, 'SET_ISD_MEMBERSHIP', 'ISD command reads an agent out');
+assert.equal(usr(omegaMgr, agent, readOut2).ok, false, 'an Omega manager cannot');
 
 // --- ISD membership grants NO cross-org reach --------------------------------
 // An agent reads other departments exactly as their COVER post allows. A CL3/
@@ -187,14 +198,14 @@ assert.equal(usr(omegaMgr, agent, ticked).ok, false, 'an Omega manager cannot ti
 const ethicsMember = { id: 'e1', designation: 'EC-3', org: 'ethics-committee', rank: 'Member', clearance: 'CL5' };
 const omegaFile = { id: 'o9', designation: 'O1-9', org: 'omega-1', rank: 'Sergeant', clearance: 'CL3' };
 
-assert.equal(accessLevel(inspector, ethicsMember), accessLevel(cl3, ethicsMember),
-  'an ISD Inspector reads an Ethics file exactly as a plain CL3 does');
-assert.equal(accessLevel(commissioner, ethicsMember), accessLevel(cl3, ethicsMember),
-  'even ISD command gets no cross-org elevation from membership');
+assert.equal(accessLevel(operative, ethicsMember), accessLevel(cl3, ethicsMember),
+  'a CL3-covered agent reads an Ethics file exactly as a plain CL3 does');
+assert.equal(accessLevel(commissioner, ethicsMember), accessLevel({ ...commissioner, isd: undefined }, ethicsMember),
+  'ISD command gets no cross-org elevation from membership — only their cover post counts');
 assert.equal(canManageOrg(omegaMgr, 'isd'), false, 'a CL4-S outsider gets no free stake in the ISD');
 assert.equal(canManageOrg(cl5, 'isd'), true, 'CL5 manages every organisation, ISD included');
 // Redaction of a third party is unchanged by the viewer's ISD membership.
-assert.deepEqual(redactUser(inspector, omegaFile), redactUser({ ...inspector, isd: undefined }, omegaFile),
+assert.deepEqual(redactUser(operative, omegaFile), redactUser({ ...operative, isd: undefined }, omegaFile),
   'stripping ISD membership from the viewer changes nothing about what they can read');
 
 // --- Playtime: one activity record, two chains of command --------------------

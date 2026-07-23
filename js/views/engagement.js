@@ -12,7 +12,7 @@
 
 import {
   ORGS, engagementSections, engagementMaxFor, engagementTotalMax,
-  engagementWeekStart, engagementWeekShift, rankIndex,
+  engagementWeekStart, engagementWeekShift, rankIndex, isdRankFor,
   ACTIVITY_STATUS, ACTIVITY_REQ_SETTING_ID, mergeActivityReqs, activityStatus,
 } from '../constants.js';
 import { engagementModel } from '../engagement.js';
@@ -42,8 +42,8 @@ function roster(org) {
     .filter((u) => !u.deleted && u.accountStatus === 'active' && u.status !== 'discharged'
       && (isd ? isISD(u) : u.org === org))
     .sort((a, b) => {
-      const ra = isd ? rankIndex('isd', a.isd?.rank) : rankIndex(org, a.rank);
-      const rb = isd ? rankIndex('isd', b.isd?.rank) : rankIndex(org, b.rank);
+      const ra = isd ? rankIndex('isd', isdRankFor(a)) : rankIndex(org, a.rank);
+      const rb = isd ? rankIndex('isd', isdRankFor(b)) : rankIndex(org, b.rank);
       return (ra - rb) || (a.designation || '').localeCompare(b.designation || '');
     });
 }

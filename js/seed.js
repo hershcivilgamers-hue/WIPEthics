@@ -94,10 +94,10 @@ async function buildUser(spec) {
 }
 
 // A ready-made ISD caveat for a seed spec — an agent keeps their cover post and
-// carries this hidden identity. Demo agents so the covert paths are exercisable
-// (and loginable) out of the box.
-function isdCaveat(rank, badge) {
-  return { rank, clearance: RANK_CLEARANCE.isd[rank], standing: 'active', badgeNumber: badge, promoChecks: [] };
+// carries this hidden identity. The ISD rank is derived from that post, so
+// membership stores only standing and a badge.
+function isdCaveat(badge) {
+  return { standing: 'active', badgeNumber: badge, promoChecks: [] };
 }
 
 const SEED_SPECS = [
@@ -113,7 +113,7 @@ const SEED_SPECS = [
   },
   {
     designation: 'O1-1', codename: 'Vanguard', org: 'omega-1', rank: 'Commander',
-    clearance: 'CL4-S', username: 'vanguard', isd: isdCaveat('Commissioner', '101'),
+    clearance: 'CL4-S', username: 'vanguard', isd: isdCaveat('101'),
     awards: [{ id: 'a2', title: 'MTF Command Ribbon', date: iso(300), note: 'Assumed command of Omega-1.' }],
     events: [
       event(600, 'transfer', 'Transferred into the task force from Site security.'),
@@ -123,7 +123,7 @@ const SEED_SPECS = [
   },
   {
     designation: 'O1-3', codename: 'Warrant', org: 'omega-1', rank: 'Lieutenant',
-    clearance: 'CL4-J', username: 'warrant', isd: isdCaveat('Inspector', '114'),
+    clearance: 'CL4-J', username: 'warrant', isd: isdCaveat('114'),
     awards: [{ id: 'a7', title: 'Field Conduct Commendation', date: iso(70), note: 'Exemplary conduct during containment escort.' }],
     events: [
       event(260, 'transfer', 'Joined the unit as Specialist.'),
@@ -143,7 +143,7 @@ const SEED_SPECS = [
   },
   {
     designation: 'O1-7', codename: 'Bailiff', org: 'omega-1', rank: 'Sergeant',
-    clearance: 'CL3', username: 'bailiff', isd: isdCaveat('Investigator', '221'),
+    clearance: 'CL3', username: 'bailiff', isd: isdCaveat('221'),
     events: [
       event(210, 'transfer', 'Inducted following recruitment review.'),
       event(54, 'training', 'Completed close-protection refresher.'),

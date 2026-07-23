@@ -21,6 +21,7 @@ import {
 import {
   canViewCase, canManageTribunal, canRuleTribunal, canClassifyAt, canViewSubject,
   isCL5, readIntoCompartment, canRequestTribunal, canReviewTribunal,
+  canModerate,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { exportCase, exportSummons } from '../export.js';
@@ -413,7 +414,9 @@ export function renderCase(host, app, id) {
       ${canRule && !c.ruling ? '<button class="btn btn--sm btn--primary" data-act="ruling">Enter ruling</button>' : ''}
       ${c.status !== 'closed' && c.status !== 'dismissed' ? '<button class="btn btn--sm" data-act="dismiss">Dismiss</button>' : ''}
       <button class="btn btn--sm btn--danger" data-act="remove">Remove</button>
-    </div>` : ''}
+    </div>` : (canModerate(actor) ? `<div class="actionbar">
+      <button class="btn btn--sm btn--danger" data-act="remove" title="Administrator moderation — removes the record to the recycle bin">⚑ Remove (staff)</button>
+    </div>` : '')}
 
     <div class="dossier-grid">
       <section class="card">
