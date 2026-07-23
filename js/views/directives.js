@@ -11,6 +11,7 @@ import { ORGS, ORG_ORDER, CLEARANCE_ORDER, CLEARANCES, clearanceWeight } from '.
 import { directives, getDirective, upsertDirective, compartments, getCompartment, isServerMode, newId, users } from '../storage.js';
 import { canManageDirectives, canReadDirective, canSeeDirective, isCL5, readIntoCompartment } from '../permissions.js';
 import { logAction } from '../audit.js';
+import { moderationBar, wireModerationBar } from '../moderation.js';
 import { exportDirective } from '../export.js';
 import { esc, fmtDate, fmtDateTime, clearanceBadge, orgTag, monogram, toast, openModal, confirmDialog } from '../ui.js';
 
@@ -200,6 +201,7 @@ export function renderDirective(host, app, id) {
     </header>
 
     ${caveatBanner(d)}
+    ${moderationBar(actor, { already: false })}
 
     ${ackStrip}
 
@@ -226,6 +228,9 @@ export function renderDirective(host, app, id) {
 
   host.querySelector('#back').addEventListener('click', () => app.navigate('#/directives'));
   host.querySelector('#export-directive').addEventListener('click', () => exportDirective(app, d));
+  wireModerationBar(host, app, {
+    label: `standing order ${d.ref}`, get: () => getDirective(d.id), upsert: upsertDirective, backHash: '#/directives',
+  });
   const rescindBtn = host.querySelector('[data-act="rescind"]');
   if (rescindBtn) rescindBtn.addEventListener('click', () => setStatus(app, d.id, 'rescinded'));
   const reinstateBtn = host.querySelector('[data-act="reinstate"]');

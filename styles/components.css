@@ -12,6 +12,18 @@
 /* A card whose content is wider than the column (e.g. the engagement grid)
    scrolls horizontally within its own bounds instead of clipping. */
 .card--scrollx { overflow-x: auto; }
+
+/* The Administrator's removal bar — visually set apart from ordinary actions,
+   because it is authority the operator holds as staff, not as themselves. */
+.actionbar--staff {
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  border: 1px dashed rgba(166, 61, 61, .5);
+  border-radius: var(--radius);
+  background: rgba(166, 61, 61, .07);
+}
+.actionbar--staff .muted-text { font-size: 11.5px; }
 .card__title {
   padding: var(--s3) var(--s4);
   border-bottom: 1px solid var(--line);

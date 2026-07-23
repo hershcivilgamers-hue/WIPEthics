@@ -22,6 +22,7 @@ import {
   canViewOperation, canManageOperation, canLogToOperation, isAssignedToOperation, isCL5,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
+import { moderationBar, wireModerationBar } from '../moderation.js';
 import { exportAfterAction } from '../export.js';
 import {
   esc, linkify, fmtDate, fmtDateTime, relTime, clearanceBadge, orgTag, monogram,
@@ -179,6 +180,7 @@ export function renderOperation(host, app, id) {
     </header>
 
     ${actions ? `<div class="actionbar">${actions}</div>` : ''}
+    ${moderationBar(actor, { already: canManage })}
     ${op.compartment ? `<div class="ntk-banner">Need-to-Know \u2014 ${esc(op.compartmentName || 'compartmented operation')}. Handling restricted to read-in personnel.</div>` : ''}
 
     <div class="dossier-grid">
@@ -222,6 +224,7 @@ export function renderOperation(host, app, id) {
   `;
 
   host.querySelector('#back').addEventListener('click', () => app.navigate('#/deployments'));
+  wireModerationBar(host, app, { label: `operation ${op.ref}`, get: () => getOperation(op.id), upsert: upsertOperation, backHash: '#/deployments' });
   const dispatch = {
     export: () => exportAfterAction(app, op),
     log: () => openLogEntry(app, op),

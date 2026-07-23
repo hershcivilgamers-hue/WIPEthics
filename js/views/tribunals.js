@@ -24,6 +24,7 @@ import {
   canModerate,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
+import { moderationBar, wireModerationBar } from '../moderation.js';
 import { exportCase, exportSummons } from '../export.js';
 import { stalenessBadge } from '../staleness.js';
 import { exportCSV } from '../csv.js';
@@ -414,9 +415,8 @@ export function renderCase(host, app, id) {
       ${canRule && !c.ruling ? '<button class="btn btn--sm btn--primary" data-act="ruling">Enter ruling</button>' : ''}
       ${c.status !== 'closed' && c.status !== 'dismissed' ? '<button class="btn btn--sm" data-act="dismiss">Dismiss</button>' : ''}
       <button class="btn btn--sm btn--danger" data-act="remove">Remove</button>
-    </div>` : (canModerate(actor) ? `<div class="actionbar">
-      <button class="btn btn--sm btn--danger" data-act="remove" title="Administrator moderation — removes the record to the recycle bin">⚑ Remove (staff)</button>
-    </div>` : '')}
+    </div>` : ''}
+    ${moderationBar(actor, { already: canManage })}
 
     <div class="dossier-grid">
       <section class="card">
@@ -462,6 +462,7 @@ export function renderCase(host, app, id) {
   `;
 
   host.querySelector('#back').addEventListener('click', () => app.navigate('#/tribunals'));
+  wireModerationBar(host, app, { label: `case ${c.ref}`, get: () => getCase(c.id), upsert: upsertCase, backHash: '#/tribunals' });
   host.querySelector('#export-case').addEventListener('click', () => exportCase(app, c));
   host.querySelector('#print-record')?.addEventListener('click', () => window.print());
 

@@ -20,6 +20,7 @@ import {
   canModerate,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
+import { moderationBar, wireModerationBar } from '../moderation.js';
 import { exportSubject, exportOpeningReport } from '../export.js';
 import { stalenessBadge } from '../staleness.js';
 import { renderHistory } from '../record-history.js';
@@ -308,9 +309,8 @@ export function renderSubject(host, app, id) {
       <button class="btn btn--sm" data-act="edit">Edit</button>
       ${s.status !== 'closed' ? '<button class="btn btn--sm" data-act="close">Close watch</button>' : ''}
       <button class="btn btn--sm btn--danger" data-act="remove">Remove</button>
-    </div>` : (canModerate(actor) ? `<div class="actionbar">
-      <button class="btn btn--sm btn--danger" data-act="remove" title="Administrator moderation — removes the record to the recycle bin">⚑ Remove (staff)</button>
-    </div>` : '')}
+    </div>` : ''}
+    ${moderationBar(actor, { already: canManage })}
 
     <div class="dossier-grid">
       <section class="card">
@@ -354,6 +354,7 @@ export function renderSubject(host, app, id) {
   `;
 
   host.querySelector('#back').addEventListener('click', () => app.navigate('#/surveillance'));
+  wireModerationBar(host, app, { label: `subject ${s.ref}`, get: () => getSubject(s.id), upsert: upsertSubject, backHash: '#/surveillance' });
   host.querySelector('#export-subject').addEventListener('click', () => exportSubject(app, s));
   host.querySelector('#export-opening').addEventListener('click', () => exportOpeningReport(app, s));
 

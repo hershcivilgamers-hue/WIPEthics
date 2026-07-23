@@ -23,6 +23,7 @@ import {
   canViewIntel, canManageIntel, canLogIntel, isAssignedToIntel, isCL5,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
+import { moderationBar, wireModerationBar } from '../moderation.js';
 import { exportSourceFile } from '../export.js';
 import {
   esc, linkify, fmtDate, fmtDateTime, relTime, clearanceBadge, toast, openModal, confirmDialog,
@@ -176,6 +177,7 @@ export function renderSource(host, app, id) {
     </header>
 
     ${actions ? `<div class="actionbar">${actions}</div>` : ''}
+    ${moderationBar(actor, { already: canManage })}
     ${src.compartment ? `<div class="ntk-banner">Need-to-Know \u2014 ${esc(src.compartmentName || 'compartmented source')}. Handling restricted to read-in personnel.</div>` : ''}
 
     <div class="dossier-grid">
@@ -211,6 +213,7 @@ export function renderSource(host, app, id) {
   `;
 
   host.querySelector('#back').addEventListener('click', () => app.navigate('#/intel'));
+  wireModerationBar(host, app, { label: `source ${src.ref}`, get: () => getIntel(src.id), upsert: upsertIntel, backHash: '#/intel' });
   const dispatch = {
     export: () => exportSourceFile(app, src),
     report: () => openReport(app, src),
