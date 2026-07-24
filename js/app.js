@@ -27,6 +27,7 @@ import * as loginView from './views/login.js';
 import * as overviewView from './views/overview.js';
 import * as searchView from './views/search.js';
 import { maybeOfferTutorial, startTutorial } from './tutorial.js';
+import { openGlossary } from './glossary.js';
 import { buildNotifications } from './views/notifications.js';
 import { unreadCount } from './inbox.js';
 import * as personnelView from './views/personnel.js';
@@ -220,6 +221,7 @@ function renderShell(user, route) {
               <select id="theme-select" class="theme-select js-theme-select" aria-label="Display theme" title="Display theme">
                 ${THEMES.map((t) => `<option value="${t.id}" ${t.id === getTheme() ? 'selected' : ''}>${t.label}</option>`).join('')}
               </select>
+              <button class="btn btn--ghost btn--sm topbar__iconbtn" id="glossary-btn" data-act="glossary" title="Field Guide — clearances, Need-To-Know, badges" aria-label="Open the Field Guide">?</button>
               <button class="btn btn--ghost btn--sm topbar__iconbtn" id="tour-btn" data-act="tour" title="Re-run the system tour" aria-label="Re-run the system tour"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.3a3 3 0 0 1 5.6 1.2c0 2-3 2.5-3 2.5"/><path d="M12 17h.01"/></svg></button>
               <button class="btn btn--ghost btn--sm topbar__iconbtn" id="change-pass" data-act="change-pass" title="Change passphrase" aria-label="Change passphrase"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M10.85 12.15 20 3"/><path d="M17 6l2.5 2.5"/><path d="M14.5 8.5 17 11"/></svg></button>
               <button class="btn btn--ghost btn--sm" id="logout" data-act="logout">Sign out</button>
@@ -237,6 +239,7 @@ function renderShell(user, route) {
   // <details> toggles itself; we only record the preference for next render.
   root.querySelectorAll('[data-nav-group]').forEach((d) => d.addEventListener('toggle', () => rememberGroup(d.dataset.navGroup, d.open)));
   root.querySelectorAll('[data-act="tour"]').forEach((b) => b.addEventListener('click', () => startTutorial(app)));
+  root.querySelectorAll('[data-act="glossary"]').forEach((b) => b.addEventListener('click', () => openGlossary(app)));
   root.querySelectorAll('[data-act="change-pass"]').forEach((b) => b.addEventListener('click', () => personnelView.openChangePassphrase(app)));
   root.querySelectorAll('[data-act="logout"]').forEach((b) => b.addEventListener('click', () => {
     logAction(user, 'LOGOUT', `${user.designation} signed out.`);
@@ -373,6 +376,16 @@ function renderApp() {
 }
 
 // --- Boot -------------------------------------------------------------------
+// A quiet full-screen loader so server mode never shows a blank frame while the
+// first snapshot is in flight. Purely cosmetic; replaced by the app on render.
+function renderBootLoading(msg = 'Establishing secure session…') {
+  root.innerHTML = `<div class="boot-load">
+    <div class="boot-load__mark">${esc(CONFIG.systemName)}</div>
+    <div class="boot-load__bar"></div>
+    <div class="boot-load__msg">${esc(msg)}</div>
+  </div>`;
+}
+
 async function boot() {
   if (api.serverMode()) {
     // Wire background sync to the Worker, then try to restore a saved session.
@@ -384,6 +397,7 @@ async function boot() {
     sync.startAutoRefresh();
     api.loadToken();
     if (api.getToken()) {
+      renderBootLoading();
       try {
         const me = await api.fetchMe();
         const snap = await api.fetchSnapshot();

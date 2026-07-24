@@ -728,9 +728,67 @@
   font-family: var(--mono); font-size: 10px; background: var(--surface-2);
   border: 1px solid var(--line); border-radius: 3px; padding: 1px 4px; margin-right: 2px; color: var(--text-3);
 }
+/* Respect the OS "reduce motion" setting everywhere, not just the palette: kill
+   every transition, animation and smooth-scroll app-wide. One global rule beats
+   gating each of the ~38 motion declarations across the stylesheets. */
 @media (prefers-reduced-motion: reduce) {
-  .cmdk-backdrop, .cmdk { animation: none; }
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
+
+/* --- Loading / pending states --------------------------------------------- */
+/* Boot & auth: a quiet full-screen "establishing session" while the first
+   snapshot loads, so server mode never shows a blank frame. */
+.boot-load {
+  position: fixed; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: var(--s4);
+  background: var(--bg); color: var(--text-2); z-index: 500;
+}
+.boot-load__mark { font-family: var(--mono); font-size: 13px; letter-spacing: .18em; text-transform: uppercase; color: var(--amber); }
+.boot-load__msg { font-size: 13px; color: var(--text-3); }
+.boot-load__bar { width: 180px; height: 2px; background: var(--surface-3); overflow: hidden; border-radius: 2px; }
+.boot-load__bar::after {
+  content: ''; display: block; width: 40%; height: 100%;
+  background: var(--amber); animation: boot-sweep 1.1s ease-in-out infinite;
+}
+@keyframes boot-sweep { 0% { transform: translateX(-120%); } 100% { transform: translateX(320%); } }
+
+/* Skeleton shimmer for in-view content that is still loading. */
+.skeleton { position: relative; overflow: hidden; background: var(--surface-2); border-radius: var(--radius); }
+.skeleton::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.05), transparent);
+  animation: skeleton-shimmer 1.3s ease-in-out infinite;
+}
+.skeleton-row { height: 38px; margin-bottom: 6px; }
+@keyframes skeleton-shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+
+/* A button waiting on a network write: dimmed, non-interactive, with a spinner. */
+.btn.is-pending { position: relative; color: transparent !important; pointer-events: none; }
+.btn.is-pending::after {
+  content: ''; position: absolute; top: 50%; left: 50%; width: 13px; height: 13px; margin: -7px 0 0 -7px;
+  border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%;
+  color: var(--amber); animation: btn-spin .6s linear infinite;
+}
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+
+/* --- Field Guide (glossary) ------------------------------------------------ */
+.gloss { display: flex; flex-direction: column; }
+.gloss__head {
+  font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .12em;
+  color: var(--faint); margin: var(--s4) 0 var(--s2); padding-bottom: var(--s1);
+  border-bottom: 1px solid var(--line);
+}
+.gloss__head:first-child { margin-top: 0; }
+.gloss__row { display: grid; grid-template-columns: 92px 1fr; gap: var(--s3); align-items: baseline; padding: 5px 0; }
+.gloss__term { display: flex; justify-content: flex-start; }
+.gloss__def { font-size: 13px; color: var(--text-2); line-height: 1.5; }
+.gloss__foot { margin-top: var(--s4); font-size: 11.5px; color: var(--text-3); }
+@media (max-width: 560px) { .gloss__row { grid-template-columns: 1fr; gap: 2px; } }
 
 /* Responsive (REC-01): wide tables scroll instead of blowing out the viewport;
    the palette sits a little higher on small screens. Desktop untouched. */

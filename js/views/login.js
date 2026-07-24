@@ -108,6 +108,7 @@ export function render(host, app) {
     if (api.serverMode()) {
       const submit = host.querySelector('#login-submit');
       submit.disabled = true;
+      submit.classList.add('is-pending'); // spinner while the Worker authenticates + the snapshot loads
       try {
         const me = await api.login(username, password);
         const snap = await api.fetchSnapshot();
@@ -116,6 +117,7 @@ export function render(host, app) {
         app.refresh();
       } catch (e) {
         submit.disabled = false;
+        submit.classList.remove('is-pending');
         // Surface the true cause in the console — a client-side error here would
         // otherwise masquerade as a network failure and be hard to diagnose.
         console.error('[login]', e);
