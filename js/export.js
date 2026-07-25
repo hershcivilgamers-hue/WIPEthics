@@ -96,7 +96,9 @@ function classBand(classification) {
 
 function authorityBody(orgKey) {
   if (orgKey === 'ethics-committee') return 'Ethics Committee';
-  if (orgKey === 'omega-1') return 'Mobile Task Force Omega-1';
+  // Branded per viewer — a junior's exported document must read "Internal
+  // Enforcement", never leak the covert unit's true name.
+  if (orgKey === 'omega-1') return ORGS['omega-1'].name;
   if (orgKey === 'command') return 'Site Command';
   return 'Office of Record';
 }
@@ -204,14 +206,14 @@ export function orgSeal(orgKey) {
 // The formal authority line for a letterhead. Omega-1 carries its epithet in
 // the canonical style; the Committee and Command stand on their names.
 function authorityLine(orgKey) {
-  if (orgKey === 'omega-1') return `MOBILE TASK FORCE OMEGA-1 \u00b7 \u201c${(ORGS['omega-1'].motto || '').toUpperCase()}\u201d`;
+  if (orgKey === 'omega-1') return `${ORGS['omega-1'].name.toUpperCase()} \u00b7 \u201c${(ORGS['omega-1'].motto || '').toUpperCase()}\u201d`;
   if (orgKey === 'ethics-committee') return 'THE ETHICS COMMITTEE';
   if (orgKey === 'command') return 'SITE COMMAND';
   return 'OFFICE OF RECORD';
 }
 
 function defaultDistribution(orgKey) {
-  if (orgKey === 'omega-1') return 'All Mobile Task Force Omega-1 personnel cleared to the marked level.';
+  if (orgKey === 'omega-1') return `All ${ORGS['omega-1'].name} personnel cleared to the marked level.`;
   if (orgKey === 'ethics-committee') return 'Members and designated staff of the Ethics Committee.';
   if (orgKey === 'command') return 'Site Command staff.';
   return 'Named recipients only.';
@@ -784,7 +786,7 @@ export function buildSourceFileHTML(src, actor) {
     : '<p class="muted">No reports have been filed.</p>';
 
   const inner = `
-    ${letterhead('omega-1', 'Regimental Intelligence Cell')}
+    ${letterhead('omega-1', 'Intelligence Cell')}
     <hr class="rule" />
     <div class="doc-title">Source File</div>
     <div class="doc-sub">${esc(type)} \u2014 ${esc(status)}</div>
@@ -802,7 +804,7 @@ export function buildSourceFileHTML(src, actor) {
     classification: `${banner(src.clearance, 'Intelligence')} // ORCON`,
     inner,
     org: 'omega-1',
-    distribution: 'Regimental Intelligence Cell only. Source identity is not for further dissemination.',
+    distribution: 'Intelligence Cell only. Source identity is not for further dissemination.',
     footerRef: src.ref,
     actor,
   });
@@ -1380,7 +1382,7 @@ export function buildSummonsHTML(record, m, actor) {
 //   { weekLabel, totalMax, sections:[{key,label,max}], atRisk,
 //     rows:[{designation,codename,rank,val:{key:score},total,req1,req2}] }
 export function buildEngagementSummaryHTML(summary, actor) {
-  const { weekLabel, sections, totalMax, rows, atRisk, org = 'omega-1', orgLabel = 'MTF Omega-1' } = summary;
+  const { weekLabel, sections, totalMax, rows, atRisk, org = 'omega-1', orgLabel = (ORGS[org] || {}).name } = summary;
   const th = 'border-bottom:1px solid #111;padding:4px 5px;font-size:9px;letter-spacing:.04em;text-transform:uppercase';
   const td = 'padding:4px 5px;border-bottom:1px solid #ccc;font-size:10px';
   const body = rows.length ? rows.map((r) => `
