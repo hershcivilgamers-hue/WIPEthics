@@ -6,7 +6,7 @@
 
 import assert from 'node:assert';
 import { mentionsActor } from '../js/views/notifications.js';
-import { promoChecklistComplete } from '../js/constants.js';
+import { promoChecklistComplete, trainingCurrency, TRAINING_EXPIRING_DAYS } from '../js/constants.js';
 
 // --- @mention boundary rule -------------------------------------------------
 const h = ['ec-1', 'arbiter']; // lower-cased designation + codename
@@ -29,4 +29,16 @@ assert.equal(promoChecklistComplete({ promoChecks: [] }, { items: [] }), false, 
 assert.equal(promoChecklistComplete({}, reqSet), false, 'no promoChecks at all');
 assert.equal(promoChecklistComplete({ promoChecks: ['a'] }, null), false, 'no requirement set');
 
-console.log('OK — notification mention + promotion-eligibility helpers hold.');
+// --- training currency (drives the expiry notification) ---------------------
+const NOW = Date.UTC(2026, 6, 25);
+const day = 86400000;
+const at = (d) => ({ expiresAt: new Date(NOW + d * day).toISOString() });
+assert.equal(trainingCurrency(null, NOW), 'missing', 'no completion = missing');
+assert.equal(trainingCurrency({}, NOW), 'valid', 'a completion that never lapses (no expiresAt) is valid');
+assert.equal(trainingCurrency(at(90), NOW), 'valid', `${TRAINING_EXPIRING_DAYS}d+ out is valid`);
+assert.equal(trainingCurrency(at(TRAINING_EXPIRING_DAYS - 1), NOW), 'expiring', 'inside the window is expiring');
+assert.equal(trainingCurrency(at(1), NOW), 'expiring', 'about to lapse is expiring, not lapsed');
+assert.equal(trainingCurrency(at(0), NOW), 'lapsed', 'exactly at the deadline is lapsed');
+assert.equal(trainingCurrency(at(-5), NOW), 'lapsed', 'past the deadline is lapsed');
+
+console.log('OK — notification mention + promotion-eligibility + training-currency helpers hold.');

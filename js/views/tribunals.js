@@ -16,7 +16,7 @@ import {
   ORGS, clearanceWeight, CASE_VOTE, CASE_VOTE_ORDER, tallyCaseVotes, caseTakesVote,
 } from '../constants.js';
 import {
-  cases, getCase, upsertCase, users, getUser, subjects, getSubject, compartments, getCompartment, newId,
+  cases, getCase, upsertCase, users, getUser, subjects, getSubject, compartments, getCompartment, newId, suggestCaseRef,
 } from '../storage.js';
 import {
   canViewCase, canManageTribunal, canRuleTribunal, canClassifyAt, canViewSubject,
@@ -525,12 +525,6 @@ function summonsWho(m, { link = false } = {}) {
   if (name) return esc(name);
   if (dept) return `${esc(dept)} <span class="badge badge--muted">Department</span>`;
   return '\u2014';
-}
-
-function suggestCaseRef() {
-  const yy = new Date().getFullYear().toString().slice(-2);
-  const n = cases().filter((c) => c.ref.includes(`-${yy}-`)).length + 1;
-  return `EC-CASE-${yy}-${String(n).padStart(3, '0')}`;
 }
 
 function openCreate(app) {

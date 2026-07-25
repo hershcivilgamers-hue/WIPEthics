@@ -19,7 +19,7 @@ import {
 } from '../constants.js';
 import {
   investigations, getInvestigation, upsertInvestigation, users, getUser, newId,
-  cases, getCase, upsertCase,
+  cases, getCase, upsertCase, suggestCaseRef,
 } from '../storage.js';
 import {
   canFileInvestigation, canAdvanceInvestigation, canAdjudicateInvestigation, canManageTribunal,
@@ -326,12 +326,6 @@ function openClose(app, id) {
 // the two. Guarded by canManageTribunal client-side — the same check
 // authorizeCase runs — so the write never 403s. Linking back onto the
 // investigation is a plain edit, which a CL5 Committee member is cleared for.
-function suggestCaseRef() {
-  const yy = new Date().getFullYear().toString().slice(-2);
-  const n = cases().filter((c) => (c.ref || '').includes(`-${yy}-`)).length + 1;
-  return `EC-CASE-${yy}-${String(n).padStart(3, '0')}`;
-}
-
 function openReferToCommittee(app, id) {
   const rec = getInvestigation(id);
   if (!rec) return;

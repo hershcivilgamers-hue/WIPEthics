@@ -470,3 +470,12 @@ export function newId(prefix = 'id') {
   counter += 1;
   return `${prefix}_${Date.now().toString(36)}_${counter.toString(36)}`;
 }
+
+// Next free Ethics case reference for the current year (EC-CASE-YY-NNN). Shared
+// by the tribunal docket and the ISD investigations flow (which can escalate a
+// matter into a Committee case), so the sequence never forks between them.
+export function suggestCaseRef() {
+  const yy = new Date().getFullYear().toString().slice(-2);
+  const n = cases().filter((c) => (c.ref || '').includes(`-${yy}-`)).length + 1;
+  return `EC-CASE-${yy}-${String(n).padStart(3, '0')}`;
+}

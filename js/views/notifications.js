@@ -15,10 +15,10 @@
 import {
   activityStatus, mergeActivityReqs, ACTIVITY_REQ_SETTING_ID,
   RECRUIT_PIPELINE_OMEGA, RECRUIT_PIPELINE_ETHICS, strikeActive,
-  rankUp, promoChecklistComplete } from '../constants.js';
+  rankUp, promoChecklistComplete, trainingCurrency } from '../constants.js';
 import {
   users, operations, intel, recruits, directives, cases, compartments, subjects,
-  getActivityForUser, getSetting, blacklist, promoReqs, evidence, investigations } from '../storage.js';
+  getActivityForUser, getSetting, blacklist, promoReqs, evidence, investigations, getTraining } from '../storage.js';
 import {
   isAssignedToOperation, isAssignedToIntel, canViewOperation, canViewIntel,
   canReadDirective, canManageOrg, canParticipateRecruitment, canRuleTribunal,
@@ -69,6 +69,21 @@ export function buildNotifications(actor, now = Date.now()) {
   const myStatus = activityStatus(actor, getActivityForUser(actor.id), reqs, now);
   if (myStatus.key === 'inactive') add('bad', '\u25CF', 'You have logged no hours this week \u2014 you are marked Inactive.', '#/dashboard');
   else if (myStatus.key === 'semi') add('warn', '\u25CF', `You are below the weekly requirement (${myStatus.weekHours}h logged).`, '#/dashboard');
+
+  // 1b. Your training currency — a certification that has lapsed (or is about to)
+  // is yours to renew. Completions live on your own file, which you see in full.
+  for (const comp of (actor.trainings || [])) {
+    const course = getTraining(comp.courseId);
+    if (!course || course.deleted) continue;
+    const cur = trainingCurrency(comp, now);
+    const at = comp.expiresAt ? new Date(comp.expiresAt).getTime() : null;
+    if (cur === 'lapsed') {
+      add('bad', '⏱', `Your ${course.code} certification has lapsed — renew it.`, `#/personnel/${actor.id}`, at);
+    } else if (cur === 'expiring') {
+      const days = at ? Math.max(0, Math.ceil((at - now) / 86400000)) : null;
+      add('warn', '⏱', `Your ${course.code} certification lapses${days != null ? ` in ${days} day${days === 1 ? '' : 's'}` : ' soon'}.`, `#/personnel/${actor.id}`, at);
+    }
+  }
 
   // 2. Standing orders addressed to you that you have not acknowledged.
   for (const d of directives()) {
