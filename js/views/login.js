@@ -169,8 +169,9 @@ export function render(host, app) {
 
 // --- Access request (self-registration) -------------------------------------
 function openRegister(app) {
-  // Internal Security is the public face of the covert unit (Omega-1 — which
-  // this signed-out screen, like any junior viewer, sees branded as "Internal
+  // Internal Security is a real public-facing department; MTF Omega-1 is the
+  // covert unit whose personnel masquerade as Internal Security (this signed-out
+  // screen, like any junior viewer, sees Omega-1 branded as "Internal
   // Enforcement"). Picking ISD requests a posting in that unit plus an ISD
   // front; Command activates the posting, ISD command issues the front at
   // induction. Nothing shown to the applicant may link ISD to Omega-1.

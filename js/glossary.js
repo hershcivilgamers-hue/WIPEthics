@@ -30,9 +30,9 @@ export function openGlossary(app) {
     const org = ORGS[o];
     return term(orgTag(o), `<strong>${esc(org.name)}</strong> — ${esc(org.motto)}`);
   }).join('')
-    // The covert note: only for those who know the mask (CL4-S+ / Ethics).
+    // The covert note: only for those cleared to know (CL4-S+ / Ethics).
     + (knowsOmegaTruth(actor)
-      ? term(orgTag('isd'), 'The <strong>Internal Security Department</strong> is the public face MTF Omega-1 wears in the field. An operator’s ISD rank is derived from their cover posting; membership is visible only to the Department and Command.')
+      ? term(orgTag('isd'), 'The <strong>Internal Security Department</strong> is a public-facing department. <strong>MTF Omega-1</strong> is the covert unit whose personnel masquerade as Internal Security in the field — an operator’s ISD identity and rank derive from their Omega-1 posting. That an operative is Omega-1, and not ordinary Internal Security, is visible only to the Department and Command.')
       : '');
 
   const staffNote = isAdmin(actor)
