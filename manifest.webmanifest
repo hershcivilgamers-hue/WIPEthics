@@ -1,0 +1,15 @@
+{
+  "name": "CAIRO.AIC — Automated Identity & Clearance",
+  "short_name": "CAIRO.AIC",
+  "description": "Foundation personnel, clearance and records registry.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0A0C0D",
+  "theme_color": "#0A0C0D",
+  "categories": ["productivity", "business"],
+  "icons": [
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

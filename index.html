@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="noindex, nofollow" />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <!-- Installable PWA: manifest + theme, icon reused for the home-screen tile. -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#0A0C0D" />
+  <link rel="apple-touch-icon" href="favicon.svg" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="CAIRO.AIC" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>CAIRO.AIC — Automated Identity &amp; Clearance</title>
 
   <!-- IBM Plex — the registry type system: Serif (documents & headings),
@@ -33,6 +40,16 @@
 
   <!-- Single module entry point; it imports everything else. -->
   <script type="module" src="js/app.js"></script>
+
+  <!-- Register the service worker for installability + offline resilience.
+       Failure is non-fatal — the app runs identically without it. -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => { /* no PWA, no problem */ });
+      });
+    }
+  </script>
 
   <!-- Shown only if the browser can't run ES modules (very old browsers). -->
   <noscript>
