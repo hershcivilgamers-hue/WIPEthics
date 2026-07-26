@@ -297,6 +297,10 @@
 .req__go { color: var(--text-3); font-size: 18px; }
 .req:hover .req__go { color: var(--amber); }
 .req-empty { color: var(--text-3); font-size: 13.5px; padding: var(--s3); }
+/* Unread home-feed items read a touch stronger; the "+N more" row is quieter. */
+.req--unread { border-color: var(--line-strong); }
+.req--unread .req__title { color: var(--text-1); }
+.req--more .req__sub { color: var(--text-3); }
 
 /* Org cards */
 .orgcard-grid { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s3); }

@@ -14,7 +14,7 @@
 
 import {
   activityStatus, mergeActivityReqs, ACTIVITY_REQ_SETTING_ID,
-  RECRUIT_PIPELINE_OMEGA, RECRUIT_PIPELINE_ETHICS, strikeActive,
+  RECRUIT_PIPELINE_OMEGA, RECRUIT_PIPELINE_ETHICS, strikeActive, activeStrikeCount, STRIKE_LIMIT,
   rankUp, promoChecklistComplete, trainingCurrency } from '../constants.js';
 import {
   users, operations, intel, recruits, directives, cases, compartments, subjects,
@@ -24,7 +24,7 @@ import {
   isAssignedToOperation, isAssignedToIntel, canViewOperation, canViewIntel,
   canReadDirective, canManageOrg, canParticipateRecruitment, canRuleTribunal,
   canManageDirectives, isCL5, canIssueStrike, canManageLeave, canPromote, canManageTribunal,
-  canViewSubject, canViewCase } from '../permissions.js';
+  canViewSubject, canViewCase, canManageSubject } from '../permissions.js';
 import { esc, relTime } from '../ui.js';
 import { partitionNotes, markSeen, markDone, snooze, restore } from '../inbox.js';
 import { watchList } from '../watch.js';
@@ -294,6 +294,24 @@ export function buildNotifications(actor, now = Date.now()) {
     if ((rec.version || 1) <= (w.base || 1)) continue;
     add('info', '★', `${w.label} you’re watching has changed.`, w.hash,
       rec.updatedAt ? new Date(rec.updatedAt).getTime() : null);
+  }
+
+  // 18. Operators you manage who have hit the strike limit — a disciplinary
+  //     breach on someone in your chain of command.
+  for (const u of users()) {
+    if (u.deleted || u.id === actor.id || u.accountStatus === 'pending') continue;
+    if (!canManageOrg(actor, u.org)) continue;
+    if (activeStrikeCount(u.strikes) >= STRIKE_LIMIT) {
+      add('bad', '⚠', `${u.designation} · ${u.codename} is at the strike limit.`, `#/personnel/${u.id}`, null);
+    }
+  }
+
+  // 19. Critical-threat targets you handle that are still live.
+  const LIVE = ['active', 'located', 'detained'];
+  for (const s of subjects()) {
+    if (s.deleted || s.threat !== 'critical' || !LIVE.includes(s.status)) continue;
+    if (!canViewSubject(actor, s) || !canManageSubject(actor, s)) continue;
+    add('bad', '◉', `${s.ref} · ${s.alias} is a live critical-threat ${s.kind === 'target' ? 'target' : 'subject'}.`, `#/subject/${s.id}`, lastAt(s.logs));
   }
 
   // Newest first; undated items sink to the bottom.
