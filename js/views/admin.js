@@ -1,11 +1,13 @@
 // =============================================================================
-// views/admin.js — Administration (CL5 only).
+// views/admin.js — Administration.
 //
-// Four tools behind one screen:
-//   • Registrations — approve or reject pending access requests.
-//   • Clearance     — adjust any operator's clearance from one table.
-//   • Recycle bin   — restore or permanently purge removed records.
-//   • System        — backend status, dataset export, full reset.
+// Mostly CL5's screen; an Administrator (staff) is admitted but sees only the
+// Accounts tab. Tools behind the tabs:
+//   • Registrations — approve or reject pending access requests. (CL5)
+//   • Accounts      — deactivate / remove / restore accounts. (CL5 + staff)
+//   • Clearance     — adjust any operator's clearance from one table. (CL5)
+//   • Recycle bin   — restore or permanently purge removed records. (CL5)
+//   • System        — backend status, dataset export, full reset. (CL5)
 // =============================================================================
 
 import { ORGS, RANKS, CLEARANCE_ORDER, CLEARANCES, rankUp, clearanceForRank, ACTIVITY_REQ_SETTING_ID, ACTIVITY_REQ_DEFAULT, mergeActivityReqs, PERSONNEL_TAGS_SETTING_ID, TAG_COLORS, normalizeTagCatalog, MEDALS_SETTING_ID, normalizeMedalCatalog } from '../constants.js';
@@ -16,7 +18,8 @@ import {
   promoReqs, getPromoReq, upsertPromoReq,
   deletePromoReq, getSetting, upsertSetting, newId, loadDb, saveDb, clearDb, storageBackend,
 } from '../storage.js';
-import { canSetClearance, canManagePromoReqs, canManageSettings, isCL5, isAdmin } from '../permissions.js';
+import { canSetClearance, canManagePromoReqs, canManageSettings, isCL5, isAdmin, canModerate } from '../permissions.js';
+import { toggleSuspension } from './personnel.js';
 import { ensureSeeded } from '../seed.js';
 import { logAction } from '../audit.js';
 import {
@@ -33,8 +36,13 @@ function nextDesignation(org) {
 }
 
 export function render(host, app) {
-  const tabs = [
+  // An Administrator (staff, not CL5) gets only the Accounts tab; everything else
+  // is Command's. CL5 sees the full set, with Accounts as a consolidated
+  // deactivate/remove/restore surface alongside the per-dossier controls.
+  const staffOnly = isAdmin(app.user) && !isCL5(app.user);
+  const allTabs = [
     ['registrations', 'Registrations'],
+    ['accounts', 'Accounts'],
     ['clearance', 'Clearance'],
     ['staff', 'Administrators'],
     ['promotions', 'Promotion Reqs'],
@@ -44,6 +52,11 @@ export function render(host, app) {
     ['recycle', 'Recycle Bin'],
     ['system', 'System'],
   ];
+  const tabs = staffOnly ? allTabs.filter(([id]) => id === 'accounts') : allTabs;
+  // A stale activeTab (from a prior session, or one this actor may not open)
+  // falls back to the first tab they're allowed — so staff can't land on a
+  // CL5-only panel, and the panel dispatch below only ever runs an allowed draw.
+  if (!tabs.some(([id]) => id === activeTab)) activeTab = tabs[0][0];
 
   const pendingCount = users().filter((u) => !u.deleted && u.accountStatus === 'pending').length;
   const binCount = users().filter((u) => u.deleted).length + directives().filter((d) => d.deleted).length
@@ -57,7 +70,7 @@ export function render(host, app) {
       <div>
         <div class="eyebrow">Site Command</div>
         <h1 class="page-title">Administration</h1>
-        <div class="page-sub">Command-tier controls \u00b7 CL5</div>
+        <div class="page-sub">${staffOnly ? 'Account administration \u00b7 Administrator (staff)' : 'Command-tier controls \u00b7 CL5'}</div>
       </div>
     </div>
     <div class="tabs" role="tablist">
@@ -76,6 +89,7 @@ export function render(host, app) {
 }
 
 function drawPanel(panel, app) {
+  if (activeTab === 'accounts') return drawAccounts(panel, app);
   if (activeTab === 'registrations') return drawRegistrations(panel, app);
   if (activeTab === 'clearance') return drawClearance(panel, app);
   if (activeTab === 'staff') return drawStaff(panel, app);
@@ -85,6 +99,86 @@ function drawPanel(panel, app) {
   if (activeTab === 'medals') return drawMedals(panel, app);
   if (activeTab === 'recycle') return drawRecycle(panel, app);
   return drawSystem(panel, app);
+}
+
+// --- Accounts (deactivate / remove / restore) -------------------------------
+// The Administrator's account-management surface, and a consolidated one for
+// CL5. Deactivating holds sign-in (reversible); removing sends the record to the
+// recycle bin (Command restores it there, or purges — purge stays CL5-only).
+// Never your own account. Every action is re-authorised by the Worker gate.
+function drawAccounts(panel, app) {
+  const actor = app.user;
+  const rows = users()
+    .filter((u) => u.id !== actor.id && u.accountStatus !== 'pending')
+    .sort((a, b) => {
+      const rank = (u) => (u.deleted ? 2 : u.accountStatus === 'suspended' ? 1 : 0);
+      return rank(a) - rank(b) || (a.designation || '').localeCompare(b.designation || '');
+    });
+
+  if (!rows.length) {
+    panel.innerHTML = '<div class="card"><div class="card__body empty">No accounts to administer.</div></div>';
+    return;
+  }
+
+  const actions = (u) => {
+    if (u.deleted) return `<button class="btn btn--xs" data-acc-restore="${esc(u.id)}">Restore</button>`;
+    const susp = u.accountStatus === 'suspended';
+    return `<button class="btn btn--xs" data-acc-suspend="${esc(u.id)}">${susp ? 'Reactivate' : 'Deactivate'}</button>
+      <button class="btn btn--xs btn--danger" data-acc-remove="${esc(u.id)}">Remove</button>`;
+  };
+
+  const body = rows.map((u) => `
+    <tr class="${u.deleted ? 'row--muted' : ''}">
+      <td class="cell-name">${esc(u.codename)} <span class="mono muted-text">${esc(u.designation)}</span></td>
+      <td>${orgTag(u.org)}</td>
+      <td>${clearanceBadge(u.clearance)}</td>
+      <td>${u.deleted ? '<span class="badge badge--bad">Removed</span>' : accountBadge(u.accountStatus)}</td>
+      <td class="cell-right">${actions(u)}</td>
+    </tr>`).join('');
+
+  panel.innerHTML = `
+    <section class="card">
+      <div class="card__title">Accounts <span class="muted-text">(${rows.length})</span></div>
+      <div class="card__body">
+        <p class="modal__message" style="margin:0 0 12px">Deactivating holds an operator's sign-in and ends live sessions; the record, rank and history are untouched, and it can be reactivated. Removing sends the account to the recycle bin, where Command can restore it. You cannot act on your own account.</p>
+        <table class="data-table">
+          <thead><tr><th>Operator</th><th>Unit</th><th>Clearance</th><th>Account</th><th></th></tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    </section>`;
+
+  panel.querySelectorAll('[data-acc-suspend]').forEach((b) => b.addEventListener('click', () => {
+    const u = getUser(b.dataset.accSuspend);
+    if (u) toggleSuspension(app, u);
+  }));
+  panel.querySelectorAll('[data-acc-remove]').forEach((b) => b.addEventListener('click', async () => {
+    const target = getUser(b.dataset.accRemove);
+    if (!target || target.deleted) return;
+    const ok = await confirmDialog({
+      title: 'Remove account',
+      message: `Move ${target.designation} · ${target.codename} to the recycle bin? This revokes their access. Command can restore it.`,
+      confirmLabel: 'Remove', danger: true,
+    });
+    if (!ok) return;
+    const fresh = getUser(target.id);
+    if (!fresh || fresh.deleted) { app.refresh(); return; }
+    fresh.deleted = true; fresh.deletedAt = new Date().toISOString();
+    fresh.version += 1; fresh.updatedAt = fresh.deletedAt;
+    upsertUser(fresh);
+    logAction(app.user, 'REMOVE_RECORD', `${fresh.designation} moved to recycle bin.`);
+    toast('Account removed to recycle bin.', 'success');
+    app.refresh();
+  }));
+  panel.querySelectorAll('[data-acc-restore]').forEach((b) => b.addEventListener('click', () => {
+    const u = getUser(b.dataset.accRestore);
+    if (!u) return;
+    u.deleted = false; u.deletedAt = null; u.version += 1; u.updatedAt = new Date().toISOString();
+    upsertUser(u);
+    logAction(app.user, 'RESTORE_RECORD', `${u.designation} restored from recycle bin.`);
+    toast('Account restored.', 'success');
+    app.refresh();
+  }));
 }
 
 // --- Registrations ----------------------------------------------------------

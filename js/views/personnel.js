@@ -1328,7 +1328,7 @@ function nextDesignationFor(org) {
 
 // Suspend or reinstate an account: sign-in is refused and live sessions are
 // dropped while suspended; the personnel record itself is untouched.
-async function toggleSuspension(app, u) {
+export async function toggleSuspension(app, u) {
   const actor = app.user;
   const suspending = u.accountStatus !== 'suspended';
   const ok = await confirmDialog({

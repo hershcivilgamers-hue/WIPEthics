@@ -214,9 +214,12 @@ export function parseHash() {
 }
 
 // May this user reach this route?
-// Administration is CL5's alone even for staff: it holds clearance assignment,
-// the grant of the Administrator power itself, and the permanent purge.
-const STAFF_BARRED = new Set(['admin']);
+// An Administrator may enter Administration, but the view itself shows them only
+// the Accounts tab (deactivate / remove / restore) — clearance assignment, the
+// grant of the Administrator power, the reqs and the permanent purge stay CL5's
+// alone, hidden in the UI and denied by the Worker gate. Nothing is STAFF_BARRED
+// today; the set is kept as the seam for any future staff-forbidden route.
+const STAFF_BARRED = new Set();
 
 export function isRouteAllowed(name, user) {
   if (featureBlocked(name)) return false;

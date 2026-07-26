@@ -78,6 +78,25 @@ const selfGone = { ...staff, accountStatus: 'active', version: 2, deleted: true,
 assert.equal(w(staff, { ...staff, accountStatus: 'active', version: 1, deleted: false }, selfGone).ok, false,
   'an Administrator cannot remove their own record');
 
+// --- Account administration: staff may deactivate + remove, not their own ----
+// The moderation remit now covers holding an account (suspend), not only
+// removing a record — the matching gate change to authorizeUser.
+const activeU = { ...plain, accountStatus: 'active', version: 1, deleted: false };
+const suspU   = { ...activeU, accountStatus: 'suspended', version: 2 };
+assert.equal(w(staff, activeU, suspU).action, 'SUSPEND_ACCOUNT', 'staff may deactivate an account');
+assert.equal(w(staff, suspU, { ...activeU, version: 3 }).action, 'REINSTATE_ACCOUNT', 'and reactivate it');
+const goneU = { ...activeU, deleted: true, deletedAt: 't', version: 2 };
+assert.equal(w(staff, activeU, goneU).action, 'REMOVE_PERSONNEL', 'staff may remove an account');
+assert.equal(w(staff, goneU, { ...activeU, version: 3 }).action, 'RESTORE_PERSONNEL', 'and restore it');
+// Never their own account, and never smuggled alongside another edit.
+const staffActive = { ...staff, accountStatus: 'active', version: 1, deleted: false };
+assert.equal(w(staff, staffActive, { ...staffActive, accountStatus: 'suspended', version: 2 }).ok, false,
+  'staff cannot deactivate their own account');
+assert.equal(w(staff, activeU, { ...suspU, clearance: 'CL4-J' }).ok, false,
+  'a deactivation cannot ride along with a clearance change');
+// A plain operator still cannot administer accounts at all.
+assert.equal(w(plain, activeU, suspU).ok, false, 'a plain operator cannot deactivate an account');
+
 // --- Granting the grant is CL5's alone ---------------------------------------
 const before = { ...plain, accountStatus: 'active', version: 1, deleted: false };
 const after = { ...before, admin: grant, version: 2 };

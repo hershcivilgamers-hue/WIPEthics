@@ -111,7 +111,10 @@ function authorizeUser(actor, cur, next) {
     const susp = (cur.accountStatus === 'active' && next.accountStatus === 'suspended')
       || (cur.accountStatus === 'suspended' && next.accountStatus === 'active');
     if (!susp) return deny('That account-status change is not permitted.');
-    if (!canEditPersonnel(actor, cur)) return deny('You cannot administer this account.');
+    // A manager of the operator's org may hold their account; so may an
+    // Administrator (staff), whose moderation remit now covers deactivating an
+    // account, not only removing a record. Neither may touch their own.
+    if (!canEditPersonnel(actor, cur) && !canModerate(actor)) return deny('You cannot administer this account.');
     if (actor.id === cur.id) return deny('You cannot suspend or reinstate your own account.');
     if (changedOutside(cur, next, ['accountStatus', 'events', 'version', 'updatedAt'])) {
       return deny('An account-status change cannot be combined with other edits.');
