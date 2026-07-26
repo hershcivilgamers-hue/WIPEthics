@@ -7,6 +7,7 @@
 // delete) live here and route through the permission checks and audit log.
 // =============================================================================
 
+import { persistedFilter } from '../view-state.js';
 import {
   ORGS, RANKS, STATUS_ORDER, CLEARANCE_ORDER, CLEARANCES, STRIKE_LIMIT, strikeActive, activeStrikeCount, strikeVoided,
   rankUp, rankDown, clearanceForRank, rankIndex, ISD_RANK_BY_COVER, isdRankFor, isdClearanceFor,
@@ -15,6 +16,7 @@ import {
   MEDALS_SETTING_ID, normalizeMedalCatalog,
 } from '../constants.js';
 import { users, getUser, upsertUser, promoReqs, newId, applyServerSnapshot, trainings, getTraining, getSetting, cases } from '../storage.js';
+import { watchButton, wireWatchButton } from '../watch.js';
 import { orgLogo } from '../logos.js';
 import {
   canEditPersonnel, canSetClearance, canSetRank, canIssueStrike,
@@ -32,7 +34,7 @@ import {
 } from '../ui.js';
 
 // Roster filter state, preserved across navigation.
-const filter = { q: '', status: '', clearance: '' };
+const filter = persistedFilter('personnel', { q: '', status: '', clearance: '' });
 // Roster bulk-selection state (cleared when the viewed org changes).
 const rosterSel = new Set();
 let rosterSelOrg = null;
@@ -748,7 +750,7 @@ export function renderDossier(host, app, id) {
       <button class="btn btn--ghost btn--sm" id="back">\u2190 ${esc(ORGS[u.org].short)} roster</button>
       <button class="btn btn--sm" id="print-record">⎙ Print</button>
       <button class="btn btn--sm" id="export-personnel">\u2913 Export record</button>
-      ${full && u.accountStatus === 'active' ? '<button class="btn btn--sm" id="export-idcard">\u2913 ID card</button>' : ''}
+      ${full && u.accountStatus === 'active' ? '<button class="btn btn--sm" id="export-idcard">\u2913 ID card</button>' : ''}${watchButton(u.id)}
     </div>
 
     <header class="dossier-head">
@@ -817,6 +819,7 @@ export function renderDossier(host, app, id) {
   host.querySelector('#back').addEventListener('click', () => app.navigate(`#/${u.org === 'ethics-committee' ? 'ethics' : u.org}`));
   host.querySelector('#export-personnel').addEventListener('click', () => exportPersonnel(app, u));
   host.querySelector('#print-record')?.addEventListener('click', () => window.print());
+  wireWatchButton(host, app, { id: u.id, type: 'personnel', hash: `#/personnel/${u.id}`, label: `personnel file ${u.designation}`, version: u.version });
   const idBtn = host.querySelector('#export-idcard');
   if (idBtn) idBtn.addEventListener('click', () => exportIdCard(app, u));
 

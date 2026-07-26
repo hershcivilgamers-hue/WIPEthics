@@ -23,6 +23,7 @@ import {
 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { moderationBar, wireModerationBar } from '../moderation.js';
+import { watchButton, wireWatchButton } from '../watch.js';
 import { exportAfterAction } from '../export.js';
 import {
   esc, linkify, fmtDate, fmtDateTime, relTime, clearanceBadge, orgTag, monogram,
@@ -166,7 +167,7 @@ export function renderOperation(host, app, id) {
   }
 
   host.innerHTML = `
-    <div class="file-actions"><button class="btn btn--ghost btn--sm" id="back">\u2190 Deployment Log</button></div>
+    <div class="file-actions"><button class="btn btn--ghost btn--sm" id="back">\u2190 Deployment Log</button>${watchButton(op.id)}</div>
 
     <header class="dossier-head">
       <div class="avatar avatar--omega">${esc((OPERATION_KIND[op.kind] || {}).short || 'OP')}</div>
@@ -225,6 +226,7 @@ export function renderOperation(host, app, id) {
 
   host.querySelector('#back').addEventListener('click', () => app.navigate('#/deployments'));
   wireModerationBar(host, app, { label: `operation ${op.ref}`, get: () => getOperation(op.id), upsert: upsertOperation, backHash: '#/deployments' });
+  wireWatchButton(host, app, { id: op.id, type: 'operation', hash: `#/operation/${op.id}`, label: `operation ${op.ref}`, version: op.version });
   const dispatch = {
     export: () => exportAfterAction(app, op),
     log: () => openLogEntry(app, op),

@@ -8,6 +8,7 @@
 // engine, are version-stamped for conflict safety, and are audit-logged.
 // =============================================================================
 
+import { persistedFilter } from '../view-state.js';
 import {
   SUBJECT_CLASS, SUBJECT_CLASS_ORDER, THREAT_LEVELS, THREAT_ORDER,
   SUBJECT_STATUS, SUBJECT_STATUS_ORDER, CLEARANCE_ORDER, CLEARANCES,
@@ -21,6 +22,7 @@ import {
 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { moderationBar, wireModerationBar } from '../moderation.js';
+import { watchButton, wireWatchButton } from '../watch.js';
 import { exportSubject, exportOpeningReport } from '../export.js';
 import { stalenessBadge } from '../staleness.js';
 import { renderHistory } from '../record-history.js';
@@ -29,7 +31,7 @@ import {
   monogram, toast, openModal, confirmDialog,
 } from '../ui.js';
 
-const filter = { q: '', kind: '', status: '', threat: '' };
+const filter = persistedFilter('surveillance', { q: '', kind: '', status: '', threat: '' });
 
 // --- Local badge renderers (kept here so ui.js stays domain-agnostic) -------
 const kindTag = (k) => {
@@ -280,7 +282,7 @@ export function renderSubject(host, app, id) {
     <div class="file-actions">
       <button class="btn btn--ghost btn--sm" id="back">\u2190 Registry</button>
       <button class="btn btn--sm" id="export-opening" title="The memorandum of record for this file's opening">\u2399 Opening report</button>
-      <button class="btn btn--sm" id="export-subject">\u2913 Export record</button>
+      <button class="btn btn--sm" id="export-subject">\u2913 Export record</button>${watchButton(s.id)}
     </div>
 
     <header class="dossier-head">
@@ -355,6 +357,7 @@ export function renderSubject(host, app, id) {
 
   host.querySelector('#back').addEventListener('click', () => app.navigate('#/surveillance'));
   wireModerationBar(host, app, { label: `subject ${s.ref}`, get: () => getSubject(s.id), upsert: upsertSubject, backHash: '#/surveillance' });
+  wireWatchButton(host, app, { id: s.id, type: 'subject', hash: `#/subject/${s.id}`, label: `subject ${s.ref}`, version: s.version });
   host.querySelector('#export-subject').addEventListener('click', () => exportSubject(app, s));
   host.querySelector('#export-opening').addEventListener('click', () => exportOpeningReport(app, s));
 

@@ -12,6 +12,7 @@ import { directives, getDirective, upsertDirective, compartments, getCompartment
 import { canManageDirectives, canReadDirective, canSeeDirective, isCL5, readIntoCompartment } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { moderationBar, wireModerationBar } from '../moderation.js';
+import { watchButton, wireWatchButton } from '../watch.js';
 import { exportDirective } from '../export.js';
 import { esc, fmtDate, fmtDateTime, clearanceBadge, orgTag, monogram, toast, openModal, confirmDialog } from '../ui.js';
 
@@ -183,7 +184,7 @@ export function renderDirective(host, app, id) {
   host.innerHTML = `
     <div class="file-actions">
       <button class="btn btn--ghost btn--sm" id="back">\u2190 Standing Orders</button>
-      <button class="btn btn--sm" id="export-directive">\u2913 Export memorandum</button>
+      <button class="btn btn--sm" id="export-directive">\u2913 Export memorandum</button>${watchButton(d.id)}
     </div>
 
     <header class="dossier-head">
@@ -231,6 +232,7 @@ export function renderDirective(host, app, id) {
   wireModerationBar(host, app, {
     label: `standing order ${d.ref}`, get: () => getDirective(d.id), upsert: upsertDirective, backHash: '#/directives',
   });
+  wireWatchButton(host, app, { id: d.id, type: 'directive', hash: `#/directive/${d.id}`, label: `standing order ${d.ref}`, version: d.version });
   const rescindBtn = host.querySelector('[data-act="rescind"]');
   if (rescindBtn) rescindBtn.addEventListener('click', () => setStatus(app, d.id, 'rescinded'));
   const reinstateBtn = host.querySelector('[data-act="reinstate"]');

@@ -7,6 +7,7 @@
 // lifted status, and record who raised them and when.
 // =============================================================================
 
+import { persistedFilter } from '../view-state.js';
 import {
   BLACKLIST_SEVERITY, BLACKLIST_SEVERITY_ORDER, BLACKLIST_STATUS,
   ORGS, ORG_ORDER,
@@ -17,7 +18,7 @@ import { canManageOrg, isCL5, canManageSettings, canModerate } from '../permissi
 import { esc, fmtDate, orgTag, toast, openModal, confirmDialog } from '../ui.js';
 import { logAction } from '../audit.js';
 
-const filter = { q: '', severity: '', status: 'active' };
+const filter = persistedFilter('blacklist', { q: '', severity: '', status: 'active' });
 
 function manageableOrgs(actor) {
   return ORG_ORDER.filter((o) => canManageOrg(actor, o));

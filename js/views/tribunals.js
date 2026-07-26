@@ -10,6 +10,7 @@
 // CL4·Senior (or Command); entering a binding ruling is CL5 only.
 // =============================================================================
 
+import { persistedFilter } from '../view-state.js';
 import {
   CASE_KIND, CASE_KIND_ORDER, CASE_STATUS, CASE_STATUS_ORDER, EXHIBIT_STATUS,
   RULING_FINDING, RULING_FINDING_ORDER, CLEARANCE_ORDER, CLEARANCES,
@@ -25,6 +26,7 @@ import {
 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { moderationBar, wireModerationBar } from '../moderation.js';
+import { watchButton, wireWatchButton } from '../watch.js';
 import { exportCase, exportSummons } from '../export.js';
 import { stalenessBadge } from '../staleness.js';
 import { exportCSV } from '../csv.js';
@@ -34,7 +36,7 @@ import {
   toast, openModal, confirmDialog, helpNote,
 } from '../ui.js';
 
-const filter = { q: '', kind: '', status: '' };
+const filter = persistedFilter('tribunals', { q: '', kind: '', status: '' });
 
 // --- Local badge renderers --------------------------------------------------
 const kindTag = (k) => {
@@ -379,7 +381,7 @@ export function renderCase(host, app, id) {
     <div class="file-actions">
       <button class="btn btn--ghost btn--sm" id="back">\u2190 Docket</button>
       <button class="btn btn--sm" id="print-record">⎙ Print</button>
-      <button class="btn btn--sm" id="export-case">\u2913 Export record</button>
+      <button class="btn btn--sm" id="export-case">\u2913 Export record</button>${watchButton(c.id)}
     </div>
 
     <header class="dossier-head">
@@ -463,6 +465,7 @@ export function renderCase(host, app, id) {
 
   host.querySelector('#back').addEventListener('click', () => app.navigate('#/tribunals'));
   wireModerationBar(host, app, { label: `case ${c.ref}`, get: () => getCase(c.id), upsert: upsertCase, backHash: '#/tribunals' });
+  wireWatchButton(host, app, { id: c.id, type: 'case', hash: `#/case/${c.id}`, label: `case ${c.ref}`, version: c.version });
   host.querySelector('#export-case').addEventListener('click', () => exportCase(app, c));
   host.querySelector('#print-record')?.addEventListener('click', () => window.print());
 

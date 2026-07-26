@@ -18,13 +18,28 @@ import {
   rankUp, promoChecklistComplete, trainingCurrency } from '../constants.js';
 import {
   users, operations, intel, recruits, directives, cases, compartments, subjects,
-  getActivityForUser, getSetting, blacklist, promoReqs, evidence, investigations, getTraining } from '../storage.js';
+  getActivityForUser, getSetting, blacklist, promoReqs, evidence, investigations, getTraining,
+  getUser, getSubject, getCase, getOperation, getIntel, getDirective } from '../storage.js';
 import {
   isAssignedToOperation, isAssignedToIntel, canViewOperation, canViewIntel,
   canReadDirective, canManageOrg, canParticipateRecruitment, canRuleTribunal,
-  canManageDirectives, isCL5, canIssueStrike, canManageLeave, canPromote, canManageTribunal } from '../permissions.js';
+  canManageDirectives, isCL5, canIssueStrike, canManageLeave, canPromote, canManageTribunal,
+  canViewSubject, canViewCase } from '../permissions.js';
 import { esc, relTime } from '../ui.js';
 import { partitionNotes, markSeen, markDone, snooze, restore } from '../inbox.js';
+import { watchList } from '../watch.js';
+
+// Watched-record registry: how to re-read each watchable type and whether the
+// current actor may still see it. A record the actor can no longer view raises
+// nothing — the watch inherits access like every other notification source.
+const WATCH_TYPES = {
+  personnel: { get: getUser,      canView: () => true },
+  subject:   { get: getSubject,   canView: canViewSubject },
+  case:      { get: getCase,      canView: canViewCase },
+  operation: { get: getOperation, canView: canViewOperation },
+  source:    { get: getIntel,     canView: canViewIntel },
+  directive: { get: getDirective, canView: canReadDirective },
+};
 
 const SEVEN_DAYS = 7 * 24 * 3600000;
 const FOURTEEN_DAYS = 14 * 24 * 3600000;
@@ -263,6 +278,22 @@ export function buildNotifications(actor, now = Date.now()) {
       add('warn', '⚖', `Internal Security referral ${i.ref} is substantiated and awaits a case.`, '#/investigations',
         i.updatedAt ? new Date(i.updatedAt).getTime() : null);
     }
+  }
+
+  // 17. Records you are watching that have moved past the version you last saw.
+  //     Per-browser preference (localStorage); re-checks canView so a record you
+  //     can no longer see stays silent. Opening the record re-baselines it.
+  const watched = watchList();
+  for (const id of Object.keys(watched)) {
+    const w = watched[id];
+    const reg = WATCH_TYPES[w.type];
+    if (!reg) continue;
+    const rec = reg.get(id);
+    if (!rec || rec.deleted) continue;
+    if (!reg.canView(actor, rec)) continue;
+    if ((rec.version || 1) <= (w.base || 1)) continue;
+    add('info', '★', `${w.label} you’re watching has changed.`, w.hash,
+      rec.updatedAt ? new Date(rec.updatedAt).getTime() : null);
   }
 
   // Newest first; undated items sink to the bottom.

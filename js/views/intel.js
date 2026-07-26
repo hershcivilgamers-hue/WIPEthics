@@ -24,6 +24,7 @@ import {
 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { moderationBar, wireModerationBar } from '../moderation.js';
+import { watchButton, wireWatchButton } from '../watch.js';
 import { exportSourceFile } from '../export.js';
 import {
   esc, linkify, fmtDate, fmtDateTime, relTime, clearanceBadge, toast, openModal, confirmDialog,
@@ -163,7 +164,7 @@ export function renderSource(host, app, id) {
   }
 
   host.innerHTML = `
-    <div class="file-actions"><button class="btn btn--ghost btn--sm" id="back">\u2190 Intelligence</button></div>
+    <div class="file-actions"><button class="btn btn--ghost btn--sm" id="back">\u2190 Intelligence</button>${watchButton(src.id)}</div>
 
     <header class="dossier-head">
       <div class="avatar avatar--omega">${esc((INTEL_SOURCE_TYPE[src.type] || {}).short || 'SRC')}</div>
@@ -214,6 +215,7 @@ export function renderSource(host, app, id) {
 
   host.querySelector('#back').addEventListener('click', () => app.navigate('#/intel'));
   wireModerationBar(host, app, { label: `source ${src.ref}`, get: () => getIntel(src.id), upsert: upsertIntel, backHash: '#/intel' });
+  wireWatchButton(host, app, { id: src.id, type: 'source', hash: `#/source/${src.id}`, label: `source ${src.ref}`, version: src.version });
   const dispatch = {
     export: () => exportSourceFile(app, src),
     report: () => openReport(app, src),
