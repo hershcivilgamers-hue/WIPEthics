@@ -53,4 +53,9 @@ const oBefore = { ...omegaPvt, accountStatus: 'active', version: 1, deleted: fal
 const oNext = { ...oBefore, isd: { standing: 'active', rank: 'Director' }, version: 2 };
 assert.equal(w(cl5, oBefore, oNext).action, 'SET_ISD_MEMBERSHIP', 'Omega membership write is fine; a stored rank is inert (derived wins)');
 
+// --- Approval may read a native applicant into ISD in one CL5 write ----------
+const applicant = { id: 'app1', designation: 'PEND-1', org: 'ethics-committee', rank: null, clearance: null, accountStatus: 'pending', requestedISD: 'Inspector', version: 1, deleted: false };
+const approved = { ...applicant, accountStatus: 'active', org: 'ethics-committee', rank: 'Assistant', clearance: 'CL4-J', designation: 'EC-2', isd: { standing: 'active', rank: 'Inspector', badgeNumber: '201', promoChecks: [] }, requestedISD: false, version: 2 };
+assert.equal(w(cl5, applicant, approved).action, 'APPROVE_REGISTRATION', 'CL5 approves an ISD applicant AND reads them in, in one write');
+
 console.log('OK — ISD identity/visibility split; derived 6-series + stored 2-series badges; native ranks validated.');

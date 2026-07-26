@@ -477,7 +477,7 @@ function sectionISD(u, actor) {
 
 // Lowest free 2-series badge (200–299), the native ISD range. Omega-1 fronts
 // use the derived 6-series and never draw from this pool.
-function nextIsdBadge() {
+export function nextIsdBadge() {
   const used = new Set(users().map((u) => u.isd?.badgeNumber).filter(Boolean).map(String));
   for (let n = 200; n <= 299; n += 1) { if (!used.has(String(n))) return String(n); }
   return '';

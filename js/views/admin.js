@@ -19,7 +19,7 @@ import {
   deletePromoReq, getSetting, upsertSetting, newId, loadDb, saveDb, clearDb, storageBackend,
 } from '../storage.js';
 import { canSetClearance, canManagePromoReqs, canManageSettings, isCL5, isAdmin, canModerate } from '../permissions.js';
-import { toggleSuspension } from './personnel.js';
+import { toggleSuspension, nextIsdBadge } from './personnel.js';
 import { ensureSeeded } from '../seed.js';
 import { logAction } from '../audit.js';
 import {
@@ -317,11 +317,12 @@ function approve(app, id) {
     title: `Approve \u2014 ${u.codename}`,
     body: `
       <p class="modal__message">Confirm organisation, assign a rank and clearance. A permanent designation is issued on approval.</p>
-      ${u.requestedISD ? `<div class="req-card__meta" style="margin-bottom:10px">\u21b3 This applicant requested <strong>Internal Security</strong> access${typeof u.requestedISD === 'string' ? ` as <strong>${esc(u.requestedISD)}</strong>` : ''}. You are activating their <em>unit posting</em> in ${esc(ORGS[org].name)} \u2014 the Internal Security front (and its rank) is issued separately by ISD command through induction.</div>` : ''}
+      ${u.requestedISD ? `<div class="req-card__meta" style="margin-bottom:10px">\u21b3 This applicant requested <strong>Internal Security</strong> access${typeof u.requestedISD === 'string' ? ` as <strong>${esc(u.requestedISD)}</strong>` : ''}. Their unit posting (below) is their cover; you can read them into the Department here in one step.</div>` : ''}
       <div class="field"><label>Organisation</label>
         <select id="ap-org">${['omega-1', 'ethics-committee', 'command'].map((o) => `<option value="${o}" ${o === org ? 'selected' : ''}>${esc(ORGS[o].name)}</option>`).join('')}</select></div>
       <div class="field"><label>Rank</label><select id="ap-rank">${rankOpts}</select></div>
       <div class="field"><label>Clearance</label><select id="ap-clr">${clrOpts}</select></div>
+      ${u.requestedISD ? `<label class="msg-pick" style="margin-top:4px"><input type="checkbox" id="ap-isd" checked /> Read into Internal Security${typeof u.requestedISD === 'string' ? ` as <strong>${esc(u.requestedISD)}</strong>` : ''} on approval <span class="muted-text">(native front; skipped for an Omega-1 posting, which is ISD already)</span></label>` : ''}
     `,
     actions: [
       { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
@@ -338,12 +339,21 @@ function approve(app, id) {
           fresh.designation = designation;
           fresh.accountStatus = 'active';
           fresh.requestedOrg = null;
+          // One-step Internal Security intake: an ISD applicant kept on a
+          // non-Omega posting is read into the Department here (Omega postings are
+          // ISD by default, so their caveat is derived — nothing to store).
+          const grantISD = fresh.requestedISD && chosenOrg !== 'omega-1' && d.querySelector('#ap-isd')?.checked;
+          if (grantISD) {
+            const isdRank = (RANKS.isd || []).includes(fresh.requestedISD) ? fresh.requestedISD : 'Operative';
+            fresh.isd = { standing: 'active', rank: isdRank, badgeNumber: nextIsdBadge(), promoChecks: [] };
+            fresh.requestedISD = false;
+          }
           fresh.version += 1;
           fresh.updatedAt = new Date().toISOString();
           fresh.events = fresh.events || [];
-          fresh.events.unshift({ id: newId('evt'), date: new Date().toISOString(), type: 'appointment', text: `Access approved by ${app.user.designation}; assigned ${rank}, ${CLEARANCES[clr].label}.` });
+          fresh.events.unshift({ id: newId('evt'), date: new Date().toISOString(), type: 'appointment', text: `Access approved by ${app.user.designation}; assigned ${rank}, ${CLEARANCES[clr].label}${grantISD ? ` · read into Internal Security as ${fresh.isd.rank}` : ''}.` });
           upsertUser(fresh);
-          logAction(app.user, 'APPROVE_REGISTRATION', `Approved ${designation} (${fresh.codename}) into ${ORGS[chosenOrg].short}.`);
+          logAction(app.user, 'APPROVE_REGISTRATION', `Approved ${designation} (${fresh.codename}) into ${ORGS[chosenOrg].short}${grantISD ? ' + Internal Security' : ''}.`);
           c();
           toast(`Approved \u2014 ${designation} activated.`, 'success');
           app.refresh();
