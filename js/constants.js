@@ -35,6 +35,20 @@ export const CLEARANCE_ORDER = ['CL3', 'CL4-J', 'CL4-S', 'CL5'];
 let omegaTruthVisible = true;
 export function setOmegaBranding(truth) { omegaTruthVisible = !!truth; }
 
+// Rewrite a baked truth-side unit name to its cover form for a cover-side
+// reader. The activity log stores whatever branding the WRITER had, then shows
+// it raw to every CL4+ operator — so a detail written by Command as "Omega-1"
+// would otherwise reach a junior. The public "O1-" designation/ref prefix is a
+// deliberate non-tell and is left alone: only the full unit name is rewritten.
+// No-op on the high side; longest match first so "MTF Omega-1" can't leave "MTF IE".
+export function deBrandOmega(text) {
+  if (omegaTruthVisible || !text) return text;
+  return String(text)
+    .replace(/Mobile Task Force Omega-1/g, 'Internal Enforcement')
+    .replace(/MTF Omega-1/g, 'Internal Enforcement')
+    .replace(/Omega-1/g, 'IE');
+}
+
 export const ORGS = {
   'omega-1': {
     code: 'omega-1',

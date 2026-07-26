@@ -13,7 +13,7 @@ import {
   rankUp, rankDown, clearanceForRank, rankIndex, ISD_RANK_BY_COVER, isdRankFor, isdClearanceFor,
   TRAINING_CATEGORY, TRAINING_CURRENCY, trainingCurrency, trainingExpiry,
   PERSONNEL_TAGS_SETTING_ID, normalizeTagCatalog,
-  MEDALS_SETTING_ID, normalizeMedalCatalog,
+  MEDALS_SETTING_ID, normalizeMedalCatalog, deBrandOmega,
 } from '../constants.js';
 import { users, getUser, upsertUser, promoReqs, newId, applyServerSnapshot, trainings, getTraining, getSetting, cases } from '../storage.js';
 import { watchButton, wireWatchButton } from '../watch.js';
@@ -1017,8 +1017,8 @@ function sectionAwards(u, canManage, full) {
   if (!(u.awards || []).length) return '';
   const items = u.awards.map((a) => `
     <div class="award">
-      <div class="award__title">${esc(a.title)}${full ? ` <button class="btn btn--xs" data-cert-award="${esc(a.id)}">Certificate</button>` : ''}${canManage ? ` <button class="btn btn--xs" data-remove-award="${esc(a.id)}">Remove</button>` : ''}</div>
-      <div class="award__meta">${fmtDate(a.date)}${a.note ? ` \u00b7 ${esc(a.note)}` : ''}${a.by ? ` \u00b7 ${esc(a.by)}` : ''}</div>
+      <div class="award__title">${esc(deBrandOmega(a.title))}${full ? ` <button class="btn btn--xs" data-cert-award="${esc(a.id)}">Certificate</button>` : ''}${canManage ? ` <button class="btn btn--xs" data-remove-award="${esc(a.id)}">Remove</button>` : ''}</div>
+      <div class="award__meta">${fmtDate(a.date)}${a.note ? ` \u00b7 ${esc(deBrandOmega(a.note))}` : ''}${a.by ? ` \u00b7 ${esc(a.by)}` : ''}</div>
     </div>`).join('');
   return `<section class="card"><div class="card__title">Awards & Commendations</div><div class="card__body">${items}</div></section>`;
 }

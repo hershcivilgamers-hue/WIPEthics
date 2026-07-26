@@ -1490,7 +1490,9 @@ export function exportSourceFile(app, src) {
   openDocument(buildSourceFileHTML(src, app.user), `${src.ref}-source-file.html`);
 }
 export function exportEngagementSummary(app, summary) {
-  logAction(app.user, 'EXPORT_ENGAGEMENT', `Generated Omega-1 engagement summary (${summary.weekLabel}).`);
+  // Neutral wording: the activity log is readable by all CL4+, cover side
+  // included — naming the unit here would leak the masquerade to a junior.
+  logAction(app.user, 'EXPORT_ENGAGEMENT', `Generated engagement summary (${summary.weekLabel}).`);
   openDocument(buildEngagementSummaryHTML(summary, app.user), 'omega-1-engagement-summary.html');
 }
 export function exportAfterAction(app, op) {

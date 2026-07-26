@@ -8,6 +8,7 @@
 // =============================================================================
 
 import { recentActions } from '../audit.js';
+import { deBrandOmega } from '../constants.js';
 import { esc, fmtDateTime, relTime } from '../ui.js';
 
 // Map raw action codes to a tone for the left rule.
@@ -115,7 +116,7 @@ export function render(host, app) {
       <li class="log__row log__row--${TONE[e.action] || 'muted'}">
         <div class="log__main">
           <span class="log__action">${esc(label(e.action))}</span>
-          <span class="log__detail">${esc(e.detail || '')}</span>
+          <span class="log__detail">${esc(deBrandOmega(e.detail || ''))}</span>
         </div>
         <div class="log__meta">
           <span class="mono">${esc(e.actor)}</span>
