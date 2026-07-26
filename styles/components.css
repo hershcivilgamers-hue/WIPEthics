@@ -302,6 +302,20 @@
 .req--unread .req__title { color: var(--text-1); }
 .req--more .req__sub { color: var(--text-3); }
 
+/* Chain of command — a rank ladder per organisation. */
+.avatar--sm { width: 30px; height: 30px; font-size: 12px; font-weight: 600; border-radius: var(--radius); }
+.ladder { display: flex; flex-direction: column; }
+.ladder__tier { display: grid; grid-template-columns: 150px 1fr; gap: var(--s3); align-items: start; padding: var(--s3) 0; border-top: 1px solid var(--line); }
+.ladder__tier:first-child { border-top: 0; padding-top: 0; }
+.ladder__rank { display: flex; flex-direction: column; gap: 4px; padding-top: 4px; }
+.ladder__rank-name { font-weight: 600; font-size: 13.5px; }
+.ladder__members { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.oc-chip { display: inline-flex; align-items: center; gap: 8px; padding: 3px 12px 3px 3px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; cursor: pointer; color: var(--text); }
+.oc-chip:hover { border-color: var(--line-strong); background: var(--surface-3); }
+.oc-chip--dim { opacity: .5; }
+.oc-chip__id { font-size: 12.5px; }
+.oc-chip__name { color: var(--text-2); margin-left: 2px; }
+
 /* Org cards */
 .orgcard-grid { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s3); }
 .orgcard {
