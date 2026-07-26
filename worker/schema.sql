@@ -201,6 +201,16 @@ CREATE TABLE IF NOT EXISTS audit (
 );
 CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit (ts);
 
+-- Operator-to-operator messages. Private between the participants; the redactor
+-- ships a row only to a participant (or an Administrator, for moderation).
+CREATE TABLE IF NOT EXISTS messages (
+  id          TEXT PRIMARY KEY,
+  deleted     INTEGER NOT NULL DEFAULT 0,
+  version     INTEGER NOT NULL DEFAULT 1,
+  updated_at  TEXT,
+  data        TEXT NOT NULL
+);
+
 -- Server-issued login sessions. The token is an opaque random string; the app
 -- sends it as `Authorization: Bearer <token>`.
 CREATE TABLE IF NOT EXISTS sessions (

@@ -47,6 +47,19 @@ export function canModerate(user) {
   return isCL5(user) || isAdmin(user);
 }
 
+// --- Operator messaging ------------------------------------------------------
+// Any active operator may send a message (clearance governs records, not who you
+// may talk to). A message is visible only to its participants — or to an
+// Administrator, whose moderation remit alone (never CL5's) grants read-through,
+// mirroring the Worker redactor.
+export function canMessage(actor) {
+  return !!(actor && actor.accountStatus === 'active');
+}
+export function canViewMessage(actor, m) {
+  if (!actor || !m) return false;
+  return isAdmin(actor) || (m.participants || []).includes(actor.id);
+}
+
 // Command personnel act across both operational organisations.
 // Internal Security membership is an orthogonal caveat, NOT an org: an agent's
 // `org` stays their cover post, and `isd` carries the covert identity. Anything

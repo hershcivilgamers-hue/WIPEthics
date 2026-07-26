@@ -19,12 +19,13 @@ import {
 import {
   users, operations, intel, recruits, directives, cases, compartments, subjects,
   getActivityForUser, getSetting, blacklist, promoReqs, evidence, investigations, getTraining,
-  getUser, getSubject, getCase, getOperation, getIntel, getDirective } from '../storage.js';
+  getUser, getSubject, getCase, getOperation, getIntel, getDirective, messages } from '../storage.js';
+import { isUnread } from '../msg-read.js';
 import {
   isAssignedToOperation, isAssignedToIntel, canViewOperation, canViewIntel,
   canReadDirective, canManageOrg, canParticipateRecruitment, canRuleTribunal,
   canManageDirectives, isCL5, canIssueStrike, canManageLeave, canPromote, canManageTribunal,
-  canViewSubject, canViewCase, canManageSubject } from '../permissions.js';
+  canViewSubject, canViewCase, canManageSubject, canViewMessage } from '../permissions.js';
 import { esc, relTime } from '../ui.js';
 import { partitionNotes, markSeen, markDone, snooze, restore } from '../inbox.js';
 import { watchList } from '../watch.js';
@@ -312,6 +313,15 @@ export function buildNotifications(actor, now = Date.now()) {
     if (s.deleted || s.threat !== 'critical' || !LIVE.includes(s.status)) continue;
     if (!canViewSubject(actor, s) || !canManageSubject(actor, s)) continue;
     add('bad', '◉', `${s.ref} · ${s.alias} is a live critical-threat ${s.kind === 'target' ? 'target' : 'subject'}.`, `#/subject/${s.id}`, lastAt(s.logs));
+  }
+
+  // 20. Unread operator messages. Read state is per-browser; a message you sent,
+  //     or one an Administrator only sees for moderation, is not "unread" for you.
+  const myUnread = messages().filter((m) => !m.deleted && canViewMessage(actor, m)
+    && (m.participants || []).includes(actor.id) && isUnread(m, actor.id));
+  if (myUnread.length) {
+    const latest = myUnread.reduce((t, m) => Math.max(t, Date.parse(m.at) || 0), 0);
+    add('info', '✉', `You have ${myUnread.length} unread message${myUnread.length === 1 ? '' : 's'}.`, '#/messages', latest || null);
   }
 
   // Newest first; undated items sink to the bottom.

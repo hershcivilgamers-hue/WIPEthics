@@ -26,6 +26,7 @@ const COLUMNS = {
   recruits:   ['id', 'org', 'deleted', 'version', 'updated_at', 'data'],
   promo_reqs: ['id', 'org', 'data'],
   settings:   ['id', 'org', 'data'],
+  messages:   ['id', 'deleted', 'version', 'updated_at', 'data'],
 };
 
 function rowValue(col, record) {

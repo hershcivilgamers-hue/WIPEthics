@@ -27,6 +27,7 @@ import * as loginView from './views/login.js';
 import * as overviewView from './views/overview.js';
 import * as searchView from './views/search.js';
 import * as orgchartView from './views/orgchart.js';
+import * as messagesView from './views/messages.js';
 import { maybeOfferTutorial, startTutorial } from './tutorial.js';
 import { openGlossary } from './glossary.js';
 import { buildNotifications } from './views/notifications.js';
@@ -297,6 +298,7 @@ function dispatch(route, user) {
     case 'overview':     overviewView.render(view, app); break;
     case 'search':       searchView.render(view, app); break;
     case 'orgchart':     orgchartView.render(view, app); break;
+    case 'messages':     messagesView.render(view, app); break;
     case 'surveillance': surveillanceView.renderList(view, app); break;
     case 'subject':      surveillanceView.renderSubject(view, app, route.params.id); break;
     case 'compartments': compartmentsView.renderList(view, app); break;

@@ -23,7 +23,7 @@ import {
   canManageOrg, canParticipateRecruitment, canActOnRecruit, isMemberTrack, canLogToOperation, canLogIntel, canManageTraining, isCL5,
   canDischarge, canManageLeave, isISD, canManageISD,
   canViewInvestigation, canFileInvestigation, canAdvanceInvestigation, canAdjudicateInvestigation,
-  canViewInduction, canFileInduction, canModerate,
+  canViewInduction, canFileInduction, canModerate, isAdmin,
 } from '../../js/permissions.js';
 import { investigationNextStage, INVESTIGATION_DISPOSITION } from '../../js/constants.js';
 import { scoreInduction } from '../../js/isd-induction.js';
@@ -1088,8 +1088,37 @@ function authorizeInduction(actor, cur, next) {
   return ok('EDIT_INDUCTION', `Updated induction ${ref}.`);
 }
 
+// Operator-to-operator messages. A message is written once and never edited:
+// the body, sender and participant set are immutable after send. Read state is
+// tracked client-side, so it never reaches this gate. Sending is open to any
+// active operator (clearance governs records, not conversation); a sender — or
+// an Administrator moderating — may soft-delete. The audit detail never carries
+// the body, only that a message was sent, to how many.
+function authorizeMessage(actor, cur, next) {
+  if (!cur) {
+    if (actor.id !== next.from) return deny('You can only send a message as yourself.');
+    if (!Array.isArray(next.participants) || !next.participants.includes(actor.id)) {
+      return deny('You must be a participant in your own message.');
+    }
+    if (next.participants.length < 2) return deny('A message needs at least one recipient.');
+    if (!next.body || !String(next.body).trim()) return deny('A message cannot be empty.');
+    return ok('SEND_MESSAGE', `Sent a message to ${next.participants.length - 1} recipient${next.participants.length - 1 === 1 ? '' : 's'}.`);
+  }
+  if (!!next.deleted !== !!cur.deleted) {
+    // The sender may withdraw their own message; an Administrator may moderate any.
+    if (cur.from !== actor.id && !isAdmin(actor)) return deny('You can only withdraw your own message.');
+    if (changedOutside(cur, next, ['deleted', 'deletedAt', 'version', 'updatedAt'])) {
+      return deny('A withdrawal cannot be combined with other edits.');
+    }
+    return next.deleted ? ok('REMOVE_MESSAGE', 'Withdrew a message.') : ok('RESTORE_MESSAGE', 'Restored a message.');
+  }
+  // Everything else about a sent message is immutable.
+  return deny('A sent message cannot be edited.');
+}
+
 const AUTHORIZERS = {
   users: authorizeUser,
+  messages: authorizeMessage,
   investigations: authorizeInvestigation,
   inductions: authorizeInduction,
   documents: authorizeDocument,
@@ -1274,6 +1303,9 @@ function authorizeEvidence(actor, cur, next) {
 // the soft, restorable kind every other path uses — nothing is destroyed.
 function moderationRemoval(collection, actor, cur, next) {
   if (!cur || !next || !canModerate(actor)) return null;
+  // Messages are private: their moderation is an Administrator power alone, never
+  // CL5's — so a Commander who is not staff cannot reach into a thread.
+  if (collection === 'messages' && !isAdmin(actor)) return null;
   if (!!next.deleted === !!cur.deleted) return null;
   if (changedOutside(cur, next, ['deleted', 'deletedAt', 'version', 'updatedAt'])) return null;
   // A self-removal is still barred; the self-override block is not moderation.

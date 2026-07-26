@@ -43,6 +43,7 @@ function emptyDb() {
     inductions: [],
     promoReqs: [],
     settings: [],
+    messages: [],
     audit: [],
     session: { userId: null },
   };
@@ -125,6 +126,7 @@ export function applyServerSnapshot(snap) {
     blacklist: snap.blacklist || [],
     promoReqs: snap.promoReqs || [],
     settings: snap.settings || [],
+    messages: snap.messages || [],
     audit: snap.audit || [],
     meta: { ...base.meta, seededAt: 'server' },
     session: { userId: null },
@@ -361,6 +363,20 @@ export function upsertBlacklistEntry(record) {
   const i = list.findIndex((r) => r.id === record.id);
   if (i >= 0) list[i] = record; else list.push(record);
   afterWrite('blacklist', record);
+  return record;
+}
+
+// Operator-to-operator messages. A conversation is the set of participants;
+// there is no separate thread record. Read state lives client-side (msg-read.js).
+export const messages = () => loadDb().messages;
+export function getMessage(id) {
+  return messages().find((r) => r.id === id) || null;
+}
+export function upsertMessage(record) {
+  const list = messages();
+  const i = list.findIndex((r) => r.id === record.id);
+  if (i >= 0) list[i] = record; else list.push(record);
+  afterWrite('messages', record);
   return record;
 }
 

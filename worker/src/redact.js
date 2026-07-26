@@ -240,6 +240,9 @@ export function buildSnapshot(actor, db) {
     investigations: (db.investigations || []).filter((i) => !i.deleted && canViewInvestigation(actor)),
     inductions: (db.inductions || []).filter((i) => !i.deleted && canViewInduction(actor)),
     blacklist: (db.blacklist || []).filter((b) => !b.deleted),
+    // Private comms: a message reaches only its participants — or an Administrator,
+    // whose moderation remit alone (never CL5's) grants read-through here.
+    messages: (db.messages || []).filter((m) => !m.deleted && (isAdmin(actor) || (m.participants || []).includes(actor.id))),
     promoReqs: db.promoReqs || [],
     settings: db.settings || [],
     audit: (isCL5(actor) || isAdmin(actor)) ? (db.audit || []) : [],

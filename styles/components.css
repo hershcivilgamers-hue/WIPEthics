@@ -316,6 +316,26 @@
 .oc-chip__id { font-size: 12.5px; }
 .oc-chip__name { color: var(--text-2); margin-left: 2px; }
 
+/* Messaging — inbox rows, thread bubbles, recipient picker. */
+.msg-list { display: flex; flex-direction: column; }
+.msg-row { display: grid; grid-template-columns: 1fr auto; gap: 2px var(--s3); text-align: left; padding: var(--s3); background: transparent; border: 0; border-top: 1px solid var(--line); cursor: pointer; color: var(--text); }
+.msg-row:first-child { border-top: 0; }
+.msg-row:hover { background: var(--surface-3); }
+.msg-row__who { grid-column: 1; font-weight: 600; font-size: 13.5px; }
+.msg-row__preview { grid-column: 1; color: var(--text-2); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46ch; }
+.msg-row__meta { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: var(--text-3); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+.msg-row--unread .msg-row__who { color: var(--text-1); }
+.msg-thread { display: flex; flex-direction: column; gap: var(--s2); }
+.msg-bubble { max-width: 78%; align-self: flex-start; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: var(--s2) var(--s3); }
+.msg-bubble--mine { align-self: flex-end; border-color: var(--amber-dim); }
+.msg-bubble__head { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--text-3); margin-bottom: 3px; }
+.msg-bubble__time { margin-left: auto; }
+.msg-bubble__del { background: 0; border: 0; color: var(--text-3); cursor: pointer; font-size: 12px; padding: 0 2px; }
+.msg-bubble__del:hover { color: var(--bad); }
+.msg-bubble__body { font-size: 13.5px; white-space: pre-wrap; word-break: break-word; }
+.msg-picks { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius); padding: var(--s2); }
+.msg-pick { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+
 /* Org cards */
 .orgcard-grid { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s3); }
 .orgcard {

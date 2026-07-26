@@ -45,6 +45,7 @@ export const NAV = [
     items: [
       { name: 'overview',     hash: '#/overview',     label: 'Command Overview' },
       { name: 'notifications', hash: '#/notifications', label: 'For Your Attention' },
+      { name: 'messages',     hash: '#/messages',     label: 'Messages' },
       { name: 'search',       hash: '#/search',       label: 'Search' },
       { name: 'orgchart',     hash: '#/orgchart',     label: 'Chain of Command' },
       { name: 'surveillance', hash: '#/surveillance', label: 'Surveillance',    feature: 'surveillance' },
@@ -153,7 +154,7 @@ function featureBlocked(name) {
   return false;
 }
 
-const TOP_LEVEL = ['overview', 'notifications', 'search', 'orgchart', 'surveillance', 'compartments', 'operations', 'trainings', 'deployments', 'intel', 'engagement', 'evidence', 'dashboard', 'docket', 'tribunals', 'directives', 'documents', 'terminal', 'activity', 'blacklist', 'recruit-omega', 'recruit-ethics', 'omega-1', 'ethics', 'command', 'isd', 'investigations', 'isd-engagement', 'isd-induction', 'insight', 'admin'];
+const TOP_LEVEL = ['overview', 'notifications', 'messages', 'search', 'orgchart', 'surveillance', 'compartments', 'operations', 'trainings', 'deployments', 'intel', 'engagement', 'evidence', 'dashboard', 'docket', 'tribunals', 'directives', 'documents', 'terminal', 'activity', 'blacklist', 'recruit-omega', 'recruit-ethics', 'omega-1', 'ethics', 'command', 'isd', 'investigations', 'isd-engagement', 'isd-induction', 'insight', 'admin'];
 
 // Parse the current location hash into a route { name, params }.
 export function parseHash() {
