@@ -490,7 +490,9 @@ function nextIsdBadge() {
 function openISDInduct(app, u) {
   const actor = app.user;
   if (!canManageISD(actor)) { toast('Internal Security membership is set by ISD command.', 'error'); return; }
-  const rankOpts = (RANKS.isd || []).map((r) => `<option value="${esc(r)}" ${r === 'Operative' ? 'selected' : ''}>${esc(r)} · ${esc(clearanceForRank('isd', r) || '')}</option>`).join('');
+  // Pre-select the rank they applied for at sign-up, when it is a real ISD rung.
+  const wantRank = (RANKS.isd || []).includes(u.requestedISD) ? u.requestedISD : 'Operative';
+  const rankOpts = (RANKS.isd || []).map((r) => `<option value="${esc(r)}" ${r === wantRank ? 'selected' : ''}>${esc(r)} · ${esc(clearanceForRank('isd', r) || '')}</option>`).join('');
   openModal({
     title: `Read into Internal Security — ${u.designation}`,
     body: `<p class="modal__message">This gives ${esc(u.codename)} an Internal Security posting alongside their home unit. Their ISD rank is the Department's own — it does not follow their unit. Visible only to the Department and CL5.</p>

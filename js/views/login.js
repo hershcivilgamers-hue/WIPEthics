@@ -169,14 +169,16 @@ export function render(host, app) {
 
 // --- Access request (self-registration) -------------------------------------
 function openRegister(app) {
-  // Internal Security is a real public-facing department; MTF Omega-1 is the
-  // covert unit whose personnel masquerade as Internal Security (this signed-out
-  // screen, like any junior viewer, sees Omega-1 branded as "Internal
-  // Enforcement"). Picking ISD requests a posting in that unit plus an ISD
-  // front; Command activates the posting, ISD command issues the front at
-  // induction. Nothing shown to the applicant may link ISD to Omega-1.
+  // Internal Security is a real public-facing department with two intake routes.
+  // The COVERT one is Internal Enforcement (MTF Omega-1 under its junior cover
+  // brand): pick that and you are an Omega field operative who carries an ISD
+  // front automatically. The DIRECT one is this "Internal Security Department"
+  // option — a native member with no Omega cover: Command activates a
+  // departmental posting (hosted by the Committee, which oversees the Department)
+  // and ISD command issues an ISD rank + a 2-series badge at induction. Either
+  // way, nothing shown to the applicant may link Internal Enforcement to Omega-1.
   const ISD_OPTION = '__isd';
-  const postingOrgOf = (o) => (o === ISD_OPTION ? 'omega-1' : o);
+  const postingOrgOf = (o) => (o === ISD_OPTION ? 'ethics-committee' : o);
   const orgOptions = ORG_ORDER
     .filter((o) => o !== 'command') // you don't self-register into Command
     .map((o) => `<option value="${o}">${esc(ORGS[o].name)}</option>`)
@@ -209,7 +211,7 @@ function openRegister(app) {
     <div class="field"><label>Organisation</label><select id="reg-org">${orgOptions}</select></div>
     <div class="field"><label>Rank sought</label><select id="reg-rank">${rankOptionsFor(firstOrg)}</select></div>
     <div class="field__hint">Your requested rank sets the clearance you're asking for. Command may adjust it on approval.</div>
-    <div class="field__hint" id="reg-isd-hint" hidden>The rank above is on the Internal Security ladder. Command assigns your posting and clearance on approval; Internal Security command completes your induction afterwards.</div>
+    <div class="field__hint" id="reg-isd-hint" hidden>Direct entry into Internal Security — no Omega cover. The rank above is on the Department's own ladder. Command activates a departmental posting on approval; Internal Security command completes your induction, issuing your rank and a 2-series badge.</div>
     <div class="field"><label>Operator ID</label><input id="reg-username" type="text" placeholder="login name" spellcheck="false" /></div>
     <div class="field"><label>Passphrase</label><input id="reg-password" type="password" placeholder="choose a passphrase" /></div>
     <div id="reg-error" class="auth__error" hidden></div>
@@ -231,7 +233,7 @@ function openRegister(app) {
           // For ISD the rank sought is an ISD rank and rides in requestedISD;
           // the posting rank stays unrequested (Command assigns a modest one).
           const requestedISD = isISDPick ? (rankChoice || true) : false;
-          const org = postingOrgOf(orgChoice); // ISD applicants are posted into Omega-1
+          const org = postingOrgOf(orgChoice); // native ISD applicants are posted into the Committee (no Omega cover)
           const requestedRank = isISDPick ? null : rankChoice;
           const username = dlg.querySelector('#reg-username').value.trim();
           const password = dlg.querySelector('#reg-password').value;

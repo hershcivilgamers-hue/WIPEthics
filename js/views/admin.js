@@ -317,7 +317,7 @@ function approve(app, id) {
     title: `Approve \u2014 ${u.codename}`,
     body: `
       <p class="modal__message">Confirm organisation, assign a rank and clearance. A permanent designation is issued on approval.</p>
-      ${u.requestedISD ? `<div class="req-card__meta" style="margin-bottom:10px">\u21b3 This applicant requested <strong>Internal Security</strong> access${typeof u.requestedISD === 'string' ? ` as <strong>${esc(u.requestedISD)}</strong>` : ''}. You are activating their <em>unit posting</em> in ${esc(ORGS['omega-1'].name)} \u2014 the Internal Security front (and its rank) is issued separately by ISD command through induction.</div>` : ''}
+      ${u.requestedISD ? `<div class="req-card__meta" style="margin-bottom:10px">\u21b3 This applicant requested <strong>Internal Security</strong> access${typeof u.requestedISD === 'string' ? ` as <strong>${esc(u.requestedISD)}</strong>` : ''}. You are activating their <em>unit posting</em> in ${esc(ORGS[org].name)} \u2014 the Internal Security front (and its rank) is issued separately by ISD command through induction.</div>` : ''}
       <div class="field"><label>Organisation</label>
         <select id="ap-org">${['omega-1', 'ethics-committee', 'command'].map((o) => `<option value="${o}" ${o === org ? 'selected' : ''}>${esc(ORGS[o].name)}</option>`).join('')}</select></div>
       <div class="field"><label>Rank</label><select id="ap-rank">${rankOpts}</select></div>
