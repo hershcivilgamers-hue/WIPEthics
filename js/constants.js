@@ -144,6 +144,7 @@ export const ISD_RANK_BY_COVER = {
 //     on the record and set by ISD command; there is no cover post to derive from.
 export function isdRankFor(user) {
   if (!user) return null;
+  if (user.org === 'isd') return user.rank || null;            // pure member: rank IS the ISD rank
   if (user.org === 'omega-1') return ISD_RANK_BY_COVER[user.rank] || null;
   if (user.isd && user.isd.standing === 'active') return user.isd.rank || 'Operative';
   return null;
@@ -161,6 +162,7 @@ export function isdClearanceFor(user) {
 //   • Native ISD members carry a stored 2-series badge, issued on induction.
 export function isdBadgeFor(user) {
   if (!user) return null;
+  if (user.org === 'isd') return String(user.designation || '').split('-')[1] || null; // "ISD-214" → "214"
   if (user.org === 'omega-1') {
     const n = parseInt(String(user.designation || '').split('-')[1], 10);
     return Number.isFinite(n) ? `6${String(n).padStart(2, '0')}` : null;

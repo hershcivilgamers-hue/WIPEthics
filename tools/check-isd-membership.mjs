@@ -53,6 +53,19 @@ const oBefore = { ...omegaPvt, accountStatus: 'active', version: 1, deleted: fal
 const oNext = { ...oBefore, isd: { standing: 'active', rank: 'Director' }, version: 2 };
 assert.equal(w(cl5, oBefore, oNext).action, 'SET_ISD_MEMBERSHIP', 'Omega membership write is fine; a stored rank is inert (derived wins)');
 
+// --- Pure ISD member: org 'isd', no cover, rank IS the ISD rank --------------
+const pure = { id: 'pi', designation: 'ISD-214', org: 'isd', rank: 'Inspector', clearance: 'CL4-J' };
+assert.equal(isISD(pure), true, 'a pure ISD posting is a full member');
+assert.equal(isdMember(pure), true);
+assert.equal(isdRankFor(pure), 'Inspector', 'their rank IS the ISD rank');
+assert.equal(isdBadgeFor(pure), '214', 'ISD-214 → badge 214 (2-series)');
+assert.equal(isdClearanceFor(pure), 'CL4-J', 'Inspector is CL4-J');
+
+// Approval straight into a pure ISD posting (no caveat) — one CL5 write.
+const isdApplicant = { id: 'ia', designation: 'PEND-9', org: 'isd', rank: null, clearance: null, accountStatus: 'pending', requestedISD: 'Inspector', version: 1, deleted: false };
+const isdApproved = { ...isdApplicant, accountStatus: 'active', rank: 'Inspector', clearance: 'CL4-J', designation: 'ISD-200', requestedISD: false, version: 2 };
+assert.equal(w(cl5, isdApplicant, isdApproved).action, 'APPROVE_REGISTRATION', 'CL5 activates a pure ISD member in one write');
+
 // --- Approval may read a native applicant into ISD in one CL5 write ----------
 const applicant = { id: 'app1', designation: 'PEND-1', org: 'ethics-committee', rank: null, clearance: null, accountStatus: 'pending', requestedISD: 'Inspector', version: 1, deleted: false };
 const approved = { ...applicant, accountStatus: 'active', org: 'ethics-committee', rank: 'Assistant', clearance: 'CL4-J', designation: 'EC-2', isd: { standing: 'active', rank: 'Inspector', badgeNumber: '201', promoChecks: [] }, requestedISD: false, version: 2 };

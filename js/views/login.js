@@ -178,7 +178,7 @@ function openRegister(app) {
   // and ISD command issues an ISD rank + a 2-series badge at induction. Either
   // way, nothing shown to the applicant may link Internal Enforcement to Omega-1.
   const ISD_OPTION = '__isd';
-  const postingOrgOf = (o) => (o === ISD_OPTION ? 'ethics-committee' : o);
+  const postingOrgOf = (o) => (o === ISD_OPTION ? 'isd' : o);
   const orgOptions = ORG_ORDER
     .filter((o) => o !== 'command') // you don't self-register into Command
     .map((o) => `<option value="${o}">${esc(ORGS[o].name)}</option>`)
@@ -211,7 +211,7 @@ function openRegister(app) {
     <div class="field"><label>Organisation</label><select id="reg-org">${orgOptions}</select></div>
     <div class="field"><label>Rank sought</label><select id="reg-rank">${rankOptionsFor(firstOrg)}</select></div>
     <div class="field__hint">Your requested rank sets the clearance you're asking for. Command may adjust it on approval.</div>
-    <div class="field__hint" id="reg-isd-hint" hidden>Direct entry into Internal Security — no Omega cover. The rank above is on the Department's own ladder. Command activates a departmental posting on approval; Internal Security command completes your induction, issuing your rank and a 2-series badge.</div>
+    <div class="field__hint" id="reg-isd-hint" hidden>Direct entry into Internal Security — no cover posting. The rank above is on the Department's own ladder; Command activates you as a pure ISD member with a 2-series badge on approval.</div>
     <div class="field"><label>Operator ID</label><input id="reg-username" type="text" placeholder="login name" spellcheck="false" /></div>
     <div class="field"><label>Passphrase</label><input id="reg-password" type="password" placeholder="choose a passphrase" /></div>
     <div id="reg-error" class="auth__error" hidden></div>

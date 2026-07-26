@@ -30,9 +30,15 @@ import {
 let activeTab = 'registrations';
 
 function nextDesignation(org) {
-  const prefix = org === 'omega-1' ? 'O1' : org === 'ethics-committee' ? 'EC' : 'CMD';
-  const nums = users().filter((x) => x.org === org && /-(\d+)$/.test(x.designation || '')).map((x) => parseInt(x.designation.split('-')[1], 10));
-  return `${prefix}-${(nums.length ? Math.max(...nums) : 0) + 1}`;
+  const prefix = org === 'omega-1' ? 'O1' : org === 'ethics-committee' ? 'EC' : org === 'isd' ? 'ISD' : 'CMD';
+  const base = org === 'isd' ? 199 : 0; // a pure ISD member's designation IS their 2-series badge (200+)
+  // Count only real, prefix-matching designations — a pending applicant still on
+  // PEND-#### must not seed the sequence (it once made the first ISD member ISD-78).
+  const nums = users().map((x) => x.designation || '')
+    .filter((d) => d.startsWith(`${prefix}-`))
+    .map((d) => parseInt(d.slice(prefix.length + 1), 10))
+    .filter(Number.isFinite);
+  return `${prefix}-${(nums.length ? Math.max(...nums) : base) + 1}`;
 }
 
 export function render(host, app) {
@@ -308,7 +314,9 @@ function approve(app, id) {
   // Pre-select what the applicant asked for, when it's valid for this org. An
   // ISD applicant asked for an ISD rank, not a posting rank — default their
   // posting to the most junior (an ISD front sits best on an unremarkable one).
-  const wantRank = ranks.includes(u.requestedRank) ? u.requestedRank : (u.requestedISD ? ranks[ranks.length - 1] : ranks[0]);
+  const wantRank = ranks.includes(u.requestedRank) ? u.requestedRank
+    : (ranks.includes(u.requestedISD) ? u.requestedISD
+    : (u.requestedISD ? ranks[ranks.length - 1] : ranks[0]));
   const wantClr = clearanceForRank(org, wantRank);
   const rankOpts = ranks.map((r) => `<option value="${esc(r)}" ${r === wantRank ? 'selected' : ''}>${esc(r)}</option>`).join('');
   const clrOpts = allowed.map((c) => `<option value="${c}" ${c === wantClr ? 'selected' : ''}>${esc(CLEARANCES[c].label)}</option>`).join('');
@@ -317,12 +325,12 @@ function approve(app, id) {
     title: `Approve \u2014 ${u.codename}`,
     body: `
       <p class="modal__message">Confirm organisation, assign a rank and clearance. A permanent designation is issued on approval.</p>
-      ${u.requestedISD ? `<div class="req-card__meta" style="margin-bottom:10px">\u21b3 This applicant requested <strong>Internal Security</strong> access${typeof u.requestedISD === 'string' ? ` as <strong>${esc(u.requestedISD)}</strong>` : ''}. Their unit posting (below) is their cover; you can read them into the Department here in one step.</div>` : ''}
+      ${u.requestedISD ? `<div class="req-card__meta" style="margin-bottom:10px">\u21b3 This applicant requested <strong>Internal Security</strong>${typeof u.requestedISD === 'string' ? ` as <strong>${esc(u.requestedISD)}</strong>` : ''}. By default they are activated as a <strong>pure ISD member</strong> \u2014 no cover posting. Change the organisation only to give them a cover unit instead.</div>` : ''}
       <div class="field"><label>Organisation</label>
-        <select id="ap-org">${['omega-1', 'ethics-committee', 'command'].map((o) => `<option value="${o}" ${o === org ? 'selected' : ''}>${esc(ORGS[o].name)}</option>`).join('')}</select></div>
+        <select id="ap-org">${['isd', 'omega-1', 'ethics-committee', 'command'].map((o) => `<option value="${o}" ${o === org ? 'selected' : ''}>${esc(ORGS[o].name)}</option>`).join('')}</select></div>
       <div class="field"><label>Rank</label><select id="ap-rank">${rankOpts}</select></div>
       <div class="field"><label>Clearance</label><select id="ap-clr">${clrOpts}</select></div>
-      ${u.requestedISD ? `<label class="msg-pick" style="margin-top:4px"><input type="checkbox" id="ap-isd" checked /> Read into Internal Security${typeof u.requestedISD === 'string' ? ` as <strong>${esc(u.requestedISD)}</strong>` : ''} on approval <span class="muted-text">(native front; skipped for an Omega-1 posting, which is ISD already)</span></label>` : ''}
+      ${u.requestedISD ? `<label class="msg-pick" id="ap-isd-row" style="margin-top:4px" hidden><input type="checkbox" id="ap-isd" checked /> Also read into Internal Security <span class="muted-text">(only for a cover posting; a pure ISD or Omega-1 posting is already ISD)</span></label>` : ''}
     `,
     actions: [
       { label: 'Cancel', tone: 'ghost', onClick: (c) => c() },
@@ -339,14 +347,16 @@ function approve(app, id) {
           fresh.designation = designation;
           fresh.accountStatus = 'active';
           fresh.requestedOrg = null;
-          // One-step Internal Security intake: an ISD applicant kept on a
-          // non-Omega posting is read into the Department here (Omega postings are
-          // ISD by default, so their caveat is derived — nothing to store).
-          const grantISD = fresh.requestedISD && chosenOrg !== 'omega-1' && d.querySelector('#ap-isd')?.checked;
+          // ISD intake. A pure ISD posting (org 'isd') IS the membership — no
+          // caveat. A cover posting (Ethics/Command) gets a stored front only if
+          // the box is ticked; an Omega posting is ISD by derivation.
+          const grantISD = fresh.requestedISD && chosenOrg !== 'omega-1' && chosenOrg !== 'isd' && d.querySelector('#ap-isd')?.checked;
           if (grantISD) {
             const isdRank = (RANKS.isd || []).includes(fresh.requestedISD) ? fresh.requestedISD : 'Operative';
             fresh.isd = { standing: 'active', rank: isdRank, badgeNumber: nextIsdBadge(), promoChecks: [] };
             fresh.requestedISD = false;
+          } else if (chosenOrg === 'isd') {
+            fresh.requestedISD = false; // the org carries membership
           }
           fresh.version += 1;
           fresh.updatedAt = new Date().toISOString();
@@ -371,11 +381,17 @@ function approve(app, id) {
     const want = clearanceForRank(orgSel ? orgSel.value : org, rankSel.value);
     if (want && [...clrSel.options].some((o) => o.value === want)) clrSel.value = want;
   };
+  // The cover-caveat checkbox only makes sense for an Ethics/Command posting —
+  // a pure ISD or Omega-1 posting is already ISD.
+  const isdRow = dlg.querySelector('#ap-isd-row');
+  const syncIsdRow = () => { if (isdRow) isdRow.hidden = !(orgSel && ['ethics-committee', 'command'].includes(orgSel.value)); };
+  syncIsdRow();
   if (orgSel && rankSel) {
     orgSel.addEventListener('change', () => {
       const list = RANKS[orgSel.value] || [];
       rankSel.innerHTML = list.map((r) => `<option value="${esc(r)}">${esc(r)}</option>`).join('');
       syncClr();
+      syncIsdRow();
     });
     rankSel.addEventListener('change', syncClr);
   }

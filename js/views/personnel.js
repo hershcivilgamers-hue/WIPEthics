@@ -421,6 +421,10 @@ async function bulkRecycle(app, list, done) {
 // is not ISD or CL5, so this is self-gating. An agent records their OWN badge
 // number; rank and standing move through ISD command (see the gate).
 function sectionISD(u, actor) {
+  // A pure ISD member (org 'isd') has no covert front over a cover posting — the
+  // main dossier record IS their Internal Security identity (org, rank, ISD-N
+  // designation), so this front card would only repeat it.
+  if (u.org === 'isd') return '';
   // Induction. A file with no membership shows nothing to anyone — except ISD
   // command (or CL5), who may read the operator in. This is the only way to
   // create an agent in-app; the record `isd` is otherwise stripped for everyone.

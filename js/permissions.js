@@ -67,21 +67,21 @@ export function canViewMessage(actor, m) {
 // when the viewer is ISD or CL5 — so a non-ISD client literally cannot see it.
 //
 // isISD is the VISIBILITY + AUTHORITY gate: it decides who may see other agents'
-// covert fronts and who wields ISD command. It stays caveat-based, so a junior
+// covert fronts and who wields ISD command. A PURE ISD member (org 'isd', no
+// cover) is a full member. Otherwise it stays caveat-based, so a junior Omega
 // cannot see the Department's membership just by belonging to the unit.
 export function isISD(actor) {
-  return !!(actor && actor.isd && actor.isd.standing === 'active');
+  return !!(actor && (actor.org === 'isd' || (actor.isd && actor.isd.standing === 'active')));
 }
 
-// isdMember is the IDENTITY predicate: does this operator carry an ISD front at
-// all? Every Omega-1 operator does by default — the unit masquerades as Internal
-// Security, so the front (rank + 6-series badge) is derived from the posting and
-// needs no induction. A non-Omega operator carries one only once read in (a
-// stored caveat), which is how a normal operator joins the Department. Used only
-// in Department-gated display (the roster, the file's ISD panel) — never to widen
-// who may SEE a front, which stays isISD's job.
+// isdMember is the IDENTITY predicate: does this operator belong to the
+// Department at all? A pure ISD posting (org 'isd') or an Omega-1 posting (the
+// unit masquerades as Internal Security, front derived) both qualify by their
+// org; anyone else only once read in (a stored caveat). Used in Department-gated
+// display (the roster, the file's ISD panel) — never to widen who may SEE a
+// front, which stays isISD's job.
 export function isdMember(actor) {
-  return !!(actor && (actor.org === 'omega-1' || (actor.isd && actor.isd.standing === 'active')));
+  return !!(actor && (actor.org === 'omega-1' || actor.org === 'isd' || (actor.isd && actor.isd.standing === 'active')));
 }
 
 // An agent's ISD rank is DERIVED from their Omega-1 cover rank — the unit wears
