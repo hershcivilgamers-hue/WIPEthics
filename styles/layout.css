@@ -160,8 +160,9 @@
 /* Secondary account actions ride as compact icons so the global search keeps a
    usable width; each carries a title + aria-label, and the full-text versions
    live in the mobile account drawer. */
-.topbar__iconbtn { padding: 6px 8px; }
+.topbar__iconbtn { padding: 6px 8px; position: relative; }
 .topbar__iconbtn svg { display: block; }
+.topbar__badge { position: absolute; top: -3px; right: -3px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px; background: var(--amber); color: var(--bg); font-size: 10px; font-weight: 700; line-height: 15px; text-align: center; }
 
 .op-chip {
   display: flex;

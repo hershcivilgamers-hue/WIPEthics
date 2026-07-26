@@ -107,7 +107,7 @@ function renderThread(host, app, key) {
     </div></div>
     <div class="card"><div class="card__body msg-thread">${bubbles}</div></div>
     <div class="card"><div class="card__body">
-      <textarea id="msg-reply" rows="3" placeholder="Write a reply…"></textarea>
+      <div class="field"><textarea id="msg-reply" rows="3" placeholder="Write a reply…"></textarea></div>
       <div class="btn-row" style="margin-top:8px;justify-content:flex-end"><button class="btn btn--primary" id="msg-send">Send</button></div>
     </div></div>`;
 

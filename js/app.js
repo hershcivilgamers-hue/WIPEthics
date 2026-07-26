@@ -223,6 +223,7 @@ function renderShell(user, route) {
               <select id="theme-select" class="theme-select js-theme-select" aria-label="Display theme" title="Display theme">
                 ${THEMES.map((t) => `<option value="${t.id}" ${t.id === getTheme() ? 'selected' : ''}>${t.label}</option>`).join('')}
               </select>
+              <button class="btn btn--ghost btn--sm topbar__iconbtn" data-act="messages" title="Messages" aria-label="Messages"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>${(() => { const n = messagesView.unreadMessages(user); return n ? `<span class="topbar__badge">${n > 9 ? '9+' : n}</span>` : ''; })()}</button>
               <button class="btn btn--ghost btn--sm topbar__iconbtn" id="glossary-btn" data-act="glossary" title="Field Guide — clearances, Need-To-Know, badges" aria-label="Open the Field Guide">?</button>
               <button class="btn btn--ghost btn--sm topbar__iconbtn" id="tour-btn" data-act="tour" title="Re-run the system tour" aria-label="Re-run the system tour"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.3a3 3 0 0 1 5.6 1.2c0 2-3 2.5-3 2.5"/><path d="M12 17h.01"/></svg></button>
               <button class="btn btn--ghost btn--sm topbar__iconbtn" id="change-pass" data-act="change-pass" title="Change passphrase" aria-label="Change passphrase"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M10.85 12.15 20 3"/><path d="M17 6l2.5 2.5"/><path d="M14.5 8.5 17 11"/></svg></button>
@@ -242,6 +243,7 @@ function renderShell(user, route) {
   root.querySelectorAll('[data-nav-group]').forEach((d) => d.addEventListener('toggle', () => rememberGroup(d.dataset.navGroup, d.open)));
   root.querySelectorAll('[data-act="tour"]').forEach((b) => b.addEventListener('click', () => startTutorial(app)));
   root.querySelectorAll('[data-act="glossary"]').forEach((b) => b.addEventListener('click', () => openGlossary(app)));
+  root.querySelectorAll('[data-act="messages"]').forEach((b) => b.addEventListener('click', () => app.navigate('#/messages')));
   root.querySelectorAll('[data-act="change-pass"]').forEach((b) => b.addEventListener('click', () => personnelView.openChangePassphrase(app)));
   root.querySelectorAll('[data-act="logout"]').forEach((b) => b.addEventListener('click', () => {
     logAction(user, 'LOGOUT', `${user.designation} signed out.`);

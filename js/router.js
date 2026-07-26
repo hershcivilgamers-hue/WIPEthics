@@ -45,7 +45,6 @@ export const NAV = [
     items: [
       { name: 'overview',     hash: '#/overview',     label: 'Command Overview' },
       { name: 'notifications', hash: '#/notifications', label: 'For Your Attention' },
-      { name: 'messages',     hash: '#/messages',     label: 'Messages' },
       { name: 'search',       hash: '#/search',       label: 'Search' },
       { name: 'orgchart',     hash: '#/orgchart',     label: 'Chain of Command' },
       { name: 'surveillance', hash: '#/surveillance', label: 'Surveillance',    feature: 'surveillance' },
