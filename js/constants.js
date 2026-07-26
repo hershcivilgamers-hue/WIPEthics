@@ -137,15 +137,35 @@ export const ISD_RANK_BY_COVER = {
   'Specialist': 'Operative',
   'Private': 'Operative',
 };
-// The ISD rank an operator presents, or null if their post carries no mask.
+// The ISD rank an operator presents, or null if they are not ISD.
+//   • Omega-1: DERIVED from the cover post — the mask follows the post, and can
+//     never drift after a promotion. Every Omega operator is ISD by default.
+//   • Native ISD (any other org, read in directly): the rank is their OWN, held
+//     on the record and set by ISD command; there is no cover post to derive from.
 export function isdRankFor(user) {
-  if (!user || user.org !== 'omega-1') return null;
-  return ISD_RANK_BY_COVER[user.rank] || null;
+  if (!user) return null;
+  if (user.org === 'omega-1') return ISD_RANK_BY_COVER[user.rank] || null;
+  if (user.isd && user.isd.standing === 'active') return user.isd.rank || 'Operative';
+  return null;
 }
 // The clearance that ISD rank carries (the ladder's own tier, not the cover's).
 export function isdClearanceFor(user) {
   const rank = isdRankFor(user);
   return rank ? (RANK_CLEARANCE.isd[rank] || null) : null;
+}
+
+// The Internal Security badge an operator carries.
+//   • Omega-1 fronts are DERIVED from the cover designation — a 6-series mirror
+//     of the public 2-series ISD badge (O1-7 → 607), so an Omega agent's cover
+//     is issued automatically and can never drift.
+//   • Native ISD members carry a stored 2-series badge, issued on induction.
+export function isdBadgeFor(user) {
+  if (!user) return null;
+  if (user.org === 'omega-1') {
+    const n = parseInt(String(user.designation || '').split('-')[1], 10);
+    return Number.isFinite(n) ? `6${String(n).padStart(2, '0')}` : null;
+  }
+  return (user.isd && user.isd.badgeNumber) || null;
 }
 
 // The clearance tier each rank carries. Promotion/demotion keeps an operator's

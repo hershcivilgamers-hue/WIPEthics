@@ -20,7 +20,7 @@ import { isdRankFor } from '../constants.js';
 import {
   inductions, getInduction, upsertInduction, users, getUser, upsertUser, newId,
 } from '../storage.js';
-import { canFileInduction, canManageISD } from '../permissions.js';
+import { canFileInduction, canManageISD, isdMember } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { esc, fmtDate, toast, openModal, confirmDialog } from '../ui.js';
 
@@ -267,7 +267,7 @@ function decide(app, id, outcome) {
 async function readCandidateIn(app, id, userId) {
   const rec = getInduction(id);
   const u = getUser(userId);
-  if (!rec || !u || u.isd) return;
+  if (!rec || !u || isdMember(u)) return;
   const ok = await confirmDialog({
     title: 'Read into Internal Security',
     message: `Read ${u.designation} · ${u.codename || ''} into the Department as an Operative? Their cover post is unaffected.`,

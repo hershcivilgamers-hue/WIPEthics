@@ -52,8 +52,23 @@ export function canModerate(user) {
 // `org` stays their cover post, and `isd` carries the covert identity. Anything
 // that reads this is, by construction, only ever handed the field by redactUser
 // when the viewer is ISD or CL5 — so a non-ISD client literally cannot see it.
+//
+// isISD is the VISIBILITY + AUTHORITY gate: it decides who may see other agents'
+// covert fronts and who wields ISD command. It stays caveat-based, so a junior
+// cannot see the Department's membership just by belonging to the unit.
 export function isISD(actor) {
   return !!(actor && actor.isd && actor.isd.standing === 'active');
+}
+
+// isdMember is the IDENTITY predicate: does this operator carry an ISD front at
+// all? Every Omega-1 operator does by default — the unit masquerades as Internal
+// Security, so the front (rank + 6-series badge) is derived from the posting and
+// needs no induction. A non-Omega operator carries one only once read in (a
+// stored caveat), which is how a normal operator joins the Department. Used only
+// in Department-gated display (the roster, the file's ISD panel) — never to widen
+// who may SEE a front, which stays isISD's job.
+export function isdMember(actor) {
+  return !!(actor && (actor.org === 'omega-1' || (actor.isd && actor.isd.standing === 'active')));
 }
 
 // An agent's ISD rank is DERIVED from their Omega-1 cover rank — the unit wears

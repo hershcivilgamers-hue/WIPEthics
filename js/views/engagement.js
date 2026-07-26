@@ -17,7 +17,7 @@ import {
 } from '../constants.js';
 import { engagementModel } from '../engagement.js';
 import { users, getEngagement, getEngagementFor, upsertEngagement, newId, getActivityForUser, getSetting } from '../storage.js';
-import { isCL5, canManageOrg, isISD, canManageISD } from '../permissions.js';
+import { isCL5, canManageOrg, isdMember, canManageISD } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { esc, fmtDate, toast, openModal } from '../ui.js';
 import { exportEngagementSummary } from '../export.js';
@@ -40,7 +40,7 @@ function roster(org) {
   const isd = org === 'isd';
   return users()
     .filter((u) => !u.deleted && u.accountStatus === 'active' && u.status !== 'discharged'
-      && (isd ? isISD(u) : u.org === org))
+      && (isd ? isdMember(u) : u.org === org))
     .sort((a, b) => {
       const ra = isd ? rankIndex('isd', isdRankFor(a)) : rankIndex(org, a.rank);
       const rb = isd ? rankIndex('isd', isdRankFor(b)) : rankIndex(org, b.rank);

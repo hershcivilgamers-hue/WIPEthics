@@ -320,10 +320,14 @@ function authorizeUser(actor, cur, next) {
     }
     if (!canManageISD(actor)) return deny('Internal Security membership is set by ISD command.');
     if (after) {
-      // No rank to validate: the ISD rank is derived from the cover post
-      // (isdRankFor), so membership carries only standing and a badge. A rank
-      // smuggled in here is inert — nothing reads it — and is stripped on write.
-      return ok('SET_ISD_MEMBERSHIP', `${cur.designation}: Internal Security ${before ? 'record updated' : 'induction'} (${isdRankFor(cur) || 'no mask'}).`);
+      // Omega-1 fronts derive their rank from the cover post (isdRankFor), so any
+      // rank on the caveat is inert. A NATIVE member (non-Omega, read in directly)
+      // carries their OWN ISD rank, set by command — it must be a real rung on the
+      // ISD ladder.
+      if (cur.org !== 'omega-1' && after.rank && !(RANKS.isd || []).includes(after.rank)) {
+        return deny('That is not a valid Internal Security rank.');
+      }
+      return ok('SET_ISD_MEMBERSHIP', `${cur.designation}: Internal Security ${before ? 'record updated' : 'induction'} (${isdRankFor({ ...cur, isd: after }) || 'no mask'}).`);
     }
     return ok('SET_ISD_MEMBERSHIP', `${cur.designation} removed from Internal Security.`);
   }
