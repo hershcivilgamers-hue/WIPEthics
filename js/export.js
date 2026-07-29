@@ -26,7 +26,7 @@ import { logAction } from './audit.js';
 import {
   CASE_KIND, CASE_STATUS, RULING_FINDING, CLEARANCES, ORGS, STATUSES,
   SUBJECT_CLASS, THREAT_LEVELS, SUBJECT_STATUS, STRIKE_LIMIT, strikeActive, activeStrikeCount,
-  CASE_VOTE, tallyCaseVotes, caseTakesVote,
+  CASE_VOTE, tallyCaseVotes, caseTakesVote, deBrandOmega,
 } from './constants.js';
 import { esc, toast } from './ui.js';
 import { interviewSetFor, INTERVIEW_GRADE, INTERVIEW_RECOMMENDATION } from './interview-bank.js';
@@ -76,6 +76,7 @@ const DOC_CLASS = {
   Operations: 'OPERATIONAL ORDER',
   Directive: 'STANDING DIRECTIVE',
   Document: 'OFFICIAL RECORD',
+  'Audit Log': 'ACTIVITY AUDIT LOG',
 };
 const banner = (code, category) => {
   const m = CLEARANCE_MARK[code] || { tier: clrLabel(code).toUpperCase(), caveat: 'RESTRICTED' };
@@ -1424,6 +1425,59 @@ export function buildEngagementSummaryHTML(summary, actor) {
   });
 }
 
+// The audit feed as a printable record — CL5/Administrator oversight only (the
+// data itself is already gated to that audience by buildSnapshot in
+// worker/src/redact.js; this just renders whatever list the caller already has).
+function auditActionLabel(action) {
+  return String(action).replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase());
+}
+export function buildAuditLogHTML(entries, actor, filters = {}) {
+  const th = 'border-bottom:1px solid #111;padding:4px 5px;font-size:9px;letter-spacing:.04em;text-transform:uppercase';
+  const td = 'padding:4px 5px;border-bottom:1px solid #ccc;font-size:10px';
+  const rows = entries.length ? entries.map((e) => `
+      <tr>
+        <td style="${td};white-space:nowrap">${esc(longDateTime(e.ts))}</td>
+        <td style="${td};white-space:nowrap" class="mono">${esc(e.actor)}</td>
+        <td style="${td};white-space:nowrap">${esc(auditActionLabel(e.action))}</td>
+        <td style="${td}">${esc(deBrandOmega(e.detail || ''))}</td>
+      </tr>`).join('') : `<tr><td style="${td}" colspan="4">No matching activity.</td></tr>`;
+
+  const activeFilters = [
+    filters.q && `text “${filters.q}”`,
+    filters.action && auditActionLabel(filters.action),
+    filters.from && `from ${filters.from}`,
+    filters.to && `to ${filters.to}`,
+  ].filter(Boolean);
+
+  const inner = `
+    ${letterhead('command', 'Office of Record')}
+    <hr class="rule" />
+    <div class="doc-title">Activity Audit Log</div>
+    <div class="doc-sub">${entries.length} recorded action${entries.length === 1 ? '' : 's'}</div>
+    <div class="doc-sub">${activeFilters.length ? `Filtered — ${esc(activeFilters.join('; '))}` : 'Full record, most recent first'}</div>
+    <hr class="rule" />
+    <table style="width:100%;border-collapse:collapse;margin-top:6px">
+      <thead><tr>
+        <th style="${th};text-align:left">Timestamp</th>
+        <th style="${th};text-align:left">Actor</th>
+        <th style="${th};text-align:left">Action</th>
+        <th style="${th};text-align:left">Detail</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+
+  return frameDoc({
+    title: 'Activity Audit Log',
+    classification: banner('CL5', 'Audit Log'),
+    inner,
+    org: 'command',
+    distribution: 'Command (CL5) and Administrator moderation staff — oversight copy.',
+    footerRef: 'AUDIT-LOG',
+    actor,
+  });
+}
+
 // ===========================================================================
 // SIDE-EFFECTING EXPORT (new tab, or download if pop-ups blocked)
 // ===========================================================================
@@ -1499,6 +1553,10 @@ export function exportAfterAction(app, op) {
   const closed = op.status === 'concluded' || op.status === 'aborted';
   logAction(app.user, 'EXPORT_OPERATION', `Generated ${closed ? 'after-action report' : 'operation record'} for ${op.ref}.`);
   openDocument(buildAfterActionHTML(op, app.user), `${op.ref}-${closed ? 'after-action' : 'operation-record'}.html`);
+}
+export function exportAuditLog(app, entries, filters = {}) {
+  logAction(app.user, 'EXPORT_AUDIT', `Generated audit log (${entries.length} entries).`);
+  openDocument(buildAuditLogHTML(entries, app.user, filters), 'audit-log.html');
 }
 
 // =============================================================================

@@ -10,6 +10,7 @@
 import { recentActions } from '../audit.js';
 import { deBrandOmega } from '../constants.js';
 import { esc, fmtDateTime, relTime } from '../ui.js';
+import { exportAuditLog } from '../export.js';
 
 // Map raw action codes to a tone for the left rule.
 const TONE = {
@@ -34,7 +35,7 @@ const TONE = {
   ENTER_RULING: 'ok', VOTE_CASE: 'info', REMOVE_CASE: 'bad', CASE_ACCESS_DENIED: 'bad',
   REQUEST_TRIBUNAL: 'warn', APPROVE_TRIBUNAL: 'ok', REJECT_TRIBUNAL: 'muted', SUBMIT_EXHIBIT: 'info', RULE_EXHIBIT: 'warn',
   EXPORT_CASE: 'muted', EXPORT_SUBJECT: 'muted', EXPORT_PERSONNEL: 'muted', EXPORT_DIRECTIVE: 'muted',
-  EXPORT_INTERVIEW: 'muted', EXPORT_OPERATION: 'muted', EXPORT_INTEL: 'muted', EXPORT_SUMMONS: 'muted', EXPORT_ENGAGEMENT: 'muted',
+  EXPORT_INTERVIEW: 'muted', EXPORT_OPERATION: 'muted', EXPORT_INTEL: 'muted', EXPORT_SUMMONS: 'muted', EXPORT_ENGAGEMENT: 'muted', EXPORT_AUDIT: 'muted',
   CREATE_COMPARTMENT: 'ok', EDIT_COMPARTMENT: 'info', REMOVE_COMPARTMENT: 'bad', RESTORE_COMPARTMENT: 'ok',
   READ_IN: 'warn', READ_OUT: 'muted', ROSTER_UPDATE: 'info', SEAL_COMPARTMENT: 'warn',
   LOG_ACTIVITY: 'info', OPEN_ACTIVITY: 'muted', SET_ACTIVITY_OVERRIDE: 'warn', CLEAR_ACTIVITY_OVERRIDE: 'muted', SET_SETTING: 'warn',
@@ -144,6 +145,7 @@ export function render(host, app) {
       <select id="log-filter" class="toolbar__select">${filterOpts}</select>
       <input id="log-from" class="toolbar__select" type="date" value="${esc(fFrom)}" title="From date" />
       <input id="log-to" class="toolbar__select" type="date" value="${esc(fTo)}" title="To date" />
+      <button class="btn btn--sm" id="log-export" style="margin-left:auto">\u2913 Export log</button>
     </div>
     <div class="card"><ul class="log" id="log-list"></ul></div>
   `;
@@ -152,5 +154,9 @@ export function render(host, app) {
   host.querySelector('#log-filter').addEventListener('change', (e) => { fAction = e.target.value; draw(); syncUrlFilters(); });
   host.querySelector('#log-from').addEventListener('change', (e) => { fFrom = e.target.value; draw(); syncUrlFilters(); });
   host.querySelector('#log-to').addEventListener('change', (e) => { fTo = e.target.value; draw(); syncUrlFilters(); });
+  host.querySelector('#log-export').addEventListener('click', () => {
+    const list = filterAuditEntries(entries, { q: fQ, action: fAction, from: fFrom, to: fTo });
+    exportAuditLog(app, list, { q: fQ, action: fAction, from: fFrom, to: fTo });
+  });
   draw();
 }

@@ -351,11 +351,17 @@
 @media (max-width: 900px) {
   .nav-toggle {
     display: inline-flex; align-items: center; justify-content: center; flex: none;
-    width: 34px; height: 32px; padding: 0; font-size: 17px; line-height: 1;
+    width: 44px; height: 44px; padding: 0; font-size: 17px; line-height: 1;
     background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius);
     color: var(--text); cursor: pointer;
   }
   .nav-toggle:hover { border-color: var(--amber-dim); color: var(--amber); }
+
+  /* The messages + Field Guide icon buttons are the only topbar__iconbtns that
+     stay visible on mobile (the rest relocate into the drawer below) — bump
+     them to a real touch target instead of the desktop mouse-sized 15px icon
+     + 6px padding. */
+  .topbar__iconbtn { min-width: 44px; min-height: 44px; }
 
   /* Sidebar becomes an off-canvas drawer */
   .sidebar {
