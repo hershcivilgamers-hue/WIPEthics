@@ -128,6 +128,28 @@ export function helpNote(text, { tone = 'info' } = {}) {
     + `<span class="help-note__text">${esc(text)}</span></div>`;
 }
 
+// --- Motion -----------------------------------------------------------------
+// Count-up for readout values: eases an element's text from 0 to its final
+// number. Progressive enhancement — the final value is already in the DOM, so a
+// no-JS or reduced-motion viewer simply sees it. Targets [data-count] within
+// `root`; the attribute holds the target integer.
+export function countUp(root) {
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  root.querySelectorAll('[data-count]').forEach((elm) => {
+    const n = Number(elm.dataset.count);
+    if (!Number.isFinite(n) || n <= 0) return;
+    let t0 = null;
+    const dur = 780;
+    const step = (ts) => {
+      t0 = t0 || ts;
+      const p = Math.min(1, (ts - t0) / dur);
+      elm.textContent = Math.round(n * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+}
+
 // --- Toasts -----------------------------------------------------------------
 function toastRoot() {
   let root = document.getElementById('toast-root');

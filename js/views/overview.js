@@ -16,7 +16,7 @@ import {
 } from '../constants.js';
 import { users, directives, subjects, cases, getActivityForUser, getSetting } from '../storage.js';
 import { canViewSubject, canViewCase } from '../permissions.js';
-import { esc, clearanceBadge } from '../ui.js';
+import { esc, clearanceBadge, countUp } from '../ui.js';
 import { buildNotifications, watchSummary } from './notifications.js';
 import { partitionNotes } from '../inbox.js';
 
@@ -63,7 +63,7 @@ export function render(host, app) {
     const w = m.v > 0 ? `${Math.max(4, Math.round(m.f * 100))}%` : '0%';
     return `<div class="oh-kpi ${m.alert ? 'oh-kpi--alert' : ''}">
       <div class="oh-kpi__k">${esc(m.k)}</div>
-      <div class="oh-kpi__v" data-n="${m.v}">${m.v}</div>
+      <div class="oh-kpi__v" data-count="${m.v}">${m.v}</div>
       <div class="oh-kpi__track"><span class="oh-kpi__fill" style="--w:${w}"></span></div>
     </div>`;
   }).join('');
@@ -201,18 +201,5 @@ function wireMotion(host) {
     tick();
     const t = setInterval(() => { if (!document.getElementById('oh-clk')) { clearInterval(t); } else tick(); }, 1000);
   }
-  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  host.querySelectorAll('.oh-kpi__v').forEach((el) => {
-    const n = Number(el.dataset.n) || 0;
-    if (n <= 0) return;
-    let start = null;
-    const dur = 850;
-    const step = (ts) => {
-      start = start || ts;
-      const p = Math.min(1, (ts - start) / dur);
-      el.textContent = Math.round(n * (1 - Math.pow(1 - p, 3)));
-      if (p < 1) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  });
+  countUp(host);
 }

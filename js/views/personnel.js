@@ -30,7 +30,7 @@ import { rankInsignia } from '../insignia.js';
 import { renderHistory } from '../record-history.js';
 import {
   esc, fmtDate, fmtDateTime, clearanceBadge, statusBadge, accountBadge,
-  orgTag, monogram, redacted, toast, openModal, confirmDialog,
+  orgTag, monogram, redacted, toast, openModal, confirmDialog, countUp,
 } from '../ui.js';
 
 // Roster filter state, preserved across navigation.
@@ -79,6 +79,23 @@ function addEvent(user, type, text) {
   user.events.unshift({ id: newId('evt'), date: new Date().toISOString(), type, text });
 }
 
+// --- Console readout strip --------------------------------------------------
+// A KPI readout row in the command-console language (see styles/console.css).
+// Each cell: { k: label, and either count (integer — animates via countUp) or
+// value (ready HTML); frac: 0-1 for the micro-bar; tone: 'ok'|'warn'|'alert' }.
+function readoutStrip(cells) {
+  const body = cells.map((c) => {
+    const w = c.frac ? `${Math.max(4, Math.round(Math.min(1, c.frac) * 100))}%` : '0%';
+    const v = c.count != null ? `<span data-count="${c.count}">${c.count}</span>` : c.value;
+    return `<div class="readout__c ${c.tone ? `readout__c--${c.tone}` : ''}">
+      <div class="readout__k">${esc(c.k)}</div>
+      <div class="readout__v">${v}</div>
+      <div class="readout__trk"><span class="readout__fl" style="--w:${w}"></span></div>
+    </div>`;
+  }).join('');
+  return `<div class="readout rise" style="--cols:${cells.length}">${body}</div>`;
+}
+
 // ===========================================================================
 // ROSTER LIST
 // ===========================================================================
@@ -96,8 +113,9 @@ export function renderList(host, app, org) {
   // Bulk selection is scoped to the viewed org.
   if (rosterSelOrg !== org) { rosterSel.clear(); rosterSelOrg = org; }
 
-  const roster = users()
-    .filter((u) => (isdRoster ? isdMember(u) : u.org === org) && !u.deleted && u.accountStatus !== 'pending')
+  const members = users()
+    .filter((u) => (isdRoster ? isdMember(u) : u.org === org) && !u.deleted && u.accountStatus !== 'pending');
+  const roster = members
     .filter((u) => {
       if (filter.status && u.status !== filter.status) return false;
       // The ISD roster reads like the Department's own board: filter and search
@@ -127,8 +145,11 @@ export function renderList(host, app, org) {
   const orgIds = new Set(users().filter((u) => u.org === org && !u.deleted && u.accountStatus !== 'pending').map((u) => u.id));
   [...rosterSel].forEach((id) => { if (!orgIds.has(id)) rosterSel.delete(id); });
 
-  const rows = roster.length ? roster.map((u) => `
-    <tr data-id="${esc(u.id)}" tabindex="0">
+  const rows = roster.length ? roster.map((u) => {
+    const sev = activeStrikeCount(u.strikes) >= STRIKE_LIMIT ? 'rowsev--bad'
+      : (u.accountStatus === 'suspended' ? 'rowsev--warn' : '');
+    return `
+    <tr class="${sev}" data-id="${esc(u.id)}" tabindex="0">
       ${canManage ? `<td class="cell-check"><input type="checkbox" data-row-check="${esc(u.id)}" ${rosterSel.has(u.id) ? 'checked' : ''} /></td>` : ''}
       <td class="mono">${isdRoster ? (isdBadgeFor(u) ? `#${esc(isdBadgeFor(u))}` : '<span class="muted-text">\u2014</span>') : esc(u.designation)}</td>
       <td class="cell-name">${esc(u.codename)}${u.accountStatus === 'suspended' ? ' <span class="badge badge--bad">Suspended</span>' : ''}${tagChips(u, { compact: true })}</td>
@@ -137,12 +158,28 @@ export function renderList(host, app, org) {
       <td>${statusBadge(u.status)}</td>
       <td class="cell-right"><span class="row-go">Open \u2192</span></td>
     </tr>
-  `).join('') : `
+  `;
+  }).join('') : `
     <tr><td colspan="${canManage ? 7 : 6}" class="empty">No personnel match the current filters.</td></tr>
   `;
 
+  // Roster readout: a summary of the whole org roster (unfiltered), the same
+  // counts already visible per row, so it leaks nothing the list does not.
+  const total = members.length;
+  const rActive = members.filter((u) => u.status === 'active').length;
+  const rFlagged = members.filter((u) => activeStrikeCount(u.strikes) >= STRIKE_LIMIT).length;
+  const rLeave = members.filter((u) => u.leave).length;
+  const rSusp = members.filter((u) => u.accountStatus === 'suspended').length;
+  const rosterReadout = total ? readoutStrip([
+    { k: 'On roster', count: total, frac: rActive / total },
+    { k: 'Active', count: rActive, frac: rActive / total, tone: 'ok' },
+    { k: 'Flagged', count: rFlagged, frac: rFlagged / total, tone: rFlagged ? 'alert' : undefined },
+    { k: 'On leave', count: rLeave, frac: rLeave / total, tone: rLeave ? 'warn' : undefined },
+    { k: 'Suspended', count: rSusp, frac: rSusp / total },
+  ]) : '';
+
   host.innerHTML = `
-    <div class="page-head">
+    <div class="page-head rise">
       <div class="page-head__lead">
         ${orgLogo(org) ? `<span class="org-crest" style="--crest:url('${orgLogo(org)}')" role="img" aria-label="${esc(meta.name)} crest"></span>` : ''}
         <div>
@@ -155,6 +192,8 @@ export function renderList(host, app, org) {
       ${canMintAgent ? `<button class="btn btn--primary" id="add-agent">+ New agent</button>` : ''}
     </div>
     ${isdRoster ? `<p class="field__hint">A new agent receives a ${esc(ORGS['omega-1'].name)} posting alongside their Internal Security front; you can also read an existing operator in from their own personnel file.</p>` : ''}
+
+    ${rosterReadout}
 
     <div class="toolbar">
       <input id="flt-q" class="toolbar__search" type="search" placeholder="Search designation or codename\u2026" value="${esc(filter.q)}" />
@@ -172,7 +211,7 @@ export function renderList(host, app, org) {
       </div>
     </div>` : ''}
 
-    <div class="card">
+    <div class="card rise">
       <table class="table">
         <thead>
           <tr>
@@ -242,6 +281,8 @@ export function renderList(host, app, org) {
   if (addBtn) addBtn.addEventListener('click', () => openCreate(app, org));
   const agentBtn = host.querySelector('#add-agent');
   if (agentBtn) agentBtn.addEventListener('click', () => openISDCreate(app));
+
+  countUp(host);
 }
 
 // Mint a NEW agent in one step: a personnel record (their unit posting, an
@@ -798,6 +839,35 @@ export function renderDossier(host, app, id) {
       sealed at your clearance. They open at CL4&middot;S within this operator's chain of command, or at CL5.
     </div>` : '');
 
+  // Status readout: a KPI summary of the record, gated to the viewer's access
+  // level exactly like the sections below \u2014 a partial viewer loses the strikes
+  // tile, a name-only viewer gets none. No data the file does not already show.
+  let statReadout = '';
+  if (!nameOnly) {
+    const cl = CLEARANCES[u.clearance];
+    const clMax = Math.max(...CLEARANCE_ORDER.map((c) => CLEARANCES[c].weight));
+    const cells = [
+      { k: 'Clearance', value: cl ? esc(cl.label) : '<span class="muted-text">\u2014</span>', frac: cl ? cl.weight / clMax : 0 },
+    ];
+    if (full) {
+      const active = activeStrikeCount(u.strikes);
+      cells.push({ k: 'Active strikes', count: active, frac: active / STRIKE_LIMIT, tone: active ? 'alert' : 'ok' });
+    }
+    // Training currency: latest completion per course; "current" = no expiry or
+    // not yet lapsed (same source as the Training section below).
+    const byCourse = new Map();
+    for (const t of (u.trainings || [])) {
+      const prev = byCourse.get(t.courseId);
+      if (!prev || new Date(t.awardedAt) > new Date(prev.awardedAt)) byCourse.set(t.courseId, t);
+    }
+    const trTotal = byCourse.size;
+    const trCur = [...byCourse.values()].filter((t) => !t.expiresAt || new Date(t.expiresAt).getTime() > Date.now()).length;
+    cells.push({ k: 'Trainings current', value: trTotal ? `${trCur}<small>/${trTotal}</small>` : '0', frac: trTotal ? trCur / trTotal : 0, tone: trTotal ? (trCur < trTotal ? 'warn' : 'ok') : undefined });
+    const dec = (u.awards || []).length;
+    cells.push({ k: 'Decorations', count: dec, frac: Math.min(1, dec / 5) });
+    statReadout = readoutStrip(cells);
+  }
+
   host.innerHTML = `
     <div class="file-actions">
       <button class="btn btn--ghost btn--sm" id="back">\u2190 ${esc(ORGS[u.org].short)} roster</button>
@@ -806,7 +876,7 @@ export function renderDossier(host, app, id) {
       ${full && u.accountStatus === 'active' ? '<button class="btn btn--sm" id="export-idcard">\u2913 ID card</button>' : ''}${watchButton(u.id)}
     </div>
 
-    <header class="dossier-head">
+    <header class="dossier-head rise">
       <div class="avatar avatar--${ORGS[u.org].tone}">${esc(monogram(u.codename))}</div>
       <div class="dossier-id">
         <div class="dossier-codename">${esc(u.codename)}</div>
@@ -824,6 +894,8 @@ export function renderDossier(host, app, id) {
     </header>
 
     ${redactBanner}
+
+    ${statReadout}
 
     ${anyAction ? `<div class="actionbar">
       ${acts.edit ? '<button class="btn btn--sm" data-act="edit">Edit record</button>' : ''}
@@ -844,11 +916,11 @@ export function renderDossier(host, app, id) {
     </div>` : ''}
 
     <div class="dossier-grid">
-      <section class="card">
+      <section class="card rise">
         <div class="card__title">Identity</div>
         <div class="card__body">${identityRows}</div>
       </section>
-      <div class="dossier-col">
+      <div class="dossier-col rise">
         ${myServiceBlock}
         ${isdBlock}
         ${promoBlock}
@@ -869,6 +941,7 @@ export function renderDossier(host, app, id) {
     </div>
   `;
 
+  countUp(host);
   host.querySelector('#back').addEventListener('click', () => app.navigate(`#/${u.org === 'ethics-committee' ? 'ethics' : u.org}`));
   host.querySelector('#export-personnel').addEventListener('click', () => exportPersonnel(app, u));
   host.querySelector('#print-record')?.addEventListener('click', () => window.print());
