@@ -100,6 +100,7 @@ export function renderOne(host, app, id) {
 }
 
 function renderReadonly(host, app, doc) {
+  const actor = app.user;
   host.innerHTML = `
     <div class="page-head">
       <div>
