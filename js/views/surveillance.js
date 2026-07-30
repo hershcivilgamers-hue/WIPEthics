@@ -28,7 +28,7 @@ import { stalenessBadge } from '../staleness.js';
 import { renderHistory } from '../record-history.js';
 import {
   esc, linkify, fmtDate, fmtDateTime, relTime, clearanceBadge, orgTag,
-  monogram, toast, openModal, confirmDialog,
+  monogram, toast, openModal, confirmDialog, readoutStrip, countUp,
 } from '../ui.js';
 
 const filter = persistedFilter('surveillance', { q: '', kind: '', status: '', threat: '' });
@@ -134,7 +134,7 @@ export function renderList(host, app) {
     .map((t) => `<option value="${t}" ${filter.threat === t ? 'selected' : ''}>${t ? esc(THREAT_LEVELS[t].label) : 'All threat levels'}</option>`).join('');
 
   const rows = shown.length ? shown.map((s) => `
-    <tr data-id="${esc(s.id)}" tabindex="0">
+    <tr class="${({ authorised: 'rowsev--bad', pending: 'rowsev--warn' })[targetAuthState(s)] || ''}" data-id="${esc(s.id)}" tabindex="0">
       <td class="mono">${esc(s.ref)}</td>
       <td class="cell-name">${esc(s.alias)}</td>
       <td>${kindTag(s.kind)}</td>
@@ -156,8 +156,19 @@ export function renderList(host, app) {
 
   const canCreate = manageableOrgs(actor).length > 0;
 
+  // Registry readout: over the subjects this operator may see, plus a count of
+  // those sealed above their clearance (already disclosed in the page-sub).
+  const sActive = visible.filter((s) => s.status !== 'closed').length;
+  const sPending = visible.filter((s) => targetAuthState(s) === 'pending').length;
+  const registryReadout = (visible.length || locked.length) ? readoutStrip([
+    { k: 'On registry', count: visible.length, frac: visible.length ? sActive / visible.length : 0 },
+    { k: 'Active watch', count: sActive, frac: visible.length ? sActive / visible.length : 0, tone: 'ok' },
+    { k: 'Pending auth', count: sPending, frac: visible.length ? sPending / visible.length : 0, tone: sPending ? 'alert' : undefined },
+    { k: 'Sealed', count: locked.length, frac: (visible.length + locked.length) ? locked.length / (visible.length + locked.length) : 0 },
+  ]) : '';
+
   host.innerHTML = `
-    <div class="page-head">
+    <div class="page-head rise">
       <div>
         <div class="eyebrow">CAIRO \u00b7 Surveillance</div>
         <h1 class="page-title">Subject Registry</h1>
@@ -166,6 +177,8 @@ export function renderList(host, app) {
       ${canCreate ? `<button class="btn btn--primary" id="add-subject">+ New subject</button>` : ''}
     </div>
 
+    ${registryReadout}
+
     <div class="toolbar">
       <input id="flt-q" class="toolbar__search" type="search" placeholder="Search ref, alias or location\u2026" value="${esc(filter.q)}" />
       <select id="flt-kind" class="toolbar__select">${kindOpts}</select>
@@ -173,7 +186,7 @@ export function renderList(host, app) {
       <select id="flt-status" class="toolbar__select">${statusOpts}</select>
     </div>
 
-    <div class="card">
+    <div class="card rise">
       <table class="table">
         <thead>
           <tr>
@@ -200,6 +213,8 @@ export function renderList(host, app) {
 
   const addBtn = host.querySelector('#add-subject');
   if (addBtn) addBtn.addEventListener('click', () => openCreate(app));
+
+  countUp(host);
 }
 
 // ===========================================================================
@@ -278,6 +293,17 @@ export function renderSubject(host, app, id) {
       </div>
     </li>`).join('') : '<div class="empty">No surveillance entries recorded.</div>';
 
+  // Subject readout: state already on the file (canViewSubject-gated above).
+  const clMax = Math.max(...CLEARANCE_ORDER.map((c) => CLEARANCES[c].weight));
+  const thrMax = Math.max(...THREAT_ORDER.map((t) => THREAT_LEVELS[t]?.weight || 0));
+  const thrW = THREAT_LEVELS[s.threat]?.weight || 0;
+  const subjectReadout = readoutStrip([
+    { k: 'Sensitivity', value: esc(CLEARANCES[s.clearance]?.label || s.clearance), frac: clMax ? (CLEARANCES[s.clearance]?.weight || 0) / clMax : 0 },
+    { k: 'Threat', value: esc(THREAT_LEVELS[s.threat]?.label || s.threat || '\u2014'), frac: thrMax ? thrW / thrMax : 0, tone: thrW && thrW >= thrMax ? 'alert' : undefined },
+    { k: 'Log entries', count: logs.length, frac: Math.min(1, logs.length / 8) },
+    { k: 'Cited in', count: citing.length, frac: Math.min(1, citing.length / 4) },
+  ]);
+
   host.innerHTML = `
     <div class="file-actions">
       <button class="btn btn--ghost btn--sm" id="back">\u2190 Registry</button>
@@ -285,7 +311,7 @@ export function renderSubject(host, app, id) {
       <button class="btn btn--sm" id="export-subject">\u2913 Export record</button>${watchButton(s.id)}
     </div>
 
-    <header class="dossier-head">
+    <header class="dossier-head rise">
       <div class="avatar avatar--${SUBJECT_CLASS[s.kind]?.tone === 'bad' ? 'omega' : 'ethics'}">${esc(monogram(s.alias))}</div>
       <div class="dossier-id">
         <div class="dossier-codename">${esc(s.alias)}</div>
@@ -303,6 +329,8 @@ export function renderSubject(host, app, id) {
     ${caveatBanner(s)}
     ${authBanner}
 
+    ${subjectReadout}
+
     ${canManage ? `<div class="actionbar">
       <button class="btn btn--sm" data-act="log">Add log entry</button>
       <button class="btn btn--sm" data-act="image">Add imagery</button>
@@ -315,7 +343,7 @@ export function renderSubject(host, app, id) {
     ${moderationBar(actor, { already: canManage })}
 
     <div class="dossier-grid">
-      <section class="card">
+      <section class="card rise">
         <div class="card__title">Subject Record</div>
         <div class="card__body">
           <div class="kv"><span class="kv__k">Reference</span><span class="kv__v mono">${esc(s.ref)}</span></div>
@@ -329,7 +357,7 @@ export function renderSubject(host, app, id) {
           <div class="kv"><span class="kv__k">Updated</span><span class="kv__v">${fmtDateTime(s.updatedAt)}</span></div>
         </div>
       </section>
-      <div class="dossier-col">
+      <div class="dossier-col rise">
         <section class="card">
           <div class="card__title">Assessment</div>
           <div class="card__body"><p class="subj-summary">${esc(s.summary || 'No summary on record.')}</p></div>
@@ -355,6 +383,7 @@ export function renderSubject(host, app, id) {
     </div>
   `;
 
+  countUp(host);
   host.querySelector('#back').addEventListener('click', () => app.navigate('#/surveillance'));
   wireModerationBar(host, app, { label: `subject ${s.ref}`, get: () => getSubject(s.id), upsert: upsertSubject, backHash: '#/surveillance' });
   wireWatchButton(host, app, { id: s.id, type: 'subject', hash: `#/subject/${s.id}`, label: `subject ${s.ref}`, version: s.version });
