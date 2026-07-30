@@ -27,7 +27,7 @@ import { moderationBar, wireModerationBar } from '../moderation.js';
 import { watchButton, wireWatchButton } from '../watch.js';
 import { exportSourceFile } from '../export.js';
 import {
-  esc, linkify, fmtDate, fmtDateTime, relTime, clearanceBadge, toast, openModal, confirmDialog,
+  esc, linkify, fmtDate, fmtDateTime, relTime, clearanceBadge, toast, openModal, confirmDialog, readoutStrip, countUp,
 } from '../ui.js';
 
 const ORG = 'omega-1';
@@ -72,7 +72,7 @@ export function renderList(host, app) {
   const canCreate = canManageIntel(actor, { org: ORG });
 
   const row = (s) => `
-    <tr data-id="${esc(s.id)}" tabindex="0">
+    <tr class="${s.status === 'burned' ? 'rowsev--bad' : ''}" data-id="${esc(s.id)}" tabindex="0">
       <td class="mono">${esc(s.ref)}</td>
       <td class="cell-name">${esc(s.codename)}</td>
       <td>${typeBadge(s.type)}</td>
@@ -84,7 +84,7 @@ export function renderList(host, app) {
     </tr>`;
 
   const section = (title, list) => list.length ? `
-    <section class="card" style="margin-top:16px">
+    <section class="card rise" style="margin-top:16px">
       <div class="card__title">${esc(title)} <span class="muted-text">(${list.length})</span></div>
       <table class="table">
         <thead><tr><th>Ref</th><th>Codename</th><th>Type</th><th>Classification</th><th>Reliability</th><th>Handler</th><th>Last report</th><th></th></tr></thead>
@@ -96,8 +96,16 @@ export function renderList(host, app) {
   const dormant = sources.filter((s) => s.status === 'dormant').sort((a, b) => (lastReportAt(b) || 0) - (lastReportAt(a) || 0));
   const closed = sources.filter((s) => s.status === 'burned' || s.status === 'closed').sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 
+  const burned = sources.filter((s) => s.status === 'burned').length;
+  const intelReadout = sources.length ? readoutStrip([
+    { k: 'On the books', count: sources.length, frac: live.length / sources.length },
+    { k: 'Active', count: live.length, frac: live.length / sources.length, tone: 'ok' },
+    { k: 'Dormant', count: dormant.length, frac: dormant.length / sources.length, tone: dormant.length ? 'warn' : undefined },
+    { k: 'Burned', count: burned, frac: burned / sources.length, tone: burned ? 'alert' : undefined },
+  ]) : '';
+
   host.innerHTML = `
-    <div class="page-head">
+    <div class="page-head rise">
       <div>
         <div class="eyebrow">CAIRO \u00b7 ${esc(ORGS['omega-1'].short)}</div>
         <h1 class="page-title">Intelligence</h1>
@@ -105,6 +113,7 @@ export function renderList(host, app) {
       </div>
       ${canCreate ? '<button class="btn btn--primary" id="new-src">+ New source</button>' : ''}
     </div>
+    ${intelReadout}
     ${sources.length ? '' : '<div class="empty">No sources you are cleared to see.</div>'}
     ${section('Active', live)}
     ${section('Dormant', dormant)}
@@ -118,6 +127,8 @@ export function renderList(host, app) {
   });
   const nb = host.querySelector('#new-src');
   if (nb) nb.addEventListener('click', () => openCreate(app));
+
+  countUp(host);
 }
 
 // ===========================================================================
@@ -163,10 +174,21 @@ export function renderSource(host, app, id) {
     actions += '<button class="btn btn--sm btn--danger" data-act="remove">Remove</button>';
   }
 
+  // Source readout: state already on the file (canViewIntel-gated above).
+  const clMax = Math.max(...CLEARANCE_ORDER.map((c) => CLEARANCES[c].weight));
+  const relN = INTEL_RELIABILITY_ORDER.length;
+  const relIdx = INTEL_RELIABILITY_ORDER.indexOf(src.reliability);
+  const sourceReadout = readoutStrip([
+    { k: 'Sensitivity', value: esc(CLEARANCES[src.clearance]?.label || src.clearance), frac: clMax ? (CLEARANCES[src.clearance]?.weight || 0) / clMax : 0 },
+    { k: 'Reliability', value: esc((INTEL_RELIABILITY[src.reliability] || {}).label || src.reliability || '\u2014'), frac: relIdx >= 0 && relN > 1 ? 1 - (relIdx / (relN - 1)) : 0 },
+    { k: 'Reports', count: reps.length, frac: Math.min(1, reps.length / 8) },
+    { k: 'Reporting on', count: targets.length, frac: Math.min(1, targets.length / 4) },
+  ]);
+
   host.innerHTML = `
     <div class="file-actions"><button class="btn btn--ghost btn--sm" id="back">\u2190 Intelligence</button>${watchButton(src.id)}</div>
 
-    <header class="dossier-head">
+    <header class="dossier-head rise">
       <div class="avatar avatar--omega">${esc((INTEL_SOURCE_TYPE[src.type] || {}).short || 'SRC')}</div>
       <div class="dossier-id">
         <div class="dossier-codename">${esc(src.codename)}</div>
@@ -177,12 +199,14 @@ export function renderSource(host, app, id) {
       </div>
     </header>
 
+    ${sourceReadout}
+
     ${actions ? `<div class="actionbar">${actions}</div>` : ''}
     ${moderationBar(actor, { already: canManage })}
     ${src.compartment ? `<div class="ntk-banner">Need-to-Know \u2014 ${esc(src.compartmentName || 'compartmented source')}. Handling restricted to read-in personnel.</div>` : ''}
 
     <div class="dossier-grid">
-      <section class="card">
+      <section class="card rise">
         <div class="card__title">Source</div>
         <div class="card__body">
           <div class="kv"><span class="kv__k">Type</span><span class="kv__v">${typeBadge(src.type)}</span></div>
@@ -196,7 +220,7 @@ export function renderSource(host, app, id) {
         </div>
       </section>
 
-      <div class="dossier-col">
+      <div class="dossier-col rise">
         <section class="card">
           <div class="card__title">Tasking</div>
           <div class="card__body"><p class="subj-summary">${esc(src.tasking || 'No tasking on record.')}</p></div>
@@ -213,6 +237,7 @@ export function renderSource(host, app, id) {
     </div>
   `;
 
+  countUp(host);
   host.querySelector('#back').addEventListener('click', () => app.navigate('#/intel'));
   wireModerationBar(host, app, { label: `source ${src.ref}`, get: () => getIntel(src.id), upsert: upsertIntel, backHash: '#/intel' });
   wireWatchButton(host, app, { id: src.id, type: 'source', hash: `#/source/${src.id}`, label: `source ${src.ref}`, version: src.version });
