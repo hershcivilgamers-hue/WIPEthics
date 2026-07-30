@@ -687,6 +687,12 @@
 .blk__fieldrow .blk__in { margin-top: 0; }
 .blk-add { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--s3); border-top: 1px dashed var(--line); padding-top: var(--s3); }
 
+/* Inline formatting toolbar in the document composer. */
+.fmt-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding-bottom: var(--s3); margin-bottom: var(--s3); border-bottom: 1px solid var(--line-soft); }
+.fmt-bar__hint { font-size: 11.5px; color: var(--text-3); margin-right: 2px; }
+.fmt-bar .btn { min-width: 30px; }
+.fmt-bar u { text-underline-offset: 2px; }
+
 /* --- CAIRO terminal ------------------------------------------------------------ */
 .term-card { padding: 0; overflow: hidden; }
 .term { display: flex; flex-direction: column; height: min(68vh, 640px); background: var(--bg); }

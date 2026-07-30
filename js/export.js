@@ -365,6 +365,8 @@ const CSS = `
   .notice--soft .hl, .notice--soft strong { color: #5a5f63; }
   .withheld { text-align: center; border: 1px dashed #7a2b2b; color: #7a2b2b; padding: 16px; margin: 16px 0; font-family: 'IBM Plex Mono', 'Courier New', monospace; font-size: 10.5pt; letter-spacing: .08em; }
   .redacted { font-family: 'IBM Plex Mono', 'Courier New', monospace; background: #1a1e21; color: #1a1e21; padding: 0 4px; border-radius: 1px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .doc-redact { font-family: 'IBM Plex Mono', 'Courier New', monospace; color: #1a1e21; letter-spacing: -0.5px; -webkit-user-select: none; user-select: none; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .doc-body u { text-underline-offset: 2px; }
   .sealed { font-family: 'IBM Plex Mono', 'Courier New', monospace; font-size: 10pt; letter-spacing: .05em; color: #7a2b2b; }
 
   /* Formal correspondence (candidate-facing letters) */
@@ -1701,33 +1703,49 @@ export function exportMedalCertificate(app, user, award) {
 // records framework. Each block maps to house-style furniture; nothing here can
 // render outside the established look.
 // =============================================================================
+// Inline markup for document prose: **bold**, *italic*, __underline__, and
+// [[redact]]. Escapes first, then applies the markers on the escaped string (the
+// markers survive esc). Redaction emits block characters sized to the hidden
+// span, so the original text never reaches the rendered output — only the stored
+// block source (already gated by canViewDocument) still holds it. Author-driven,
+// not clearance-driven: it is what the composer marks, for anyone cleared to
+// open the document.
+function inlineMarkup(raw) {
+  let s = esc(String(raw == null ? '' : raw));
+  s = s.replace(/\[\[([\s\S]+?)\]\]/g, (_, t) => `<span class="doc-redact">${'█'.repeat(Math.min(64, Math.max(2, [...t].length)))}</span>`);
+  s = s.replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\*(?!\s)([\s\S]+?)\*/g, '<em>$1</em>');
+  s = s.replace(/__([\s\S]+?)__/g, '<u>$1</u>');
+  return s;
+}
+
 function renderDocBlocks(blocks) {
   return (blocks || []).map((b) => {
     if (b.type === 'heading') return `<div class="jhead">${esc(b.text || '')}</div>`;
-    if (b.type === 'paragraph') return `<p>${esc(b.text || '').replace(/\n/g, '<br/>')}</p>`;
+    if (b.type === 'paragraph') return `<p>${inlineMarkup(b.text || '').replace(/\n/g, '<br/>')}</p>`;
     if (b.type === 'clauses') {
       const items = (b.items || []).filter((x) => String(x).trim());
-      return items.length ? `<div class="judgment">${items.map((x) => `<div class="para">${esc(x)}</div>`).join('')}</div>` : '';
+      return items.length ? `<div class="judgment">${items.map((x) => `<div class="para">${inlineMarkup(x)}</div>`).join('')}</div>` : '';
     }
     if (b.type === 'list') {
       const items = (b.items || []).filter((x) => String(x).trim());
-      return items.length ? `<ul class="plainlist">${items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
+      return items.length ? `<ul class="plainlist">${items.map((x) => `<li>${inlineMarkup(x)}</li>`).join('')}</ul>` : '';
     }
     if (b.type === 'fields') {
       const rows = (b.rows || []).filter((r) => (r.k || r.v));
-      return rows.length ? `<table class="memo-h"><tbody>${rows.map((r) => `<tr><td class="ml">${esc(r.k || '')}</td><td>${esc(r.v || '')}</td></tr>`).join('')}</tbody></table>` : '';
+      return rows.length ? `<table class="memo-h"><tbody>${rows.map((r) => `<tr><td class="ml">${esc(r.k || '')}</td><td>${inlineMarkup(r.v || '')}</td></tr>`).join('')}</tbody></table>` : '';
     }
     if (b.type === 'log') {
       const rows = (b.entries || []).filter((r) => (r.date || r.text));
-      return rows.length ? `<table class="log"><tbody>${rows.map((r) => `<tr><td class="ld">${esc(r.date || '—')}</td><td>${esc(r.text || '')}</td></tr>`).join('')}</tbody></table>` : '';
+      return rows.length ? `<table class="log"><tbody>${rows.map((r) => `<tr><td class="ld">${esc(r.date || '—')}</td><td>${inlineMarkup(r.text || '')}</td></tr>`).join('')}</tbody></table>` : '';
     }
     if (b.type === 'quote') {
       if (!String(b.text || '').trim()) return '';
-      return `<blockquote class="docquote">${esc(b.text).replace(/\n/g, '<br/>')}${b.by ? `<div class="docquote__att">— ${esc(b.by)}</div>` : ''}</blockquote>`;
+      return `<blockquote class="docquote">${inlineMarkup(b.text).replace(/\n/g, '<br/>')}${b.by ? `<div class="docquote__att">— ${esc(b.by)}</div>` : ''}</blockquote>`;
     }
     if (b.type === 'notice') {
       if (!String(b.text || '').trim()) return '';
-      return `<div class="notice${b.tone === 'advisory' ? ' notice--soft' : ''}">${esc(b.text).replace(/\n/g, '<br/>')}</div>`;
+      return `<div class="notice${b.tone === 'advisory' ? ' notice--soft' : ''}">${inlineMarkup(b.text).replace(/\n/g, '<br/>')}</div>`;
     }
     if (b.type === 'withheld') {
       const reason = String(b.reason || '').trim() || 'BY ORDER OF SITE COMMAND';

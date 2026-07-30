@@ -228,6 +228,13 @@ function renderComposer(host, app) {
           <div class="field"><label>Distribution <span class="muted-text">(optional)</span></label><input id="d-dist" value="${esc(d.distribution || '')}" placeholder="Defaults to the issuing body's standard list" maxlength="200" /></div>
         </div></div>
         <div class="card"><div class="card__body">
+          <div class="fmt-bar" role="toolbar" aria-label="Text formatting">
+            <span class="fmt-bar__hint">Format selection:</span>
+            <button type="button" class="btn btn--xs" data-fmt="**" title="Bold — **text**"><strong>B</strong></button>
+            <button type="button" class="btn btn--xs" data-fmt="*" title="Italic — *text*"><em>I</em></button>
+            <button type="button" class="btn btn--xs" data-fmt="__" title="Underline — __text__"><u>U</u></button>
+            <button type="button" class="btn btn--xs" data-fmt="[[" title="Redact — [[text]] renders as █████ in the document">▮ Redact</button>
+          </div>
           <div class="blk-list">${d.blocks.map((b, i) => blockEditor(b, i)).join('')}</div>
           <div class="blk-add">
             ${Object.keys(BLOCK_LABELS).map((t) => `<button class="btn btn--xs" data-add="${t}">+ ${BLOCK_LABELS[t]}</button>`).join('')}
@@ -300,6 +307,26 @@ function renderComposer(host, app) {
   }));
   host.querySelectorAll('[data-lrow-del]').forEach((btn) => btn.addEventListener('click', () => {
     const b = d.blocks[+btn.dataset.i]; if (b.entries) b.entries.splice(+btn.dataset.ri, 1); renderComposer(host, app);
+  }));
+
+  // Inline formatting toolbar — wraps the selection in the last-focused text
+  // field with the markup renderDocBlocks understands (**bold**, *italic*,
+  // __underline__, [[redact]]).
+  let lastEd = null;
+  host.querySelectorAll('.blk__in').forEach((el) => el.addEventListener('focus', () => { lastEd = el; }));
+  const FMT_CLOSE = { '**': '**', '*': '*', __: '__', '[[': ']]' };
+  host.querySelectorAll('[data-fmt]').forEach((btn) => btn.addEventListener('click', () => {
+    const open = btn.dataset.fmt;
+    const close = FMT_CLOSE[open];
+    const el = lastEd;
+    if (!el) { toast('Click into a text field first, then select the text to format.', 'info'); return; }
+    const s = el.selectionStart ?? el.value.length;
+    const e = el.selectionEnd ?? el.value.length;
+    const sel = el.value.slice(s, e) || 'text';
+    el.value = `${el.value.slice(0, s)}${open}${sel}${close}${el.value.slice(e)}`;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.focus();
+    el.setSelectionRange(s + open.length, s + open.length + sel.length);
   }));
 
   host.querySelector('#doc-back').addEventListener('click', () => app.navigate('#/documents'));
