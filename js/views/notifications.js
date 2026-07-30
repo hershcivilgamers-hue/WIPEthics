@@ -329,6 +329,23 @@ export function buildNotifications(actor, now = Date.now()) {
   return items;
 }
 
+// The operator's watchlist for the home card: each viewable watched record with
+// whether it has moved past the baseline. Reuses the WATCH_TYPES registry so the
+// change rule stays in one place.
+export function watchSummary(actor) {
+  const watched = watchList();
+  const out = [];
+  for (const id of Object.keys(watched)) {
+    const w = watched[id];
+    const reg = WATCH_TYPES[w.type];
+    if (!reg) continue;
+    const rec = reg.get(id);
+    if (!rec || rec.deleted || !reg.canView(actor, rec)) continue;
+    out.push({ label: w.label, hash: w.hash, changed: (rec.version || 1) > (w.base || 1) });
+  }
+  return out;
+}
+
 export function render(host, app) {
   const userId = app.user.id;
   const items = buildNotifications(app.user);
