@@ -25,7 +25,7 @@ import {
 import { logAction } from '../audit.js';
 import {
   esc, fmtDate, fmtDateTime, relTime, orgTag, monogram,
-  toast, openModal,
+  toast, openModal, readoutStrip, countUp,
 } from '../ui.js';
 
 function reqs() {
@@ -91,6 +91,16 @@ export function render(host, app) {
 
   const breaches = roster.filter((u) => activityInBreach(u, getActivityForUser(u.id), reqs()));
 
+  // Readiness readout across the operators in this actor's remit.
+  const opOnTarget = roster.length - breaches.length;
+  const opFlagged = roster.filter((u) => activeStrikeCount(u.strikes) >= STRIKE_LIMIT).length;
+  const readinessReadout = roster.length ? readoutStrip([
+    { k: 'Tracked', count: roster.length, frac: opOnTarget / roster.length },
+    { k: 'On target', count: opOnTarget, frac: opOnTarget / roster.length, tone: 'ok' },
+    { k: 'Below requirement', count: breaches.length, frac: breaches.length / roster.length, tone: breaches.length ? 'alert' : undefined },
+    { k: 'Flagged', count: opFlagged, frac: opFlagged / roster.length, tone: opFlagged ? 'warn' : undefined },
+  ]) : '';
+
   const orgBlock = (org) => {
     const list = roster.filter((u) => u.org === org).sort((a, b) => (a.designation || '').localeCompare(b.designation || ''));
     if (!list.length) return '';
@@ -120,7 +130,7 @@ export function render(host, app) {
         </tr>`;
     }).join('');
     return `
-      <section class="card" style="margin-top:16px">
+      <section class="card rise" style="margin-top:16px">
         <div class="card__title">${orgTag(org)} ${esc(ORGS[org].name)}</div>
         <table class="table activity-table">
           <thead><tr><th>Operator</th><th>Status</th><th>This week</th>${isOmega ? '<th>This month</th>' : ''}<th>Last logged</th><th></th></tr></thead>
@@ -130,7 +140,7 @@ export function render(host, app) {
   };
 
   host.innerHTML = `
-    <div class="page-head">
+    <div class="page-head rise">
       <div>
         <div class="eyebrow">CAIRO \u00b7 Operations</div>
         <h1 class="page-title">Readiness</h1>
@@ -138,6 +148,8 @@ export function render(host, app) {
       </div>
       ${canLogSelf ? '<button class="btn btn--primary" id="log-self">Log my hours</button>' : ''}
     </div>
+
+    ${readinessReadout}
 
     ${breaches.length ? `<div class="readiness-banner readiness-banner--bad">
       <strong>${breaches.length}</strong> operator${breaches.length === 1 ? '' : 's'} below the activity requirement this week.
@@ -163,6 +175,8 @@ export function render(host, app) {
     tr.addEventListener('click', () => openLogDetail(app, tr.dataset.user));
     tr.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') openLogDetail(app, tr.dataset.user); });
   });
+
+  countUp(host);
 }
 
 // ===========================================================================

@@ -25,7 +25,7 @@ import {
   canFileInvestigation, canAdvanceInvestigation, canAdjudicateInvestigation, canManageTribunal,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
-import { esc, fmtDate, fmtDateTime, toast, openModal, confirmDialog } from '../ui.js';
+import { esc, fmtDate, fmtDateTime, toast, openModal, confirmDialog, readoutStrip, countUp } from '../ui.js';
 
 const ORG = 'isd';
 const live = () => investigations().filter((i) => !i.deleted);
@@ -58,6 +58,16 @@ export function render(host, app) {
   const closed = all.filter((i) => i.stage === 'closed')
     .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 
+  // Pipeline readout. Whole panel is already Department-only (live() gates it).
+  const subst = closed.filter((i) => i.disposition === 'substantiated').length;
+  const referred = closed.filter((i) => i.disposition === 'referred').length;
+  const invReadout = all.length ? readoutStrip([
+    { k: 'Open', count: open.length, frac: all.length ? open.length / all.length : 0, tone: 'ok' },
+    { k: 'Closed', count: closed.length, frac: all.length ? closed.length / all.length : 0 },
+    { k: 'Substantiated', count: subst, frac: closed.length ? subst / closed.length : 0, tone: subst ? 'warn' : undefined },
+    { k: 'Referred', count: referred, frac: closed.length ? referred / closed.length : 0, tone: referred ? 'alert' : undefined },
+  ]) : '';
+
   const columns = INVESTIGATION_PIPELINE.filter((s) => s !== 'closed').map((stage) => {
     const list = open.filter((i) => i.stage === stage)
       .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
@@ -87,7 +97,7 @@ export function render(host, app) {
     </tr>`).join('');
 
   host.innerHTML = `
-    <div class="page-head">
+    <div class="page-head rise">
       <div>
         <div class="eyebrow">CAIRO · Internal Security</div>
         <h1 class="page-title">Investigations</h1>
@@ -96,11 +106,13 @@ export function render(host, app) {
       ${canFileInvestigation(actor) ? '<button class="btn btn--primary" id="inv-new">+ File a referral</button>' : ''}
     </div>
 
+    ${invReadout}
+
     <div class="ntk-banner">Internal Security material. These records are not visible outside the Department.</div>
 
-    <div class="pipeline pipeline--4">${columns}</div>
+    <div class="pipeline pipeline--4 rise">${columns}</div>
 
-    ${closed.length ? `<section class="card" style="margin-top:18px">
+    ${closed.length ? `<section class="card rise" style="margin-top:18px">
       <div class="card__title">Closed</div>
       <table class="table">
         <thead><tr><th>Ref</th><th>Subject</th><th>Disposition</th><th>Closed</th><th></th></tr></thead>
@@ -116,6 +128,8 @@ export function render(host, app) {
   });
   const add = host.querySelector('#inv-new');
   if (add) add.addEventListener('click', () => openReferral(app));
+
+  countUp(host);
 }
 
 // --- The investigative file ---------------------------------------------------
