@@ -14,7 +14,7 @@ import { logAction } from '../audit.js';
 import { moderationBar, wireModerationBar } from '../moderation.js';
 import { watchButton, wireWatchButton } from '../watch.js';
 import { exportDirective } from '../export.js';
-import { esc, fmtDate, fmtDateTime, clearanceBadge, orgTag, monogram, toast, openModal, confirmDialog } from '../ui.js';
+import { esc, fmtDate, fmtDateTime, clearanceBadge, orgTag, monogram, toast, openModal, confirmDialog, readoutStrip, countUp } from '../ui.js';
 
 // --- Need-To-Know caveat (kept local so ui.js stays domain-agnostic) --------
 function caveatName(d) {
@@ -55,6 +55,22 @@ function audienceOrgs(d) {
 export function render(host, app) {
   const actor = app.user;
   const all = directives().filter((d) => !d.deleted);
+
+  // Board readout: summarised over only the orders this operator is addressed to
+  // (canSeeDirective is the same gate the groups use), so it leaks nothing the
+  // board does not already show. "Awaiting your sign-off" counts active orders in
+  // the operator's own org they can read but have not yet acknowledged.
+  const visible = all.filter((d) => canSeeDirective(actor, d));
+  const dResc = visible.filter((d) => d.status === 'rescinded').length;
+  const dActive = visible.length - dResc;
+  const dAwait = visible.filter((d) => d.status !== 'rescinded' && actor.org === d.org
+    && bodyReadable(actor, d) && !((d.acks || {})[actor.id])).length;
+  const boardReadout = visible.length ? readoutStrip([
+    { k: 'On the board', count: visible.length, frac: dActive / visible.length },
+    { k: 'In force', count: dActive, frac: dActive / visible.length, tone: 'ok' },
+    { k: 'Rescinded', count: dResc, frac: dResc / visible.length },
+    { k: 'Awaiting your sign-off', count: dAwait, frac: dActive ? dAwait / dActive : 0, tone: dAwait ? 'alert' : undefined },
+  ]) : '';
 
   const groups = ORG_ORDER.map((org) => {
     // Addressed, not broadcast: only orders this operator is an audience for.
@@ -105,13 +121,14 @@ export function render(host, app) {
   }).join('');
 
   host.innerHTML = `
-    <div class="page-head">
+    <div class="page-head rise">
       <div>
         <div class="eyebrow">CAIRO</div>
         <h1 class="page-title">Standing Orders</h1>
         <div class="page-sub">Active directives across all organisations</div>
       </div>
     </div>
+    ${boardReadout}
     ${groups || '<div class="card"><div class="card__body empty">No directives on record.</div></div>'}
   `;
 
@@ -123,6 +140,8 @@ export function render(host, app) {
   host.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); openIssue(app, b.dataset.add); }));
   host.querySelectorAll('[data-rescind]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); setStatus(app, b.dataset.rescind, 'rescinded'); }));
   host.querySelectorAll('[data-reactivate]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); setStatus(app, b.dataset.reactivate, 'active'); }));
+
+  countUp(host);
 }
 
 // ===========================================================================
@@ -171,7 +190,7 @@ export function renderDirective(host, app, id) {
     const outstanding = eligible.filter((u) => !(d.acks || {})[u.id]);
     const row = (u, ts) => `<div class="ack-row"><span class="mono">${esc(u.designation)}</span><span class="ack-row__name">${esc(u.codename || '')}</span><span class="muted-text">${ts ? `Acknowledged ${fmtDate(ts)}` : 'Outstanding'}</span></div>`;
     ackPanel = `
-      <section class="card">
+      <section class="card rise">
         <div class="card__title">Acknowledgements <span class="muted-text">(${signed.length} of ${eligible.length})</span></div>
         <div class="card__body">
           ${outstanding.map((u) => row(u, null)).join('')}
@@ -187,7 +206,7 @@ export function renderDirective(host, app, id) {
       <button class="btn btn--sm" id="export-directive">\u2913 Export memorandum</button>${watchButton(d.id)}
     </div>
 
-    <header class="dossier-head">
+    <header class="dossier-head rise">
       <div class="avatar avatar--${ORGS[d.org].tone}">${esc(monogram(d.ref))}</div>
       <div class="dossier-id">
         <div class="dossier-codename">${esc(d.title)}</div>
@@ -211,7 +230,7 @@ export function renderDirective(host, app, id) {
       ${!rescinded ? '<button class="btn btn--sm btn--danger" data-act="rescind">Rescind</button>' : '<button class="btn btn--sm" data-act="reinstate">Reinstate</button>'}
     </div>` : ''}
 
-    <section class="card memo">
+    <section class="card memo rise">
       <div class="memo__head">
         <div class="memo__row"><span class="memo__k">From</span><span class="memo__v">${esc(ORGS[d.org].name)}</span></div>
         <div class="memo__row"><span class="memo__k">To</span><span class="memo__v">All ${esc(ORGS[d.org].short)} personnel at clearance${aud.length ? `, and ${aud.map((o) => esc(ORGS[o].short)).join(', ')}` : ''}</span></div>

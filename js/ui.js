@@ -128,7 +128,24 @@ export function helpNote(text, { tone = 'info' } = {}) {
     + `<span class="help-note__text">${esc(text)}</span></div>`;
 }
 
-// --- Motion -----------------------------------------------------------------
+// --- Console readout & motion -----------------------------------------------
+// A KPI readout row in the command-console language (styles/console.css). Each
+// cell: { k: label; and either count (integer — animates via countUp) or value
+// (ready HTML); frac: 0-1 for the micro-bar; tone: 'ok'|'warn'|'alert' }. Pair
+// with countUp() to animate the count cells on mount.
+export function readoutStrip(cells) {
+  const body = cells.map((c) => {
+    const w = c.frac ? `${Math.max(4, Math.round(Math.min(1, c.frac) * 100))}%` : '0%';
+    const v = c.count != null ? `<span data-count="${c.count}">${c.count}</span>` : c.value;
+    return `<div class="readout__c ${c.tone ? `readout__c--${c.tone}` : ''}">
+      <div class="readout__k">${esc(c.k)}</div>
+      <div class="readout__v">${v}</div>
+      <div class="readout__trk"><span class="readout__fl" style="--w:${w}"></span></div>
+    </div>`;
+  }).join('');
+  return `<div class="readout rise" style="--cols:${cells.length}">${body}</div>`;
+}
+
 // Count-up for readout values: eases an element's text from 0 to its final
 // number. Progressive enhancement — the final value is already in the DOM, so a
 // no-JS or reduced-motion viewer simply sees it. Targets [data-count] within

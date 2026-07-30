@@ -30,7 +30,7 @@ import { rankInsignia } from '../insignia.js';
 import { renderHistory } from '../record-history.js';
 import {
   esc, fmtDate, fmtDateTime, clearanceBadge, statusBadge, accountBadge,
-  orgTag, monogram, redacted, toast, openModal, confirmDialog, countUp,
+  orgTag, monogram, redacted, toast, openModal, confirmDialog, countUp, readoutStrip,
 } from '../ui.js';
 
 // Roster filter state, preserved across navigation.
@@ -77,23 +77,6 @@ function mutate(app, id, expectedVersion, patch, { action, detail }) {
 function addEvent(user, type, text) {
   user.events = user.events || [];
   user.events.unshift({ id: newId('evt'), date: new Date().toISOString(), type, text });
-}
-
-// --- Console readout strip --------------------------------------------------
-// A KPI readout row in the command-console language (see styles/console.css).
-// Each cell: { k: label, and either count (integer — animates via countUp) or
-// value (ready HTML); frac: 0-1 for the micro-bar; tone: 'ok'|'warn'|'alert' }.
-function readoutStrip(cells) {
-  const body = cells.map((c) => {
-    const w = c.frac ? `${Math.max(4, Math.round(Math.min(1, c.frac) * 100))}%` : '0%';
-    const v = c.count != null ? `<span data-count="${c.count}">${c.count}</span>` : c.value;
-    return `<div class="readout__c ${c.tone ? `readout__c--${c.tone}` : ''}">
-      <div class="readout__k">${esc(c.k)}</div>
-      <div class="readout__v">${v}</div>
-      <div class="readout__trk"><span class="readout__fl" style="--w:${w}"></span></div>
-    </div>`;
-  }).join('');
-  return `<div class="readout rise" style="--cols:${cells.length}">${body}</div>`;
 }
 
 // ===========================================================================
