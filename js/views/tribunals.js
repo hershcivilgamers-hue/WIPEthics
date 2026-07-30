@@ -33,7 +33,7 @@ import { exportCSV } from '../csv.js';
 import { renderHistory } from '../record-history.js';
 import {
   esc, linkify, fmtDate, fmtDateTime, clearanceBadge, orgTag, monogram,
-  toast, openModal, confirmDialog, helpNote,
+  toast, openModal, confirmDialog, helpNote, readoutStrip, countUp,
 } from '../ui.js';
 
 const filter = persistedFilter('tribunals', { q: '', kind: '', status: '' });
@@ -154,7 +154,7 @@ export function renderList(host, app) {
     .map((s) => `<option value="${s}" ${filter.status === s ? 'selected' : ''}>${s ? esc(CASE_STATUS[s].label) : 'All statuses'}</option>`).join('');
 
   const rows = shown.length ? shown.map((c) => `
-    <tr data-id="${esc(c.id)}" tabindex="0">
+    <tr class="${c.status === 'requested' ? 'rowsev--warn' : ''}" data-id="${esc(c.id)}" tabindex="0">
       <td class="mono">${esc(c.ref)}</td>
       <td class="cell-name">${esc(c.title)}</td>
       <td>${kindTag(c.kind)}</td>
@@ -171,8 +171,20 @@ export function renderList(host, app) {
       <td class="cell-right">${clearanceBadge(c.clearance)}</td>
     </tr>`).join('') : '';
 
+  // Docket readout: over the cases this operator can see, plus a count of those
+  // sealed above their clearance (already disclosed in the page-sub, so no leak).
+  const cDone = new Set(['closed', 'dismissed']);
+  const cLive = visible.filter((c) => !cDone.has(c.status) && c.status !== 'requested').length;
+  const cReq = visible.filter((c) => c.status === 'requested').length;
+  const docketReadout = (visible.length || sealed.length) ? readoutStrip([
+    { k: 'On docket', count: visible.length, frac: visible.length ? cLive / visible.length : 0 },
+    { k: 'In proceedings', count: cLive, frac: visible.length ? cLive / visible.length : 0, tone: 'ok' },
+    { k: 'Requested', count: cReq, frac: visible.length ? cReq / visible.length : 0, tone: cReq ? 'alert' : undefined },
+    { k: 'Sealed', count: sealed.length, frac: (visible.length + sealed.length) ? sealed.length / (visible.length + sealed.length) : 0 },
+  ]) : '';
+
   host.innerHTML = `
-    <div class="page-head">
+    <div class="page-head rise">
       <div>
         <div class="eyebrow">Ethics Committee</div>
         <h1 class="page-title">Case Docket</h1>
@@ -182,6 +194,8 @@ export function renderList(host, app) {
         : (canRequestTribunal(actor) ? `<button class="btn btn--primary" id="req-tribunal">⚖ Request tribunal</button>` : '')}
     </div>
 
+    ${docketReadout}
+
     <div class="toolbar">
       <input id="flt-q" class="toolbar__search" type="search" placeholder="Search reference or title\u2026" value="${esc(filter.q)}" />
       <select id="flt-kind" class="toolbar__select">${kindOpts}</select>
@@ -189,7 +203,7 @@ export function renderList(host, app) {
       <button class="btn btn--ghost btn--sm" id="export-csv" title="Export the filtered docket to CSV">⤓ CSV</button>
     </div>
 
-    <div class="card">
+    <div class="card rise">
       <table class="table">
         <thead>
           <tr><th>Reference</th><th>Matter</th><th>Type</th><th>Respondent</th><th>Status</th><th>Sensitivity</th><th></th></tr>
@@ -228,6 +242,8 @@ export function renderList(host, app) {
   if (addBtn) addBtn.addEventListener('click', () => openCreate(app));
   const reqBtn = host.querySelector('#req-tribunal');
   if (reqBtn) reqBtn.addEventListener('click', () => openRequestTribunal(app));
+
+  countUp(host);
 }
 
 // ===========================================================================
@@ -377,6 +393,17 @@ export function renderCase(host, app, id) {
       </div>
     </section>`;
 
+  // Case readout: countable state already on the file (gated by canViewCase above).
+  const clw = clearanceWeight(c.clearance);
+  const clMax = Math.max(...CLEARANCE_ORDER.map((x) => clearanceWeight(x)));
+  const panelN = (c.panelIds || []).length;
+  const caseReadout = readoutStrip([
+    { k: 'Sensitivity', value: esc(CLEARANCES[c.clearance]?.label || c.clearance), frac: clMax ? clw / clMax : 0 },
+    { k: 'Panel seated', count: panelN, frac: Math.min(1, panelN / 5), tone: panelN ? 'ok' : undefined },
+    { k: 'Exhibits', count: (c.exhibits || []).length, frac: Math.min(1, (c.exhibits || []).length / 6) },
+    { k: 'Proceedings', count: (c.entries || []).length, frac: Math.min(1, (c.entries || []).length / 8) },
+  ]);
+
   host.innerHTML = `
     <div class="file-actions">
       <button class="btn btn--ghost btn--sm" id="back">\u2190 Docket</button>
@@ -384,7 +411,7 @@ export function renderCase(host, app, id) {
       <button class="btn btn--sm" id="export-case">\u2913 Export record</button>${watchButton(c.id)}
     </div>
 
-    <header class="dossier-head">
+    <header class="dossier-head rise">
       <div class="avatar avatar--ethics">${esc(monogram(c.title))}</div>
       <div class="dossier-id">
         <div class="dossier-codename">${esc(c.title)}</div>
@@ -399,6 +426,8 @@ export function renderCase(host, app, id) {
     </header>
 
     ${caveatBanner(c)}
+
+    ${caseReadout}
 
     ${isRequest ? `<div class="ntk-banner">Tribunal request from ${esc(c.createdBy || 'an operator')} — awaiting the Committee.${mayReview ? '' : ' Only the Committee may grant or throw it out.'}</div>
       ${mayReview ? `<div class="actionbar">
@@ -421,7 +450,7 @@ export function renderCase(host, app, id) {
     ${moderationBar(actor, { already: canManage })}
 
     <div class="dossier-grid">
-      <section class="card">
+      <section class="card rise">
         <div class="card__title">Case Record</div>
         <div class="card__body">
           <div class="kv"><span class="kv__k">Reference</span><span class="kv__v mono">${esc(c.ref)}</span></div>
@@ -435,7 +464,7 @@ export function renderCase(host, app, id) {
           <div class="kv kv--stack"><span class="kv__k">Cited subjects</span><span class="kv__v link-list">${linkedSubjects}</span></div>
         </div>
       </section>
-      <div class="dossier-col">
+      <div class="dossier-col rise">
         <section class="card">
           <div class="card__title">Matter Under Review</div>
           <div class="card__body"><p class="subj-summary">${esc(c.summary || 'No summary on record.')}</p></div>
@@ -463,6 +492,7 @@ export function renderCase(host, app, id) {
     </div>
   `;
 
+  countUp(host);
   host.querySelector('#back').addEventListener('click', () => app.navigate('#/tribunals'));
   wireModerationBar(host, app, { label: `case ${c.ref}`, get: () => getCase(c.id), upsert: upsertCase, backHash: '#/tribunals' });
   wireWatchButton(host, app, { id: c.id, type: 'case', hash: `#/case/${c.id}`, label: `case ${c.ref}`, version: c.version });
