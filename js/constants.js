@@ -49,6 +49,23 @@ export function deBrandOmega(text) {
     .replace(/Omega-1/g, 'IE');
 }
 
+// The system's true name (CONFIG.systemName, 'CAIRO.AIC') is a codename. Only
+// CL5 sees it; personnel at CL4-S and below see the generic cover 'AIC'. Same
+// per-session flag pattern as the Omega branding — but the default is the COVER
+// side, because the boot loader and sign-in screen render before any actor is
+// known and must not leak the real name to a viewer who has not proven CL5.
+// app.js sets the flag via setSystemBranding(isCL5(user)) once an operator loads.
+const SYSTEM_COVER_NAME = 'AIC';
+let systemTruthVisible = false;
+export function setSystemBranding(truth) { systemTruthVisible = !!truth; }
+export function systemName() { return systemTruthVisible ? 'CAIRO.AIC' : SYSTEM_COVER_NAME; }
+// Rewrite the codename to its cover in baked free-text / eyebrows for a cover-
+// side reader. No-op on the high side (CL5). Longest match first.
+export function deBrandSystem(text) {
+  if (systemTruthVisible || !text) return text;
+  return String(text).replace(/CAIRO\.AIC/g, SYSTEM_COVER_NAME).replace(/CAIRO/g, SYSTEM_COVER_NAME);
+}
+
 export const ORGS = {
   'omega-1': {
     code: 'omega-1',

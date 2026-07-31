@@ -3,7 +3,7 @@
 // =============================================================================
 
 import { CONFIG } from '../config.js';
-import { ORGS, ORG_ORDER, RANKS, CLEARANCES, clearanceForRank } from '../constants.js';
+import { ORGS, ORG_ORDER, RANKS, CLEARANCES, clearanceForRank, systemName } from '../constants.js';
 import { users, upsertUser, newId, applyServerSnapshot } from '../storage.js';
 import { verifyPassword, makeCredential } from '../crypto.js';
 import { startSession, setServerUser } from '../state.js';
@@ -46,7 +46,7 @@ export function render(host, app) {
             </svg>
           </div>
           <div>
-            <div class="auth__name">${esc(CONFIG.systemName)}</div>
+            <div class="auth__name">${esc(systemName())}</div>
             <div class="auth__sub">${esc(CONFIG.systemSubtitle)}</div>
           </div>
         </div>

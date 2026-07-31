@@ -1,6 +1,6 @@
 {
-  "name": "CAIRO.AIC — Automated Identity & Clearance",
-  "short_name": "CAIRO.AIC",
+  "name": "AIC — Automated Identity & Clearance",
+  "short_name": "AIC",
   "description": "Foundation personnel, clearance and records registry.",
   "start_url": "./",
   "scope": "./",

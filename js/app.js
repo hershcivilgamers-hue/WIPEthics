@@ -20,8 +20,8 @@ import * as api from './api.js';
 import * as sync from './sync.js';
 import { installPaletteShortcut, openPalette } from './command-palette.js';
 import { attachTopbarSearch } from './topbar-search.js';
-import { setOmegaBranding } from './constants.js';
-import { knowsOmegaTruth } from './permissions.js';
+import { setOmegaBranding, setSystemBranding, systemName, deBrandSystem } from './constants.js';
+import { knowsOmegaTruth, isCL5 } from './permissions.js';
 
 import * as loginView from './views/login.js';
 import * as overviewView from './views/overview.js';
@@ -135,7 +135,7 @@ function buildSidebar(user, activeName) {
           </svg>
         </span>
         <span class="sidebar__brand-text">
-          <span class="sidebar__name">${esc(CONFIG.systemName)}</span>
+          <span class="sidebar__name">${esc(systemName())}</span>
           <span class="sidebar__tag">${esc(CONFIG.facility)}</span>
         </span>
       </div>
@@ -207,7 +207,7 @@ function renderShell(user, route) {
         <div class="shell__main">
           <header class="topbar">
             <button class="nav-toggle" id="nav-toggle" type="button" aria-label="Open navigation menu" aria-expanded="false">☰</button>
-            <div class="topbar__title">${esc(CONFIG.systemName)} <span class="topbar__sub">${esc(CONFIG.systemSubtitle)}</span></div>
+            <div class="topbar__title">${esc(systemName())} <span class="topbar__sub">${esc(CONFIG.systemSubtitle)}</span></div>
             <div class="topbar__search-wrap">
               <div class="topbar__search-box">
                 <input id="topbar-search" class="topbar__search" type="search" placeholder="Search records\u2026" value="${esc(searchView.getQuery())}" autocomplete="off" aria-label="Search records" />
@@ -366,6 +366,10 @@ function renderApp() {
   // Brand the unit for THIS viewer before anything renders: juniors (and the
   // signed-out screen) see "Internal Enforcement"; CL4-S+/Ethics see Omega-1.
   setOmegaBranding(knowsOmegaTruth(user));
+  // System identity: only CL5 sees the real name; CL4-S and below (and the
+  // signed-out screen) see the generic cover. Upgrade the tab title to match.
+  setSystemBranding(!!user && isCL5(user));
+  document.title = `${systemName()} — ${CONFIG.systemSubtitle}`;
   if (!user) {
     loginView.render(root, app);
     return;
@@ -386,13 +390,31 @@ function renderApp() {
 // first snapshot is in flight. Purely cosmetic; replaced by the app on render.
 function renderBootLoading(msg = 'Establishing secure session…') {
   root.innerHTML = `<div class="boot-load">
-    <div class="boot-load__mark">${esc(CONFIG.systemName)}</div>
+    <div class="boot-load__mark">${esc(systemName())}</div>
     <div class="boot-load__bar"></div>
     <div class="boot-load__msg">${esc(msg)}</div>
   </div>`;
 }
 
+// System-name masquerade for page eyebrows. A persistent observer de-brands any
+// `.eyebrow` as views render it — deBrandSystem is a no-op for a CL5 viewer, so
+// this self-gates on the per-session flag. It runs as a microtask before paint
+// (no flash) and survives in-view re-renders (filter/search) that set
+// host.innerHTML directly without going back through renderApp.
+function armEyebrowMasquerade() {
+  const scrub = () => {
+    root.querySelectorAll('.eyebrow').forEach((el) => {
+      const t = el.textContent;
+      const d = deBrandSystem(t);
+      if (d !== t) el.textContent = d;
+    });
+  };
+  new MutationObserver(scrub).observe(root, { childList: true, subtree: true });
+  scrub();
+}
+
 async function boot() {
+  armEyebrowMasquerade();
   if (api.serverMode()) {
     // Wire background sync to the Worker, then try to restore a saved session.
     sync.init({
