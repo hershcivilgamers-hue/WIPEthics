@@ -74,7 +74,7 @@ export function render(host, app, org = 'omega-1') {
     const st = activityStatus(u, getActivityForUser(u.id), actReqs, Date.now(), org);
     const m = ACTIVITY_STATUS[st.key] || { label: st.key, tone: 'muted' };
     const need = st.req && st.req.weekly ? ` · needs ${st.req.weekly}h` : '';
-    return `<span class="badge badge--${m.tone}" title="${esc(st.weekHours)}h logged this week${esc(need)}">${esc(m.label)}</span>`;
+    return `<span class="badge badge--${m.tone}" title="${esc(+st.weekHours.toFixed(1))}h logged this week${esc(need)}">${esc(m.label)}</span>`;
   };
   const reqDot = (ok, label) => `<span class="eng-req ${ok ? 'eng-req--ok' : 'eng-req--no'}" title="${esc(label)}">${ok ? '✓' : '✕'}</span>`;
 

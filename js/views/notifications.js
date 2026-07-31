@@ -84,7 +84,7 @@ export function buildNotifications(actor, now = Date.now()) {
   const reqs = mergeActivityReqs((getSetting(ACTIVITY_REQ_SETTING_ID) || {}).data);
   const myStatus = activityStatus(actor, getActivityForUser(actor.id), reqs, now);
   if (myStatus.key === 'inactive') add('bad', '\u25CF', 'You have logged no hours this week \u2014 you are marked Inactive.', '#/dashboard');
-  else if (myStatus.key === 'semi') add('warn', '\u25CF', `You are below the weekly requirement (${myStatus.weekHours}h logged).`, '#/dashboard');
+  else if (myStatus.key === 'semi') add('warn', '\u25CF', `You are below the weekly requirement (${+myStatus.weekHours.toFixed(1)}h logged).`, '#/dashboard');
 
   // 1b. Your training currency — a certification that has lapsed (or is about to)
   // is yours to renew. Completions live on your own file, which you see in full.
