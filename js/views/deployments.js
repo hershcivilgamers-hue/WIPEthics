@@ -27,7 +27,7 @@ import { watchButton, wireWatchButton } from '../watch.js';
 import { exportAfterAction } from '../export.js';
 import {
   esc, linkify, fmtDate, fmtDateTime, relTime, clearanceBadge, orgTag, monogram,
-  toast, openModal, confirmDialog,
+  toast, openModal, confirmDialog, readoutStrip, countUp,
 } from '../ui.js';
 
 const ORG = 'omega-1';
@@ -73,7 +73,7 @@ export function renderList(host, app) {
   const canCreate = canManageOperation(actor, { org: ORG });
 
   const row = (o) => `
-    <tr data-id="${esc(o.id)}" tabindex="0">
+    <tr class="${o.status === 'aborted' ? 'rowsev--bad' : ''}" data-id="${esc(o.id)}" tabindex="0">
       <td class="mono">${esc(o.ref)}</td>
       <td class="cell-name">${esc(o.name)}</td>
       <td>${kindBadge(o.kind)}</td>
@@ -85,7 +85,7 @@ export function renderList(host, app) {
     </tr>`;
 
   const section = (title, list, showResult) => list.length ? `
-    <section class="card" style="margin-top:16px">
+    <section class="card rise" style="margin-top:16px">
       <div class="card__title">${esc(title)} <span class="muted-text">(${list.length})</span></div>
       <table class="table">
         <thead><tr><th>Ref</th><th>Operation</th><th>Kind</th><th>Classification</th><th>Lead</th><th>Team</th><th>Last log</th><th></th></tr></thead>
@@ -97,8 +97,16 @@ export function renderList(host, app) {
   const planned = ops.filter((o) => o.status === 'planned').sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   const closed = ops.filter((o) => o.status === 'concluded' || o.status === 'aborted').sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 
+  const aborted = ops.filter((o) => o.status === 'aborted').length;
+  const deployReadout = ops.length ? readoutStrip([
+    { k: 'On the log', count: ops.length, frac: active.length / ops.length },
+    { k: 'Active', count: active.length, frac: active.length / ops.length, tone: 'ok' },
+    { k: 'Planned', count: planned.length, frac: planned.length / ops.length, tone: planned.length ? 'warn' : undefined },
+    { k: 'Aborted', count: aborted, frac: aborted / ops.length, tone: aborted ? 'alert' : undefined },
+  ]) : '';
+
   host.innerHTML = `
-    <div class="page-head">
+    <div class="page-head rise">
       <div>
         <div class="eyebrow">CAIRO \u00b7 ${esc(ORGS['omega-1'].short)}</div>
         <h1 class="page-title">Deployment Log</h1>
@@ -106,6 +114,7 @@ export function renderList(host, app) {
       </div>
       ${canCreate ? '<button class="btn btn--primary" id="new-op">+ New operation</button>' : ''}
     </div>
+    ${deployReadout}
     ${ops.length ? '' : '<div class="empty">No operations you are cleared to see.</div>'}
     ${section('Active', active)}
     ${section('Planned', planned)}
@@ -119,6 +128,8 @@ export function renderList(host, app) {
   });
   const nb = host.querySelector('#new-op');
   if (nb) nb.addEventListener('click', () => openCreate(app));
+
+  countUp(host);
 }
 
 // ===========================================================================
@@ -166,10 +177,19 @@ export function renderOperation(host, app, id) {
     actions += '<button class="btn btn--sm btn--danger" data-act="remove">Remove</button>';
   }
 
+  // Operation readout: state already on the file (canViewOperation-gated above).
+  const clMax = Math.max(...CLEARANCE_ORDER.map((c) => CLEARANCES[c].weight));
+  const opReadout = readoutStrip([
+    { k: 'Sensitivity', value: esc(CLEARANCES[op.clearance]?.label || op.clearance), frac: clMax ? (CLEARANCES[op.clearance]?.weight || 0) / clMax : 0 },
+    { k: 'Team', count: team.length, frac: Math.min(1, team.length / 6), tone: team.length ? 'ok' : undefined },
+    { k: 'Log entries', count: log.length, frac: Math.min(1, log.length / 8) },
+    { k: 'Linked targets', count: targets.length, frac: Math.min(1, targets.length / 4) },
+  ]);
+
   host.innerHTML = `
     <div class="file-actions"><button class="btn btn--ghost btn--sm" id="back">\u2190 Deployment Log</button>${watchButton(op.id)}</div>
 
-    <header class="dossier-head">
+    <header class="dossier-head rise">
       <div class="avatar avatar--omega">${esc((OPERATION_KIND[op.kind] || {}).short || 'OP')}</div>
       <div class="dossier-id">
         <div class="dossier-codename">${esc(op.name)}</div>
@@ -180,12 +200,14 @@ export function renderOperation(host, app, id) {
       </div>
     </header>
 
+    ${opReadout}
+
     ${actions ? `<div class="actionbar">${actions}</div>` : ''}
     ${moderationBar(actor, { already: canManage })}
     ${op.compartment ? `<div class="ntk-banner">Need-to-Know \u2014 ${esc(op.compartmentName || 'compartmented operation')}. Handling restricted to read-in personnel.</div>` : ''}
 
     <div class="dossier-grid">
-      <section class="card">
+      <section class="card rise">
         <div class="card__title">Operation</div>
         <div class="card__body">
           <div class="kv"><span class="kv__k">Kind</span><span class="kv__v">${kindBadge(op.kind)}</span></div>
@@ -201,7 +223,7 @@ export function renderOperation(host, app, id) {
         </div>
       </section>
 
-      <div class="dossier-col">
+      <div class="dossier-col rise">
         <section class="card">
           <div class="card__title">Objective</div>
           <div class="card__body"><p class="subj-summary">${esc(op.objective || 'No objective on record.')}</p></div>
@@ -224,6 +246,7 @@ export function renderOperation(host, app, id) {
     </div>
   `;
 
+  countUp(host);
   host.querySelector('#back').addEventListener('click', () => app.navigate('#/deployments'));
   wireModerationBar(host, app, { label: `operation ${op.ref}`, get: () => getOperation(op.id), upsert: upsertOperation, backHash: '#/deployments' });
   wireWatchButton(host, app, { id: op.id, type: 'operation', hash: `#/operation/${op.id}`, label: `operation ${op.ref}`, version: op.version });
