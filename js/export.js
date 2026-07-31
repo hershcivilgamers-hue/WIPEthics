@@ -60,6 +60,11 @@ function paras(text) {
 }
 
 const REDACTED = '<span class="redacted">[ REDACTED ]</span>';
+// Field-level redaction: the real (already-escaped) value when the viewer is
+// cleared for it, a black bar otherwise. `allowed` is the per-field clearance
+// decision the caller computes — "configurable" means each buildXHTML decides
+// which of its fields pass what test, per document type, not a generic engine.
+function redactField(value, allowed) { return allowed ? value : REDACTED; }
 const clrLabel = (code) => CLEARANCES[code]?.label || code;
 // SCP-style classification marking. Leads with the clearance level and its
 // classic secrecy tier (as real markings lead with the classification), then the
@@ -486,12 +491,11 @@ export function buildCaseDocumentHTML(record, actor) {
   const kind = CASE_KIND[record.kind]?.label || record.kind;
   const kindLower = (CASE_KIND[record.kind]?.label || record.kind).toLowerCase();
   const status = CASE_STATUS[record.status]?.label || record.status;
+  const respName = (record.respondentName && record.respondentName !== '[UNNAMED]')
+    ? redactField(esc(record.respondentName), isCL5(actor)) : '';
   const respondent = record.respondentId
     ? personRef(record.respondentId)
-    : esc([
-        (record.respondentName && record.respondentName !== '[UNNAMED]') ? record.respondentName : '',
-        record.respondentDept || '',
-      ].filter(Boolean).join(' \u2014 ') || 'an unnamed party');
+    : ([respName, esc(record.respondentDept || '')].filter(Boolean).join(' \u2014 ') || 'an unnamed party');
 
   const panel = (record.panelIds || []);
   const panelLine = panel.length
@@ -508,7 +512,8 @@ export function buildCaseDocumentHTML(record, actor) {
   if (summons.length) {
     blocks.push('<div class="jhead">Summons</div>');
     summons.forEach((m) => {
-      const who = m.targetId ? personRef(m.targetId, m.targetName) : esc([m.targetName || '', m.targetDept || ''].filter(Boolean).join(' \u2014 ') || 'a party');
+      const tName = m.targetName ? redactField(esc(m.targetName), isCL5(actor)) : '';
+      const who = m.targetId ? personRef(m.targetId, m.targetName) : ([tName, esc(m.targetDept || '')].filter(Boolean).join(' \u2014 ') || 'a party');
       blocks.push(`<div class="para">${who} was summoned to appear before the Committee: ${esc(m.reason)}</div>`);
     });
   }
@@ -624,7 +629,7 @@ export function buildSubjectDocumentHTML(subject, actor) {
   const fields = [
     ['Reference', esc(subject.ref)],
     ['Designation', `\u201c${esc(subject.alias)}\u201d`],
-    ['Identity on File', esc(subject.realName || '[UNIDENTIFIED]')],
+    ['Identity on File', (subject.realName && subject.realName !== '[UNIDENTIFIED]') ? redactField(esc(subject.realName), isCL5(actor)) : '[UNIDENTIFIED]'],
     ['Classification', esc(kind)],
     ['Organisation', esc(ORGS[subject.org]?.name || subject.org)],
     ['Threat Assessment', esc(threat)],
@@ -700,7 +705,7 @@ export function buildOpeningReportHTML(subject, actor) {
   const fields = [
     ['Reference', esc(subject.ref)],
     ['Designation', `“${esc(subject.alias)}”`],
-    ['Identity on File', esc(subject.realName || '[UNIDENTIFIED]')],
+    ['Identity on File', (subject.realName && subject.realName !== '[UNIDENTIFIED]') ? redactField(esc(subject.realName), isCL5(actor)) : '[UNIDENTIFIED]'],
     ['Category', esc(kind)],
     ['Threat Assessment', esc(threat)],
     ['Last Known Location', esc(subject.lastKnownLocation || '—')],
@@ -912,8 +917,8 @@ export function buildPersonnelDocumentHTML(user, actor) {
   const fields = [
     ['Designation', esc(user.designation)],
     ['Codename', `\u201c${esc(user.codename)}\u201d`],
-    ['Legal Name', full ? esc(user.realName) : REDACTED],
-    ['Operator ID', full ? esc(user.username) : REDACTED],
+    ['Legal Name', redactField(esc(user.realName), full)],
+    ['Operator ID', redactField(esc(user.username), full)],
     ['Organisation', esc(ORGS[user.org]?.name || user.org)],
     ['Rank', esc(user.rank || '\u2014')],
     ['Clearance', esc(clrLabel(user.clearance))],
@@ -929,7 +934,7 @@ export function buildPersonnelDocumentHTML(user, actor) {
       <div class="field"><span class="fl">Type</span><span class="fv">${esc(user.leave.type)}</span></div>
       <div class="field"><span class="fl">From</span><span class="fv">${longDate(user.leave.from)}</span></div>
       <div class="field"><span class="fl">Until</span><span class="fv">${longDate(user.leave.to)}</span></div>
-      <div class="field"><span class="fl">Reason</span><span class="fv">${full ? esc(user.leave.reason || '\u2014') : REDACTED}</span></div>
+      <div class="field"><span class="fl">Reason</span><span class="fv">${redactField(esc(user.leave.reason || '\u2014'), full)}</span></div>
     </div>`);
   }
 
