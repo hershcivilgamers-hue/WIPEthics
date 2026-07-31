@@ -27,7 +27,7 @@ import { logAction } from '../audit.js';
 import { moderationBar, wireModerationBar } from '../moderation.js';
 import {
   esc, fmtDate, fmtDateTime, clearanceBadge, orgTag, monogram,
-  toast, openModal, confirmDialog,
+  toast, openModal, confirmDialog, readoutStrip, countUp,
 } from '../ui.js';
 
 const filter = { q: '', org: '', status: '' };
@@ -125,8 +125,17 @@ export function renderList(host, app) {
 
   const canCreate = manageableOrgs(actor).length > 0;
 
+  const compActive = mine.filter((c) => c.status === 'active').length;
+  const compAdmin = mine.filter((c) => canManageCompartment(actor, c)).length;
+  const compReadout = mine.length ? readoutStrip([
+    { k: 'Compartments', count: mine.length, frac: compActive / mine.length },
+    { k: 'Active', count: compActive, frac: compActive / mine.length, tone: 'ok' },
+    { k: 'Sealed', count: mine.length - compActive, frac: (mine.length - compActive) / mine.length, tone: (mine.length - compActive) ? 'warn' : undefined },
+    { k: 'You administer', count: compAdmin, frac: compAdmin / mine.length },
+  ]) : '';
+
   host.innerHTML = `
-    <div class="page-head">
+    <div class="page-head rise">
       <div>
         <div class="eyebrow">CAIRO \u00b7 Need-To-Know</div>
         <h1 class="page-title">Compartments</h1>
@@ -134,6 +143,8 @@ export function renderList(host, app) {
       </div>
       ${canCreate ? '<button class="btn btn--primary" id="add-comp">+ New compartment</button>' : ''}
     </div>
+
+    ${compReadout}
 
     <div class="ntk-note card">
       <div class="card__body">
@@ -149,7 +160,7 @@ export function renderList(host, app) {
       <select id="flt-status" class="toolbar__select">${statusOpts}</select>
     </div>
 
-    <div class="card">
+    <div class="card rise">
       <table class="table">
         <thead>
           <tr>
@@ -173,6 +184,7 @@ export function renderList(host, app) {
   host.querySelector('#flt-org').addEventListener('change', (e) => { filter.org = e.target.value; renderList(host, app); });
   host.querySelector('#flt-status').addEventListener('change', (e) => { filter.status = e.target.value; renderList(host, app); });
 
+  countUp(host);
   const addBtn = host.querySelector('#add-comp');
   if (addBtn) addBtn.addEventListener('click', () => openCreate(app));
 }

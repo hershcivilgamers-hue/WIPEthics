@@ -19,7 +19,7 @@ import { engagementModel } from '../engagement.js';
 import { users, getEngagement, getEngagementFor, upsertEngagement, newId, getActivityForUser, getSetting } from '../storage.js';
 import { isCL5, canManageOrg, isdMember, canManageISD } from '../permissions.js';
 import { logAction } from '../audit.js';
-import { esc, fmtDate, toast, openModal } from '../ui.js';
+import { esc, fmtDate, toast, openModal, readoutStrip, countUp } from '../ui.js';
 import { exportEngagementSummary } from '../export.js';
 
 // The board is per-organisation. `curOrg` tracks the board being viewed so the
@@ -111,14 +111,26 @@ export function render(host, app, org = 'omega-1') {
       </tr>`;
   }).join('');
 
+  const engTotals = list.map((u) => models.get(u.id).total);
+  const engOnTarget = engTotals.filter((t) => t >= TOTAL_MAX * 0.6).length;
+  const engAvg = list.length ? Math.round(engTotals.reduce((a, b) => a + b, 0) / list.length) : 0;
+  const engReadout = list.length ? readoutStrip([
+    { k: 'Operators', count: list.length, frac: engOnTarget / list.length },
+    { k: 'On target', count: engOnTarget, frac: engOnTarget / list.length, tone: 'ok' },
+    { k: 'At risk', count: atRisk.length, frac: atRisk.length / list.length, tone: atRisk.length ? 'alert' : undefined },
+    { k: 'Avg score', value: `${engAvg}<small>/${TOTAL_MAX}</small>`, frac: TOTAL_MAX ? engAvg / TOTAL_MAX : 0, tone: engAvg >= TOTAL_MAX * 0.6 ? 'ok' : (engAvg >= TOTAL_MAX * 0.3 ? 'warn' : undefined) },
+  ]) : '';
+
   host.innerHTML = `
-    <div class="page-head">
+    <div class="page-head rise">
       <div>
         <div class="eyebrow">CAIRO · ${esc(ORGS[org].short)}</div>
         <h1 class="page-title">Engagement</h1>
         <div class="page-sub">${isd ? 'Weekly casework score · five sections derived from the investigative record, two entered by ISD command' : 'Weekly engagement score · six sections derived from the records, two entered by Sr CL4'}</div>
       </div>
     </div>
+
+    ${engReadout}
 
     <div class="toolbar eng-weeknav">
       <button class="btn btn--sm" id="eng-prev">◀ Previous week</button>
@@ -130,7 +142,7 @@ export function render(host, app, org = 'omega-1') {
 
     ${atRisk.length ? `<div class="readiness-banner readiness-banner--warn"><strong>${atRisk.length}</strong> of ${list.length} operator${list.length === 1 ? '' : 's'} below the weekly engagement requirement this week.</div>` : ''}
 
-    <div class="card card--scrollx">
+    <div class="card card--scrollx rise">
       <table class="table eng-table">
         <thead><tr>
           <th>Operator</th>
@@ -145,6 +157,7 @@ export function render(host, app, org = 'omega-1') {
       : '<p class="field__hint" style="margin-top:12px">Derived sections (Scouting, Orders, Evidence, PoIs, Trainings, Activity) come from the week’s records — Evidence from the <a class="rec-link" href="#/evidence">evidence submissions</a>; Squadron and RP are entered by a reviewer, who may override any derived score for quality. Expectation: one Scouting/Order/Evidence/PoI engagement a week, one training host every three weeks.</p>'}
   `;
 
+  countUp(host);
   host.querySelector('#eng-prev').addEventListener('click', () => { viewWeek = engagementWeekShift(viewWeek, -1); render(host, app, org); });
   const nx = host.querySelector('#eng-next');
   if (nx) nx.addEventListener('click', () => { viewWeek = engagementWeekShift(viewWeek, 1); render(host, app, org); });

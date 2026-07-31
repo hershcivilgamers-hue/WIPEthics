@@ -18,7 +18,7 @@ import {
 import { trainings, getTraining, upsertTraining, users, newId } from '../storage.js';
 import { canViewTraining, canManageTraining, isCL5 } from '../permissions.js';
 import { logAction } from '../audit.js';
-import { esc, toast, openModal, confirmDialog } from '../ui.js';
+import { esc, toast, openModal, confirmDialog, readoutStrip, countUp } from '../ui.js';
 import { ORGS as ORG_META } from '../constants.js';
 
 const ORGS = [
@@ -64,7 +64,7 @@ export function render(host, app) {
     }).join('') : `<tr><td colspan="6"><div class="empty">No courses defined for this organisation.</div></td></tr>`;
 
     return `
-      <section class="card" style="margin-top:16px">
+      <section class="card rise" style="margin-top:16px">
         <div class="card__title">${esc(o.label)} ${canManage ? `<button class="btn btn--sm btn--primary" data-new="${esc(o.key)}" style="float:right;margin-top:-4px">+ New course</button>` : ''}</div>
         <table class="table">
           <thead><tr><th>Code</th><th>Course</th><th>Category</th><th>Min. clearance</th><th>Validity</th><th>Held by unit</th></tr></thead>
@@ -73,14 +73,24 @@ export function render(host, app) {
       </section>`;
   }).join('');
 
+  const trActive = all.filter((c) => c.active).length;
+  const trCats = new Set(all.map((c) => c.category)).size;
+  const trReadout = all.length ? readoutStrip([
+    { k: 'Courses', count: all.length, frac: trActive / all.length },
+    { k: 'Active', count: trActive, frac: trActive / all.length, tone: 'ok' },
+    { k: 'Retired', count: all.length - trActive, frac: (all.length - trActive) / all.length, tone: (all.length - trActive) ? 'warn' : undefined },
+    { k: 'Categories', count: trCats, frac: trCats ? Math.min(1, trCats / TRAINING_CATEGORY_ORDER.length) : 0 },
+  ]) : '';
+
   host.innerHTML = `
-    <div class="page-head">
+    <div class="page-head rise">
       <div>
         <div class="eyebrow">CAIRO</div>
         <h1 class="page-title">Trainings</h1>
         <div class="page-sub">Course catalogue \u00b7 currency is shown on each personnel file</div>
       </div>
     </div>
+    ${trReadout}
     ${all.length || ORGS.some((o) => canManageTraining(actor, o.key)) ? orgSections : '<div class="empty">No courses you are cleared to see.</div>'}
   `;
 
@@ -90,6 +100,8 @@ export function render(host, app) {
     tr.addEventListener('click', open);
     tr.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(); });
   });
+
+  countUp(host);
 }
 
 function clearanceFloorOptions(actor, current) {
