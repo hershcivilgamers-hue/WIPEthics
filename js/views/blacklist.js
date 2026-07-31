@@ -15,7 +15,7 @@ import {
 } from '../constants.js';
 import { blacklist, getBlacklistEntry, upsertBlacklistEntry, newId, getSetting, upsertSetting } from '../storage.js';
 import { canManageOrg, isCL5, canManageSettings, canModerate } from '../permissions.js';
-import { esc, fmtDate, orgTag, toast, openModal, confirmDialog } from '../ui.js';
+import { esc, fmtDate, orgTag, toast, openModal, confirmDialog, readoutStrip, countUp } from '../ui.js';
 import { logAction } from '../audit.js';
 
 const filter = persistedFilter('blacklist', { q: '', severity: '', status: 'active' });
@@ -50,7 +50,7 @@ export function render(host, app) {
     .sort((a, b) => (a.status === b.status ? (b.createdAt || '').localeCompare(a.createdAt || '') : (a.status === 'active' ? -1 : 1)));
 
   const body = rows.length ? rows.map((b) => `
-    <tr data-id="${esc(b.id)}" tabindex="0" class="${(b.status || 'active') === 'lifted' ? 'row--muted' : ''}">
+    <tr data-id="${esc(b.id)}" tabindex="0" class="${(b.status || 'active') === 'lifted' ? 'row--muted' : ((BLACKLIST_SEVERITY[b.severity] || {}).tone === 'bad' ? 'rowsev--bad' : '')}">
       <td class="cell-name">${esc(b.name)}${b.identifier ? `<span class="mono muted-text"> \u00b7 ${esc(b.identifier)}</span>` : ''}</td>
       <td>${sevBadge(b.severity)}</td>
       <td>${orgTag(b.org)}</td>
@@ -62,8 +62,18 @@ export function render(host, app) {
   const sevOpts = ['<option value="">All severities</option>', ...BLACKLIST_SEVERITY_ORDER.map((s) => `<option value="${s}" ${filter.severity === s ? 'selected' : ''}>${esc(BLACKLIST_SEVERITY[s].label)}</option>`)].join('');
   const statOpts = [['active', 'Active'], ['lifted', 'Lifted'], ['', 'All']].map(([v, l]) => `<option value="${v}" ${filter.status === v ? 'selected' : ''}>${l}</option>`).join('');
 
+  const blActive = all.filter((b) => (b.status || 'active') === 'active').length;
+  const blLifted = all.filter((b) => (b.status || 'active') === 'lifted').length;
+  const blSevere = all.filter((b) => (b.status || 'active') === 'active' && (BLACKLIST_SEVERITY[b.severity] || {}).tone === 'bad').length;
+  const blReadout = all.length ? readoutStrip([
+    { k: 'On the register', count: all.length, frac: blActive / all.length },
+    { k: 'Active', count: blActive, frac: blActive / all.length, tone: 'warn' },
+    { k: 'Severe', count: blSevere, frac: blSevere / all.length, tone: blSevere ? 'alert' : undefined },
+    { k: 'Lifted', count: blLifted, frac: blLifted / all.length },
+  ]) : '';
+
   host.innerHTML = `
-    <div class="page-head">
+    <div class="page-head rise">
       <div>
         <div class="eyebrow">Cross-Department</div>
         <h1 class="page-title">Blacklist</h1>
@@ -71,6 +81,7 @@ export function render(host, app) {
       </div>
       ${canManageAny ? '<button class="btn btn--primary" id="bl-add">+ Add entry</button>' : ''}
     </div>
+    ${blReadout}
     ${canManageSettings(actor) ? '<div class="toolbar" style="justify-content:flex-end"><button class="btn btn--sm" id="bl-sources">Manage external sheets</button></div>' : ''}
     <div id="bl-external"></div>
     <div class="toolbar">
@@ -78,7 +89,7 @@ export function render(host, app) {
       <select id="bl-sev" class="toolbar__select">${sevOpts}</select>
       <select id="bl-status" class="toolbar__select">${statOpts}</select>
     </div>
-    <div class="card">
+    <div class="card rise">
       <table class="data-table">
         <thead><tr><th>Name</th><th>Severity</th><th>Raised by</th><th>Reason</th><th>Status</th><th></th></tr></thead>
         <tbody>${body}</tbody>
@@ -98,6 +109,8 @@ export function render(host, app) {
     tr.addEventListener('click', open);
     tr.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(); });
   });
+
+  countUp(host);
 }
 
 function openCreate(app) {

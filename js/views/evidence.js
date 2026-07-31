@@ -24,7 +24,7 @@ import {
   canManageTribunal, canViewCase, canModerate,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
-import { esc, fmtDate, toast, openModal, confirmDialog } from '../ui.js';
+import { esc, fmtDate, toast, openModal, confirmDialog, readoutStrip, countUp } from '../ui.js';
 
 const ORG = 'omega-1';
 let viewWeek = engagementWeekStart();
@@ -88,7 +88,7 @@ export function render(host, app) {
     ? '<div class="ntk-banner">Your evidence is under review — new items are held until a reviewer counts them.</div>'
     : '';
   const mineHTML = member ? `
-    <section class="card">
+    <section class="card rise">
       <div class="card__title">Your evidence — ${esc(weekLabel(viewWeek))}</div>
       <div class="card__body">
         ${myReviewNote}
@@ -99,7 +99,23 @@ export function render(host, app) {
 
   // --- reviewer roster ---
   let reviewHTML = '';
+  let reviewReadout = '';
   if (reviewer || staffOnly) {
+    const rl = roster();
+    let evC = 0; let evP = 0; let evF = 0;
+    for (const u of rl) {
+      const items = evidenceFor(u.id, viewWeek);
+      evC += items.filter((e) => e.status === 'counted').length;
+      evP += items.filter((e) => e.status === 'pending').length;
+      if (u.evidenceReviewRequired) evF += 1;
+    }
+    const evTotal = evC + evP;
+    reviewReadout = readoutStrip([
+      { k: 'Operators', count: rl.length, frac: rl.length ? 1 : 0 },
+      { k: 'Counted', count: evC, frac: evTotal ? evC / evTotal : 0, tone: 'ok' },
+      { k: 'In review', count: evP, frac: evTotal ? evP / evTotal : 0, tone: evP ? 'alert' : undefined },
+      { k: 'Flagged', count: evF, frac: rl.length ? evF / rl.length : 0, tone: evF ? 'warn' : undefined },
+    ]);
     const rows = roster().map((u) => {
       const items = evidenceFor(u.id, viewWeek).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
       const counted = items.filter((e) => e.status === 'counted').length;
@@ -126,14 +142,14 @@ export function render(host, app) {
         </div>`;
     }).join('');
     reviewHTML = `
-      <section class="card">
+      <section class="card rise">
         <div class="card__title">Review — ${esc(weekLabel(viewWeek))}</div>
         <div class="card__body">${roster().length ? rows : `<div class="empty">No active ${esc(ORGS['omega-1'].short)} operators.</div>`}</div>
       </section>`;
   }
 
   host.innerHTML = `
-    <div class="page-head">
+    <div class="page-head rise">
       <div>
         <div class="eyebrow">CAIRO · ${esc(ORGS['omega-1'].short)}</div>
         <h1 class="page-title">Evidence</h1>
@@ -148,10 +164,14 @@ export function render(host, app) {
       ${viewWeek !== engagementWeekStart() ? '<button class="btn btn--sm btn--ghost" id="ev-now">This week</button>' : ''}
     </div>
 
+    ${reviewReadout}
+
     ${mineHTML}
     ${reviewHTML}
     ${!member && !reviewer ? `<div class="card"><div class="card__body"><div class="empty">Evidence submission is for ${esc(ORGS['omega-1'].short)} personnel.</div></div></div>` : ''}
   `;
+
+  countUp(host);
 
   // Week nav
   host.querySelector('#ev-prev').addEventListener('click', () => { viewWeek = engagementWeekShift(viewWeek, -1); render(host, app); });
