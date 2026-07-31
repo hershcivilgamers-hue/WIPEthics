@@ -35,7 +35,7 @@ import { logAction } from '../audit.js';
 import { moderationBar, wireModerationBar } from '../moderation.js';
 import {
   esc, fmtDate, fmtDateTime, relTime, orgTag, monogram,
-  toast, openModal, confirmDialog,
+  toast, openModal, confirmDialog, readoutStrip, countUp,
 } from '../ui.js';
 
 const ORG_LABEL = { 'omega-1': 'Recruitment', 'ethics-committee': 'Assistant Applications' };
@@ -153,8 +153,17 @@ export function renderList(host, app, org, trackArg) {
     : isEthics ? 'Assistant applications \u2014 cadre review and vote; CL5 interviews'
     : 'Scouting pipeline \u2014 run by the unit\u2019s CL4 cadre';
 
+  const voteStage = isEthics ? 'application' : 'greenlit';
+  const awaitingVote = live.filter((r) => r.stage === voteStage).length;
+  const recReadout = mine.length ? readoutStrip([
+    { k: 'Candidates', count: mine.length, frac: mine.length ? live.length / mine.length : 0 },
+    { k: 'In pipeline', count: live.length, frac: mine.length ? live.length / mine.length : 0, tone: 'ok' },
+    { k: 'Awaiting vote', count: awaitingVote, frac: mine.length ? awaitingVote / mine.length : 0, tone: awaitingVote ? 'alert' : undefined },
+    { k: 'Archived', count: archived.length, frac: mine.length ? archived.length / mine.length : 0 },
+  ]) : '';
+
   host.innerHTML = `
-    <div class="page-head">
+    <div class="page-head rise">
       <div>
         <div class="eyebrow">${eyebrow}</div>
         <h1 class="page-title">${esc(listLabel(org, track))}</h1>
@@ -166,9 +175,11 @@ export function renderList(host, app, org, trackArg) {
       </div>
     </div>
 
-    <div class="pipeline pipeline--${pipeline.length}">${columns}</div>
+    ${recReadout}
 
-    ${archived.length ? `<section class="card" style="margin-top:18px">
+    <div class="pipeline pipeline--${pipeline.length} rise">${columns}</div>
+
+    ${archived.length ? `<section class="card rise" style="margin-top:18px">
       <div class="card__title">Archived</div>
       <table class="table">
         <thead><tr><th>Ref</th><th>Name</th><th>Rank</th><th>Department</th><th>Outcome</th><th></th></tr></thead>
@@ -198,6 +209,8 @@ export function renderList(host, app, org, trackArg) {
       { header: 'No', value: (r) => tallyVotes(r.votes).no },
     ], mine);
   });
+
+  countUp(host);
 }
 
 // ===========================================================================
@@ -394,6 +407,13 @@ export function renderRecruit(host, app, id) {
   // after archiving so it can be issued alongside the outcome.
   const showFeedback = isEthics && canAct && !!r.interviewAssessment;
 
+  const recStatReadout = readoutStrip([
+    { k: 'Votes for', count: t.yes, frac: (t.yes + t.no) ? t.yes / (t.yes + t.no) : 0, tone: t.yes ? 'ok' : undefined },
+    { k: 'Votes against', count: t.no, frac: (t.yes + t.no) ? t.no / (t.yes + t.no) : 0, tone: t.no ? 'alert' : undefined },
+    { k: 'Thread notes', count: comments.length, frac: Math.min(1, comments.length / 8) },
+    { k: 'Days open', count: Math.max(0, Math.floor((Date.now() - new Date(r.createdAt).getTime()) / 86400000)), frac: Math.min(1, Math.max(0, (Date.now() - new Date(r.createdAt).getTime()) / 86400000) / 30) },
+  ]);
+
   host.innerHTML = `
     <div class="file-actions">
       <button class="btn btn--ghost btn--sm" id="back">\u2190 ${esc(listLabel(r.org, recruitTrack(r)))}</button>
@@ -402,7 +422,7 @@ export function renderRecruit(host, app, id) {
       ${showAccept ? '<button class="btn btn--sm" data-act="export-accept">\u23ce Appointment Notice</button>' : ''}
     </div>
 
-    <header class="dossier-head">
+    <header class="dossier-head rise">
       <div class="avatar avatar--${avatarTone}">${esc(monogram(r.name))}</div>
       <div class="dossier-id">
         <div class="dossier-codename">${esc(r.name)}</div>
@@ -416,12 +436,14 @@ export function renderRecruit(host, app, id) {
       </div>
     </header>
 
+    ${recStatReadout}
+
     ${actions.length ? `<div class="actionbar">${actions.join('')}</div>` : ''}
     ${moderationBar(actor, { already: false })}
     ${tagRow}
 
     <div class="dossier-grid">
-      <section class="card">
+      <section class="card rise">
         <div class="card__title">Candidate</div>
         <div class="card__body">
           <div class="kv"><span class="kv__k">Name</span><span class="kv__v">${esc(r.name)}</span></div>
@@ -437,7 +459,7 @@ export function renderRecruit(host, app, id) {
           <div class="kv"><span class="kv__k">Updated</span><span class="kv__v">${fmtDateTime(r.updatedAt)}</span></div>
         </div>
       </section>
-      <div class="dossier-col">
+      <div class="dossier-col rise">
         ${interviewPanel}
         ${strikesPanel}
         <section class="card">
@@ -455,6 +477,7 @@ export function renderRecruit(host, app, id) {
     </div>
   `;
 
+  countUp(host);
   host.querySelector('#back').addEventListener('click', () => app.navigate(backHash(r)));
   wireModerationBar(host, app, { label: `candidate ${r.ref || r.name}`, get: () => getRecruit(r.id), upsert: upsertRecruit, backHash: backHash(r) });
 
