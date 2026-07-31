@@ -111,6 +111,7 @@ function operatorIsBusy() {
 
 export async function autoRefreshTick(force = false) {
   if (!api.serverMode() || !api.getToken()) return;
+  if (!liveSocket && !liveStopped) openLiveSocket(); // token present now — make sure the live socket is up
   try { if (document.visibilityState && document.visibilityState !== 'visible') return; } catch (_) { /* no DOM */ }
   const now = Date.now();
   if (!force && now - lastTickAt < REFRESH_MIN_GAP_MS) return;
@@ -148,15 +149,69 @@ function armAutoRefresh() {
   if (refreshTimer && typeof refreshTimer.unref === 'function') refreshTimer.unref();
 }
 
+// ---------------------------------------------------------------------------
+// Live push — a hibernatable WebSocket to the Worker's SyncHub Durable Object.
+// When any operator's write is authorized anywhere, the hub sends a content-free
+// "changed" ping and we re-fetch the (per-viewer-redacted) snapshot at once —
+// no data crosses the socket, so redaction stays entirely server-side. If the
+// socket can't stay up we simply lean on the 30s poll above, which is never torn
+// down. The session token rides as a subprotocol, never in the URL.
+// ---------------------------------------------------------------------------
+let liveSocket = null;
+let liveBackoffMs = 1000;
+let liveStopped = false;
+let liveHeartbeat = null;
+
+function liveUrl() {
+  return String(CONFIG.apiBaseUrl || '').replace(/^http/i, 'ws').replace(/\/+$/, '') + '/api/live';
+}
+
+function openLiveSocket() {
+  if (liveStopped || !api.serverMode() || !api.getToken()) return;
+  if (CONFIG.features && CONFIG.features.autoRefresh === false) return;
+  if (typeof WebSocket === 'undefined') return; // no WebSocket (e.g. the Node test harness)
+  if (liveSocket) { try { liveSocket.close(); } catch (_) { /* replacing */ } }
+  let ws;
+  try { ws = new WebSocket(liveUrl(), ['cairo.sync', `auth.${api.getToken()}`]); }
+  catch (_) { scheduleLiveReconnect(); return; }
+  liveSocket = ws;
+  ws.addEventListener('open', () => {
+    liveBackoffMs = 1000;
+    clearInterval(liveHeartbeat);
+    liveHeartbeat = setInterval(() => { try { if (ws.readyState === 1) ws.send('ping'); } catch (_) { /* closing */ } }, 45000);
+    if (liveHeartbeat && typeof liveHeartbeat.unref === 'function') liveHeartbeat.unref();
+  });
+  ws.addEventListener('message', (e) => { if (e.data === 'changed') autoRefreshTick(true); });
+  ws.addEventListener('close', () => { if (ws === liveSocket) liveSocket = null; clearInterval(liveHeartbeat); scheduleLiveReconnect(); });
+  ws.addEventListener('error', () => { try { ws.close(); } catch (_) { /* already gone */ } });
+}
+
+function scheduleLiveReconnect() {
+  if (liveStopped || !api.serverMode() || !api.getToken()) return;
+  const delay = Math.min(liveBackoffMs, 30000);
+  liveBackoffMs = Math.min(liveBackoffMs * 2, 30000);
+  const t = setTimeout(openLiveSocket, delay);
+  if (t && typeof t.unref === 'function') t.unref();
+}
+
+// Drop the live socket (e.g. on sign-out). startAutoRefresh() re-arms it.
+export function stopLive() {
+  liveStopped = true;
+  clearInterval(liveHeartbeat);
+  if (liveSocket) { try { liveSocket.close(); } catch (_) { /* already closed */ } liveSocket = null; }
+}
+
 export function startAutoRefresh() {
   if (!api.serverMode()) return;
   if (CONFIG.features && CONFIG.features.autoRefresh === false) return;
+  liveStopped = false;
   try {
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') { autoRefreshTick(true); armAutoRefresh(); }
+      if (document.visibilityState === 'visible') { autoRefreshTick(true); armAutoRefresh(); if (!liveSocket) openLiveSocket(); }
       else disarmAutoRefresh();
     });
     window.addEventListener('focus', () => autoRefreshTick(false));
   } catch (_) { /* no DOM events available */ }
   armAutoRefresh();
+  openLiveSocket();
 }

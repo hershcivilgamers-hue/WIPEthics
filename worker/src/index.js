@@ -20,6 +20,10 @@ import { assessInterview } from './interview-assess.js';
 import { buildSnapshot, redactUser, redactDirective, redactCompartment, redactDocument } from './redact.js';
 import { canReadDirective, compartmentClears, canManageOrg, isCL5, canParticipateRecruitment } from '../../js/permissions.js';
 import { CLEARANCES, RANKS } from '../../js/constants.js';
+import { SyncHub } from './sync-hub.js';
+
+// The live-sync Durable Object must be a named export of the Worker entry module.
+export { SyncHub };
 
 const WRITABLE = new Set(['users', 'documents', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'engagement', 'evidence', 'investigations', 'inductions', 'blacklist', 'promo_reqs', 'settings', 'messages']);
 const SNAPSHOT = ['users', 'documents', 'directives', 'subjects', 'cases', 'compartments', 'activity', 'recruits', 'operations', 'intel', 'trainings', 'engagement', 'evidence', 'investigations', 'inductions', 'blacklist', 'promo_reqs', 'settings', 'messages', 'audit'];
@@ -60,12 +64,11 @@ function json(data, status, env, extraHeaders) {
   });
 }
 
-// Resolve the acting operator from the Bearer token, or null.
-async function authenticate(request, repo) {
-  const auth = request.headers.get('Authorization') || '';
-  const m = auth.match(/^Bearer\s+(.+)$/i);
-  if (!m) return { actor: null, token: null };
-  const token = m[1];
+// Resolve the acting operator from a raw session token, or null. Shared by the
+// Bearer-header path and the live-sync WebSocket (which carries the token as a
+// subprotocol instead of a header).
+async function authenticateToken(token, repo) {
+  if (!token) return { actor: null, token: null };
   const sess = await repo.getSession(token);
   if (!sess) return { actor: null, token };
   if (sess.expires_at && sess.expires_at < new Date().toISOString()) {
@@ -81,6 +84,13 @@ async function authenticate(request, repo) {
     return { actor: null, token };
   }
   return { actor, token };
+}
+
+// Resolve the acting operator from the Bearer token, or null.
+async function authenticate(request, repo) {
+  const auth = request.headers.get('Authorization') || '';
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  return authenticateToken(m ? m[1] : null, repo);
 }
 
 async function fullDb(repo) {
@@ -469,6 +479,21 @@ export async function handle(request, repo, rawEnv) {
   if (parts[1] === 'login' && request.method === 'POST') return login(request, repo, env);
   if (parts[1] === 'register' && request.method === 'POST') return register(request, repo, env);
 
+  // Live-sync WebSocket: GET /api/live with an Upgrade header. A browser cannot
+  // set an Authorization header on a WebSocket, so the session token rides as a
+  // subprotocol ("auth.<token>") — never in the URL or a response header. Validate
+  // it here, then hand the raw upgrade to the single global SyncHub.
+  if (parts[1] === 'live') {
+    if (request.headers.get('Upgrade') !== 'websocket') return json({ error: 'Expected a WebSocket.' }, 426, env);
+    if (!env.SYNC_HUB) return json({ error: 'Live sync unavailable.' }, 503, env);
+    const offered = (request.headers.get('Sec-WebSocket-Protocol') || '').split(',').map((s) => s.trim());
+    const authProto = offered.find((p) => p.startsWith('auth.'));
+    const { actor } = await authenticateToken(authProto ? authProto.slice(5) : null, repo);
+    if (!actor) return new Response('Unauthorized', { status: 401, headers: corsHeaders(env) });
+    const stub = env.SYNC_HUB.get(env.SYNC_HUB.idFromName('global'));
+    return stub.fetch(request);
+  }
+
   // Everything else requires a valid session.
   const { actor, token } = await authenticate(request, repo);
   if (!actor) return json({ error: 'Not authenticated.' }, 401, env);
@@ -533,10 +558,30 @@ export async function handle(request, repo, rawEnv) {
   return json({ error: 'Not found.' }, 404, env);
 }
 
+// Best-effort: ping the single global SyncHub so every connected client
+// re-fetches. Never throws — the client's 30s poll is the guaranteed fallback.
+async function broadcastChange(env) {
+  try {
+    const stub = env.SYNC_HUB.get(env.SYNC_HUB.idFromName('global'));
+    await stub.fetch('https://sync-hub.internal/notify');
+  } catch (_) { /* poll covers it */ }
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     try {
-      return await handle(request, makeD1Repo(env.DB), env);
+      const res = await handle(request, makeD1Repo(env.DB), env);
+      // After any successful mutation, tell the hub to nudge connected clients.
+      // Reads, auth and self-only endpoints don't broadcast; over-pinging is a
+      // cheap no-op client-side (the snapshot is diffed before re-render).
+      try {
+        const p = new URL(request.url).pathname;
+        const mutates = ['PUT', 'DELETE', 'POST'].includes(request.method)
+          && res.status >= 200 && res.status < 300
+          && !/^\/api\/(login|logout|terminal|live|me)(\/|$)/.test(p);
+        if (mutates && env.SYNC_HUB && ctx && ctx.waitUntil) ctx.waitUntil(broadcastChange(env));
+      } catch (_) { /* notification must never affect the response */ }
+      return res;
     } catch (err) {
       return new Response(JSON.stringify({ error: 'Server error.', detail: String(err && err.message || err) }), {
         status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders(env) },

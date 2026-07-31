@@ -36,3 +36,16 @@ LOGIN_LOCK_MIN = "15"
 # secret (see RUNBOOK), Gemini is used instead and this binding sits idle.
 [ai]
 binding = "AI"
+
+# Live sync. One global Durable Object ("SyncHub") relays a content-free
+# "changed" ping to every connected client after an authorized write; clients
+# then re-fetch the snapshot they are cleared to see. WebSocket Hibernation keeps
+# idle connections free. The migration below registers the new class; it is
+# applied automatically by `wrangler deploy`.
+[[durable_objects.bindings]]
+name = "SYNC_HUB"
+class_name = "SyncHub"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SyncHub"]
