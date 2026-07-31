@@ -27,8 +27,10 @@ import {
   CASE_KIND, CASE_STATUS, RULING_FINDING, CLEARANCES, ORGS, STATUSES,
   SUBJECT_CLASS, THREAT_LEVELS, SUBJECT_STATUS, STRIKE_LIMIT, strikeActive, activeStrikeCount,
   CASE_VOTE, tallyCaseVotes, caseTakesVote, deBrandOmega,
+  setSystemBranding, deBrandSystem,
 } from './constants.js';
 import { esc, toast } from './ui.js';
+import { isCL5 } from './permissions.js';
 import { interviewSetFor, INTERVIEW_GRADE, INTERVIEW_RECOMMENDATION } from './interview-bank.js';
 
 // --- Helpers ----------------------------------------------------------------
@@ -227,7 +229,7 @@ function signBlock({ name, role, dated }) {
       <div class="sign__line"></div>
       <div class="sign__name">${name}</div>
       <div class="sign__role">${esc(role)}</div>
-      <div class="sig-e">//SIGNED ELECTRONICALLY \u2014 CAIRO.AIC RECORDS//</div>
+      <div class="sig-e">//SIGNED ELECTRONICALLY \u2014 ${deBrandSystem('CAIRO.AIC')} RECORDS//</div>
       ${dated ? `<div class="sign__date">${esc(dated)}</div>` : ''}
     </div>`;
 }
@@ -436,10 +438,11 @@ const CSS = `
   }
 `;
 
-function frameDoc({ title, classification, inner, footerRef, actor, org = null, distribution = null, letter = false }) {
+function frameDoc({ title, classification, inner, footerRef, actor, org = null, distribution = null, letter = false, maskYear = false }) {
   const now = new Date().toISOString();
   const code = org === 'omega-1' ? 'O1' : org === 'ethics-committee' ? 'EC' : org === 'command' ? 'CMD' : 'GEN';
-  const controlNo = `CAIRO/${code}/${footerRef}`;
+  const controlNo = `${deBrandSystem('CAIRO')}/${code}/${footerRef}`;
+  const issued = maskYear ? longDate(now).replace(/\b\d{4}\b/, '████') : longDate(now);
   const logo = org ? orgLogo(org) : null;
   const wm = logo ? `<div class="wm" aria-hidden="true"><img src="${logo}" alt="" /></div>` : '';
   const dist = distribution || defaultDistribution(org);
@@ -468,7 +471,7 @@ function frameDoc({ title, classification, inner, footerRef, actor, org = null, 
       <div><span class="hl">Distribution:</span> ${esc(dist)}</div>
       <div><span class="hl">Handling:</span> This record contains information affecting the security of the Foundation. Store and transmit by approved channels only; reproduction requires the originator\u2019s written consent. Unauthorised disclosure is a matter for the Ethics Committee.</div>
     </div>
-    <div class="foot foot--meta"><div>Issued ${longDate(now)}</div><div class="foot__c">Copy 01 of 01</div><div>Originator ${esc(actor?.designation || 'SYSTEM')}</div></div>
+    <div class="foot foot--meta"><div>Issued ${issued}</div><div class="foot__c">Copy 01 of 01</div><div>Originator ${esc(actor?.designation || 'SYSTEM')}</div></div>
     <div class="foot"><div>${esc(controlNo)}</div><div class="foot__c">${esc(classification)}</div><div>Page 1 of 1</div></div>
     <div class="classbar classbar--bottom ${band}">${esc(classification)}</div>
   </div></div>
@@ -1577,7 +1580,7 @@ const CLEARANCE_BAND = {
 export function buildIdCardHTML(user) {
   const band = CLEARANCE_BAND[user.clearance] || { color: '#4a5361', label: user.clearance || 'UNGRADED' };
   const code = user.org === 'omega-1' ? 'O1' : user.org === 'ethics-committee' ? 'EC' : 'CMD';
-  const controlNo = `CAIRO/${code}/ID-${user.designation}`;
+  const controlNo = `${deBrandSystem('CAIRO')}/${code}/ID-${user.designation}`;
   const issued = longDate(new Date().toISOString());
   const seal = orgSeal(user.org);
   return `<!DOCTYPE html>
@@ -1760,6 +1763,12 @@ function renderDocBlocks(blocks) {
 }
 
 export function buildCustomDocumentHTML(doc, actor) {
+  // A document classified CL4-S or below (not CL5) is baked with the cover
+  // identity and a redacted year for EVERYONE — its audience is sub-CL5, so even
+  // a CL5-exported copy is safe to hand down. The author can disable this per doc
+  // via the composer's mask toggle (doc.maskIdentity === false).
+  const mask = doc.classification !== 'CL5' && doc.maskIdentity !== false;
+  if (mask) setSystemBranding(false);
   const office = doc.office || 'Office of Record';
   const inner = `
     ${letterhead(doc.org, office)}
@@ -1767,7 +1776,7 @@ export function buildCustomDocumentHTML(doc, actor) {
     <div class="doc-title">${esc(doc.title || 'Untitled Document')}</div>
     ${doc.status === 'draft' ? '<div class="notice notice--soft">DRAFT \u2014 NOT YET ISSUED</div>' : ''}
     ${renderDocBlocks(doc.blocks)}`;
-  return frameDoc({
+  const html = frameDoc({
     title: doc.title || 'Document',
     classification: banner(doc.classification, 'Document'),
     inner,
@@ -1775,7 +1784,11 @@ export function buildCustomDocumentHTML(doc, actor) {
     actor,
     org: doc.org,
     distribution: doc.distribution || null,
+    maskYear: mask,
   });
+  // Restore the session's real branding (renderApp also resets it per navigation).
+  if (mask) setSystemBranding(!!actor && isCL5(actor));
+  return html;
 }
 
 export function exportCustomDocument(app, doc) {

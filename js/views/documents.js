@@ -226,6 +226,8 @@ function renderComposer(host, app) {
           <div class="field"><label>Office</label><input id="d-office" value="${esc(d.office || '')}" placeholder="e.g. Office of the Commander" maxlength="80" /></div>
           <div class="field"><label>Classification</label><select id="d-class">${classes.map((c) => `<option value="${c}" ${c === d.classification ? 'selected' : ''}>${esc((CLEARANCES[c] || {}).label || c)}</option>`).join('')}</select></div>
           <div class="field"><label>Distribution <span class="muted-text">(optional)</span></label><input id="d-dist" value="${esc(d.distribution || '')}" placeholder="Defaults to the issuing body's standard list" maxlength="200" /></div>
+          <div class="field"><label class="check"><input type="checkbox" id="d-mask" ${d.maskIdentity !== false ? 'checked' : ''} /> <span>Mask the system name &amp; year for sub-CL5 readers</span></label>
+            <div class="field__hint">Applies when the classification is CL4·S or below — the baked record shows “AIC” and a redacted year, so a copy is safe to hand down. CL5 documents are unaffected.</div></div>
         </div></div>
         <div class="card"><div class="card__body">
           <div class="fmt-bar" role="toolbar" aria-label="Text formatting">
@@ -262,6 +264,7 @@ function renderComposer(host, app) {
     renderComposer(host, app);
   });
   host.querySelector('#d-class').addEventListener('change', (e) => { d.classification = e.target.value; refresh(); });
+  host.querySelector('#d-mask').addEventListener('change', (e) => { d.maskIdentity = e.target.checked; refresh(); });
 
   // Block field bindings.
   host.querySelectorAll('.blk__in').forEach((el) => {
@@ -342,6 +345,7 @@ function persist(app, status) {
     id: d.id, ref: d.ref, org: d.org, classification: d.classification,
     title: (d.title || '').trim() || 'Untitled Document', office: d.office || 'Office of Record',
     distribution: (d.distribution || '').trim(), status,
+    maskIdentity: d.maskIdentity !== false,
     blocks: d.blocks, createdBy: d.createdBy, createdAt: d.createdAt,
     updatedAt: now, version: (getDocument(d.id) ? (getDocument(d.id).version || 1) + 1 : 1),
     deleted: false, deletedAt: null,
