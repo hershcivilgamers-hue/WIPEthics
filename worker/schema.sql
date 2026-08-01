@@ -177,6 +177,16 @@ CREATE TABLE IF NOT EXISTS incidents (
 );
 CREATE INDEX IF NOT EXISTS idx_incidents_org ON incidents (org);
 
+CREATE TABLE IF NOT EXISTS commendations (
+  id          TEXT PRIMARY KEY,
+  org         TEXT,
+  deleted     INTEGER NOT NULL DEFAULT 0,
+  version     INTEGER NOT NULL DEFAULT 1,
+  updated_at  TEXT,
+  data        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_commendations_org ON commendations (org);
+
 -- ISD induction assessments (covert; Department or CL5 only).
 CREATE TABLE IF NOT EXISTS inductions (
   id          TEXT PRIMARY KEY,

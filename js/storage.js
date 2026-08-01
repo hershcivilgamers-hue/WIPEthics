@@ -42,6 +42,7 @@ function emptyDb() {
     investigations: [],
     inductions: [],
     incidents: [],
+    commendations: [],
     promoReqs: [],
     settings: [],
     messages: [],
@@ -125,6 +126,7 @@ export function applyServerSnapshot(snap) {
     investigations: snap.investigations || [],
     inductions: snap.inductions || [],
     incidents: snap.incidents || [],
+    commendations: snap.commendations || [],
     blacklist: snap.blacklist || [],
     promoReqs: snap.promoReqs || [],
     settings: snap.settings || [],
@@ -378,6 +380,19 @@ export function upsertIncident(record) {
   const i = list.findIndex((r) => r.id === record.id);
   if (i >= 0) list[i] = record; else list.push(record);
   afterWrite('incidents', record);
+  return record;
+}
+
+// Commendation nominations.
+export const commendations = () => loadDb().commendations;
+export function getCommendation(id) {
+  return commendations().find((r) => r.id === id) || null;
+}
+export function upsertCommendation(record) {
+  const list = commendations();
+  const i = list.findIndex((r) => r.id === record.id);
+  if (i >= 0) list[i] = record; else list.push(record);
+  afterWrite('commendations', record);
   return record;
 }
 

@@ -25,6 +25,7 @@ import {
   canViewInvestigation, canFileInvestigation, canAdvanceInvestigation, canAdjudicateInvestigation,
   canViewInduction, canFileInduction, canModerate, isAdmin,
   canFileIncident, canViewIncident, canManageIncident,
+  canFileCommendation, canViewCommendation, canManageCommendation,
 } from '../../js/permissions.js';
 import { investigationNextStage, INVESTIGATION_DISPOSITION, INCIDENT_SEVERITY } from '../../js/constants.js';
 import { scoreInduction } from '../../js/isd-induction.js';
@@ -1157,11 +1158,45 @@ function authorizeIncident(actor, cur, next) {
   return ok('EDIT_INCIDENT', `Updated ${ref}.`);
 }
 
+// Commendation nominations. Any active operator files one; the nominee's unit
+// command (or CL5) rules on it. Approval writes the decoration onto the nominee
+// as a SEPARATE user write (authorised by the user gate). Not covert.
+function authorizeCommendation(actor, cur, next) {
+  const rec = next || cur;
+  const ref = rec.ref || 'nomination';
+  if (!cur) {
+    if (!canFileCommendation(actor)) return deny('Only an active operator may nominate.');
+    if (next.status !== 'pending') return deny('A nomination opens as pending.');
+    if (!next.nomineeId || !next.title || !next.org) return deny('A nomination needs a nominee, a title and a unit.');
+    if (next.nominatedBy !== actor.id) return deny('A nomination is filed under your own name.');
+    return ok('OPEN_COMMENDATION', `Commendation ${ref} nominated.`);
+  }
+
+  if (!canViewCommendation(actor, cur)) return deny('No such record.');
+
+  if (!!next.deleted !== !!cur.deleted) {
+    if (!canManageCommendation(actor, cur)) return deny('Only unit command may withdraw a nomination.');
+    return next.deleted ? ok('REMOVE_COMMENDATION', `Withdrew ${ref}.`) : ok('RESTORE_COMMENDATION', `Restored ${ref}.`);
+  }
+
+  // Ruling is a unit-command action; a nomination moves pending -> approved|declined.
+  if (j(next.status) !== j(cur.status)) {
+    if (!canManageCommendation(actor, cur)) return deny('Ruling on a nomination is a unit-command action.');
+    if (cur.status !== 'pending') return deny('This nomination has already been ruled on.');
+    if (next.status !== 'approved' && next.status !== 'declined') return deny('A nomination is approved or declined.');
+    return ok(next.status === 'approved' ? 'APPROVE_COMMENDATION' : 'DECLINE_COMMENDATION', `${ref} ${next.status}.`);
+  }
+
+  if (!canManageCommendation(actor, cur)) return deny('Only unit command may amend a nomination.');
+  return ok('EDIT_COMMENDATION', `Updated ${ref}.`);
+}
+
 const AUTHORIZERS = {
   users: authorizeUser,
   messages: authorizeMessage,
   investigations: authorizeInvestigation,
   incidents: authorizeIncident,
+  commendations: authorizeCommendation,
   inductions: authorizeInduction,
   documents: authorizeDocument,
   directives: authorizeDirective,

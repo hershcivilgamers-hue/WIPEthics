@@ -169,6 +169,23 @@ export function canManageIncident(actor, inc) {
   return !!inc && (isCL5(actor) || canManageOrg(actor, inc.org));
 }
 
+// --- Commendation nominations -----------------------------------------------
+// Any active operator may nominate another. Visible to the nominee's unit
+// command, CL5, the nominator, and Administrators. Ruling (approve/decline) is
+// the nominee's unit command (or CL5). Mirror in gate.js + redact.js.
+export function canFileCommendation(actor) {
+  return !!(actor && actor.accountStatus === 'active');
+}
+export function canViewCommendation(actor, c) {
+  if (!actor || !c) return false;
+  if (isCL5(actor) || isAdmin(actor)) return true;
+  if (c.nominatedBy && c.nominatedBy === actor.id) return true;
+  return canManageOrg(actor, c.org);
+}
+export function canManageCommendation(actor, c) {
+  return !!c && (isCL5(actor) || canManageOrg(actor, c.org));
+}
+
 function hasStakeIn(actor, org) {
   if (org === 'isd') return isISD(actor); // Command does NOT get a free ISD stake
   return actor.org === org || actor.org === 'command';

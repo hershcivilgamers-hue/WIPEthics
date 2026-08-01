@@ -10,7 +10,7 @@
 
 import { CONFIG } from './config.js';
 import { ORGS } from './constants.js';
-import { canViewCommandRoster, canAccessAdmin, canManageOrg, canParticipateRecruitment, isCL5, canSeeISD, canManageISD, isAdmin, canFileIncident } from './permissions.js';
+import { canViewCommandRoster, canAccessAdmin, canManageOrg, canParticipateRecruitment, isCL5, canSeeISD, canManageISD, isAdmin, canFileIncident, canFileCommendation } from './permissions.js';
 
 // Each recruitment feed is for the unit's CL4 cadre (a stake in that org), or CL5.
 const canSeeOmegaRecruitment = (u) => isCL5(u) || canParticipateRecruitment(u, 'omega-1');
@@ -57,6 +57,7 @@ export const NAV = [
       { name: 'activity',     hash: '#/activity',     label: 'Activity Log',    feature: 'activityLog', guard: isAtLeastCL4 },
       { name: 'blacklist',    hash: '#/blacklist',    label: 'Blacklist',       feature: 'blacklist', guard: isAtLeastCL4 },
       { name: 'incidents',    hash: '#/incidents',    label: 'Incident Reports', guard: canFileIncident },
+      { name: 'commendations', hash: '#/commendations', label: 'Commendations', guard: canFileCommendation },
     ],
   },
   {
@@ -126,6 +127,7 @@ const GUARDS = {
   isd: canSeeISD,
   investigations: canSeeISD,
   incidents: canFileIncident,
+  commendations: canFileCommendation,
   'isd-engagement': canSeeISDEngagement,
   'isd-induction': canSeeISD,
 };
@@ -155,7 +157,7 @@ function featureBlocked(name) {
   return false;
 }
 
-const TOP_LEVEL = ['overview', 'notifications', 'messages', 'search', 'orgchart', 'surveillance', 'compartments', 'operations', 'trainings', 'deployments', 'intel', 'engagement', 'evidence', 'dashboard', 'docket', 'tribunals', 'directives', 'documents', 'terminal', 'activity', 'blacklist', 'recruit-omega', 'recruit-ethics', 'omega-1', 'ethics', 'command', 'isd', 'investigations', 'incidents', 'isd-engagement', 'isd-induction', 'insight', 'admin'];
+const TOP_LEVEL = ['overview', 'notifications', 'messages', 'search', 'orgchart', 'surveillance', 'compartments', 'operations', 'trainings', 'deployments', 'intel', 'engagement', 'evidence', 'dashboard', 'docket', 'tribunals', 'directives', 'documents', 'terminal', 'activity', 'blacklist', 'recruit-omega', 'recruit-ethics', 'omega-1', 'ethics', 'command', 'isd', 'investigations', 'incidents', 'commendations', 'isd-engagement', 'isd-induction', 'insight', 'admin'];
 
 // Parse the current location hash into a route { name, params }.
 export function parseHash() {
