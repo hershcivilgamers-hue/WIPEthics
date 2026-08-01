@@ -4,7 +4,9 @@
 
 /* --- Readiness banner ----------------------------------------------------- */
 .readiness-banner {
-  margin: 0 0 16px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto 16px;
   padding: 10px 14px;
   border-radius: 6px;
   border: 1px solid var(--line);
@@ -213,7 +215,7 @@
 }
 /* Scoped centre variant — only the ISD "not visible outside the Department"
    notices ask for it; the shared .ntk-banner stays left-aligned everywhere else. */
-.ntk-banner--center { text-align: center; }
+.ntk-banner--center { width: fit-content; max-width: 100%; margin-left: auto; margin-right: auto; text-align: center; }
 .plain-list { list-style: none; margin: 0; padding: 0; }
 .plain-list li { padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
 .plain-list li:last-child { border-bottom: none; }
