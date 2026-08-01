@@ -16,7 +16,7 @@ import { moderationBar, wireModerationBar } from '../moderation.js';
 import { canComposeDocument, canViewDocument, canManageOrg, isCL5 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { exportCustomDocument, buildCustomDocumentHTML } from '../export.js';
-import { esc, fmtDate, clearanceBadge, orgTag, toast, confirmDialog } from '../ui.js';
+import { esc, fmtDate, clearanceBadge, orgTag, toast, confirmDialog, openModal } from '../ui.js';
 
 // Working copy of the document currently open in the composer.
 let draft = null;
@@ -69,17 +69,7 @@ export function render(host, app) {
     </div>`;
 
   const nb = host.querySelector('#doc-new');
-  if (nb) nb.addEventListener('click', () => {
-    const org = composableOrgs(actor)[0];
-    draft = {
-      id: newId('doc'), ref: nextRef(org), org,
-      classification: allowedClasses(actor)[0], title: '', office: 'Office of Record',
-      distribution: '', status: 'draft', blocks: [{ type: 'paragraph', text: '' }],
-      createdBy: actor.id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-      version: 1, deleted: false, deletedAt: null, _new: true,
-    };
-    app.navigate(`#/document/${draft.id}`);
-  });
+  if (nb) nb.addEventListener('click', () => openTemplatePicker(app, actor));
   host.querySelectorAll('tr[data-id]').forEach((tr) => {
     tr.addEventListener('click', () => app.navigate(`#/document/${tr.dataset.id}`));
     tr.addEventListener('keydown', (e) => { if (e.key === 'Enter') app.navigate(`#/document/${tr.dataset.id}`); });
@@ -150,6 +140,83 @@ const BLOCK_DEFAULTS = {
   signature: { name: '', role: '', dated: '' },
   rule: {},
 };
+
+// Document templates — a starting set of blocks (+ a suggested title) for the
+// composer. Purely client-side seed content: the resulting document still flows
+// through the normal compose/issue gate and per-viewer redaction. Blocks use the
+// shapes in BLOCK_DEFAULTS above.
+const DOC_TEMPLATES = [
+  { id: 'memo', label: 'Memorandum', title: 'Memorandum', description: 'Heading, body, signature.',
+    blocks: [
+      { type: 'heading', text: 'Memorandum' },
+      { type: 'paragraph', text: '' },
+      { type: 'signature', name: '', role: '', dated: '' },
+    ] },
+  { id: 'order', label: 'Standing Order', title: 'Standing Order', description: 'Notice, numbered clauses, signature.',
+    blocks: [
+      { type: 'notice', tone: 'warning', text: 'BY ORDER OF SITE COMMAND' },
+      { type: 'paragraph', text: 'The following orders take effect immediately and remain in force until rescinded.' },
+      { type: 'clauses', items: ['', ''] },
+      { type: 'signature', name: '', role: '', dated: '' },
+    ] },
+  { id: 'incident', label: 'Incident Summary', title: 'Incident Summary', description: 'Fields, summary, log, signature.',
+    blocks: [
+      { type: 'heading', text: 'Incident Summary' },
+      { type: 'fields', rows: [{ k: 'Incident ref', v: '' }, { k: 'Unit', v: '' }, { k: 'Severity', v: '' }, { k: 'Date', v: '' }] },
+      { type: 'paragraph', text: '' },
+      { type: 'log', entries: [{ date: '', text: '' }] },
+      { type: 'signature', name: '', role: '', dated: '' },
+    ] },
+  { id: 'citation', label: 'Commendation Citation', title: 'Citation for Commendation', description: 'Heading, citation, signature.',
+    blocks: [
+      { type: 'heading', text: 'Citation for Commendation' },
+      { type: 'paragraph', text: 'Let it be recorded that ' },
+      { type: 'signature', name: '', role: '', dated: '' },
+    ] },
+  { id: 'tribunal', label: 'Tribunal Notice', title: 'Notice of Proceeding', description: 'Notice, body, Committee signature.',
+    blocks: [
+      { type: 'notice', tone: 'warning', text: 'NOTICE OF PROCEEDING — ETHICS COMMITTEE' },
+      { type: 'paragraph', text: '' },
+      { type: 'signature', name: '', role: 'For and on behalf of the Ethics Committee', dated: '' },
+    ] },
+];
+
+// Build a fresh draft, optionally seeded from a template, and open the composer.
+function startDocument(app, actor, template) {
+  const org = composableOrgs(actor)[0];
+  const now = new Date().toISOString();
+  draft = {
+    id: newId('doc'), ref: nextRef(org), org,
+    classification: allowedClasses(actor)[0],
+    title: template ? (template.title || '') : '',
+    office: (template && template.office) || 'Office of Record',
+    distribution: '', status: 'draft',
+    blocks: template ? JSON.parse(JSON.stringify(template.blocks)) : [{ type: 'paragraph', text: '' }],
+    createdBy: actor.id, createdAt: now, updatedAt: now,
+    version: 1, deleted: false, deletedAt: null, _new: true,
+  };
+  app.navigate(`#/document/${draft.id}`);
+}
+
+// New-document picker: a blank document or one of the templates.
+function openTemplatePicker(app, actor) {
+  const opts = [{ id: 'blank', label: 'Blank document', description: 'Start empty — a single paragraph.' }, ...DOC_TEMPLATES];
+  const dialog = openModal({
+    title: 'New document',
+    body: `<p class="modal__message">Choose a starting point.</p>
+      <div class="stack">${opts.map((t) => `
+        <button class="btn tpl-pick" style="width:100%;justify-content:flex-start;text-align:left" data-tpl="${esc(t.id)}">
+          <span><strong>${esc(t.label)}</strong> — <span class="muted-text">${esc(t.description)}</span></span>
+        </button>`).join('')}</div>`,
+    actions: [{ label: 'Cancel', tone: 'ghost', onClick: (c) => c() }],
+  });
+  dialog.querySelectorAll('[data-tpl]').forEach((b) => b.addEventListener('click', () => {
+    const id = b.dataset.tpl;
+    const tpl = id === 'blank' ? null : DOC_TEMPLATES.find((t) => t.id === id);
+    dialog.querySelector('[data-close]').click();
+    startDocument(app, actor, tpl);
+  }));
+}
 
 function blockEditor(b, i) {
   const head = `<div class="blk__head"><span class="blk__label">${BLOCK_LABELS[b.type] || b.type}</span>
