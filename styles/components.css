@@ -315,9 +315,6 @@
 .oc-chip--dim { opacity: .5; }
 .oc-chip__id { font-size: 12.5px; }
 .oc-chip__name { color: var(--text-2); margin-left: 2px; }
-/* The monogram sits inside a fully-rounded (pill) chip, so round it to a circle
-   to follow the chip's edge instead of a square poking out of the curve. */
-.oc-chip .avatar { border-radius: 50%; }
 
 /* Messaging — inbox rows, thread bubbles, recipient picker. */
 .msg-list { display: flex; flex-direction: column; }

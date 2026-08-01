@@ -10,7 +10,6 @@
   border: 1px solid var(--line);
   font-size: 13px;
   letter-spacing: 0.02em;
-  text-align: center;
 }
 .readiness-banner--bad {
   border-color: rgba(207, 68, 54, 0.5);
@@ -210,7 +209,6 @@
   color: var(--amber-2, #d9a441);
   font-size: 13px;
   letter-spacing: 0.02em;
-  text-align: center;
 }
 .plain-list { list-style: none; margin: 0; padding: 0; }
 .plain-list li { padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
@@ -218,7 +216,7 @@
 
 /* --- Situation Board & Docket Board (shared rollup styles) ------------------ */
 .stat-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--s4); margin: var(--s5) 0; }
-.stat { padding: var(--s4) var(--s4) var(--s4); text-align: center; }
+.stat { padding: var(--s4) var(--s4) var(--s4); }
 .stat__n { font-family: var(--mono); font-size: 32px; line-height: 1.1; }
 .stat__k { margin-top: 5px; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--text-3); }
 .stat__sub { margin-top: 3px; font-size: 11px; color: var(--text-3); }
