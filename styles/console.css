@@ -7,8 +7,8 @@
    page renders fully (final values, filled bars) with no motion and no
    dependency on JS.
 
-   ponytail: .readout/.rise and the rc* keyframes duplicate home.css's
-   .oh-kpi*/.oh-rise/oh* verbatim — kept separate to avoid restyling the shipped
+   ponytail: the .readout and .rise classes and the rc keyframes duplicate
+   home.css's oh-prefixed twins verbatim — kept separate to avoid restyling the shipped
    Operator Home in this pass. Converge when overview.js is next revisited in the
    rollout: migrate Operator Home onto these neutral names and delete the .oh-*
    twins, leaving one shared vocabulary.
