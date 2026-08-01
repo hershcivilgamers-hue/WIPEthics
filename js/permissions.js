@@ -151,6 +151,24 @@ export function canFileInduction(actor) {
   return isdAtLeast(actor, 'Investigator');
 }
 
+// --- Incident / breach reports ----------------------------------------------
+// Any active operator may FILE a report. It is NOT covert: it is visible to the
+// named unit's command, to CL5, to the reporter (their own filing), and to an
+// Administrator for moderation read-through. Closing/amending is the unit's
+// command (or CL5). Mirror any change in worker/src/gate.js + redact.js.
+export function canFileIncident(actor) {
+  return !!(actor && actor.accountStatus === 'active');
+}
+export function canViewIncident(actor, inc) {
+  if (!actor || !inc) return false;
+  if (isCL5(actor) || isAdmin(actor)) return true;
+  if (inc.reportedBy && inc.reportedBy === actor.id) return true;
+  return canManageOrg(actor, inc.org);
+}
+export function canManageIncident(actor, inc) {
+  return !!inc && (isCL5(actor) || canManageOrg(actor, inc.org));
+}
+
 function hasStakeIn(actor, org) {
   if (org === 'isd') return isISD(actor); // Command does NOT get a free ISD stake
   return actor.org === org || actor.org === 'command';

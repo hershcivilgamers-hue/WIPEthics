@@ -18,7 +18,7 @@ import {
   compartmentClears, readIntoCompartment, canManageCompartment,
   canViewActivity, canViewRecruitment, canViewOperation, isAssignedToOperation,
   canViewIntel, isAssignedToIntel, canViewTraining,
-  canViewDocument, canManageOrg, isISD, isAdmin, canViewInvestigation, canViewInduction, canManageISD, canSeeISD,
+  canViewDocument, canManageOrg, isISD, isAdmin, canViewInvestigation, canViewInduction, canManageISD, canSeeISD, canViewIncident,
 } from '../../js/permissions.js';
 import { strikeVoided } from '../../js/constants.js';
 
@@ -239,6 +239,8 @@ export function buildSnapshot(actor, db) {
     // ISD investigations are covert: the Department (or CL5) or nothing at all.
     investigations: (db.investigations || []).filter((i) => !i.deleted && canViewInvestigation(actor)),
     inductions: (db.inductions || []).filter((i) => !i.deleted && canViewInduction(actor)),
+    // Incident reports — not covert; each is filtered to those who may view it.
+    incidents: (db.incidents || []).filter((i) => !i.deleted && canViewIncident(actor, i)),
     blacklist: (db.blacklist || []).filter((b) => !b.deleted),
     // Private comms: a message reaches only its participants — or an Administrator,
     // whose moderation remit alone (never CL5's) grants read-through here.

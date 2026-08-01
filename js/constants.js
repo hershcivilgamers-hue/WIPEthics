@@ -102,6 +102,14 @@ export const ORGS = {
 
 export const ORG_ORDER = ['omega-1', 'ethics-committee', 'command'];
 
+// Severity of a filed incident/breach report. `tone` drives the badge colour.
+export const INCIDENT_SEVERITY = {
+  low:      { label: 'Low',      tone: 'muted' },
+  moderate: { label: 'Moderate', tone: 'warn' },
+  severe:   { label: 'Severe',   tone: 'bad' },
+  critical: { label: 'Critical', tone: 'bad' },
+};
+
 // --- Rank ladders (per organisation) ----------------------------------------
 // Ordered HIGH -> LOW: index 0 is the most senior rank. The next promotion
 // from a given rank is therefore the entry at (rankIndex - 1); the next

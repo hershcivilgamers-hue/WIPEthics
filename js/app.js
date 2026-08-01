@@ -54,6 +54,7 @@ import * as activityView from './views/activity.js';
 import * as adminView from './views/admin.js';
 import * as insightView from './views/insight.js';
 import * as investigationsView from './views/investigations.js';
+import * as incidentsView from './views/incidents.js';
 import * as isdInductionView from './views/isd-induction.js';
 
 const root = document.getElementById('app');
@@ -316,6 +317,7 @@ function dispatch(route, user) {
     case 'evidence':     evidenceView.render(view, app); break;
     case 'trainings':    trainingsView.render(view, app); break;
     case 'blacklist':    blacklistView.render(view, app); break;
+    case 'incidents':    incidentsView.render(view, app); break;
     case 'dashboard':    dashboardView.render(view, app); break;
     case 'docket':       docketView.render(view, app); break;
     case 'notifications': notificationsView.render(view, app); break;

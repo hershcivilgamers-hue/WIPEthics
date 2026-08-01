@@ -24,8 +24,9 @@ import {
   canDischarge, canManageLeave, isISD, canManageISD,
   canViewInvestigation, canFileInvestigation, canAdvanceInvestigation, canAdjudicateInvestigation,
   canViewInduction, canFileInduction, canModerate, isAdmin,
+  canFileIncident, canViewIncident, canManageIncident,
 } from '../../js/permissions.js';
-import { investigationNextStage, INVESTIGATION_DISPOSITION } from '../../js/constants.js';
+import { investigationNextStage, INVESTIGATION_DISPOSITION, INCIDENT_SEVERITY } from '../../js/constants.js';
 import { scoreInduction } from '../../js/isd-induction.js';
 import { rankUp, rankDown, clearanceForRank, clearanceWeight, tallyVotes, RANKS, caseTakesVote, strikeActive, isdRankFor } from '../../js/constants.js';
 
@@ -1116,10 +1117,51 @@ function authorizeMessage(actor, cur, next) {
   return deny('A sent message cannot be edited.');
 }
 
+// Incident / breach reports. Any active operator files one; the log is
+// append-only; the named unit's command (or CL5) closes or amends it. Not
+// covert — visibility is governed by canViewIncident (mirrored in redact.js).
+function authorizeIncident(actor, cur, next) {
+  const rec = next || cur;
+  const ref = rec.ref || 'report';
+  if (!cur) {
+    if (!canFileIncident(actor)) return deny('Only an active operator may file a report.');
+    if (next.status !== 'open') return deny('A report opens as open.');
+    if (!next.title || !next.org) return deny('A report needs a title and a unit.');
+    if (next.reportedBy !== actor.id) return deny('A report is filed under your own name.');
+    if (!INCIDENT_SEVERITY[next.severity]) return deny('Unknown severity.');
+    return ok('OPEN_INCIDENT', `Incident ${ref} filed.`);
+  }
+
+  if (!canViewIncident(actor, cur)) return deny('No such record.');
+
+  if (!!next.deleted !== !!cur.deleted) {
+    if (!canManageIncident(actor, cur)) return deny('Only unit command may withdraw a report.');
+    return next.deleted ? ok('REMOVE_INCIDENT', `Withdrew ${ref}.`) : ok('RESTORE_INCIDENT', `Restored ${ref}.`);
+  }
+
+  // Append-only log: anyone who can see a live report may add to it.
+  if (j(next.entries) !== j(cur.entries) && !changedOutside(cur, next, ['entries', 'version', 'updatedAt'])) {
+    if (cur.status === 'closed') return deny('A closed report is a record and cannot be added to.');
+    if (len(next.entries) < len(cur.entries)) return deny('The incident log is append-only.');
+    return ok('LOG_INCIDENT', `Entry recorded in ${ref}.`);
+  }
+
+  // Closure is a unit-command action; a report only ever moves open -> closed.
+  if (j(next.status) !== j(cur.status)) {
+    if (!canManageIncident(actor, cur)) return deny('Closing a report is a unit-command action.');
+    if (next.status !== 'closed') return deny('A report can only be closed.');
+    return ok('CLOSE_INCIDENT', `${ref} closed.`);
+  }
+
+  if (!canManageIncident(actor, cur)) return deny('Only unit command may amend a report.');
+  return ok('EDIT_INCIDENT', `Updated ${ref}.`);
+}
+
 const AUTHORIZERS = {
   users: authorizeUser,
   messages: authorizeMessage,
   investigations: authorizeInvestigation,
+  incidents: authorizeIncident,
   inductions: authorizeInduction,
   documents: authorizeDocument,
   directives: authorizeDirective,

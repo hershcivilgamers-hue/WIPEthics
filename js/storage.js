@@ -41,6 +41,7 @@ function emptyDb() {
     evidence: [],
     investigations: [],
     inductions: [],
+    incidents: [],
     promoReqs: [],
     settings: [],
     messages: [],
@@ -123,6 +124,7 @@ export function applyServerSnapshot(snap) {
     evidence: snap.evidence || [],
     investigations: snap.investigations || [],
     inductions: snap.inductions || [],
+    incidents: snap.incidents || [],
     blacklist: snap.blacklist || [],
     promoReqs: snap.promoReqs || [],
     settings: snap.settings || [],
@@ -363,6 +365,19 @@ export function upsertBlacklistEntry(record) {
   const i = list.findIndex((r) => r.id === record.id);
   if (i >= 0) list[i] = record; else list.push(record);
   afterWrite('blacklist', record);
+  return record;
+}
+
+// Incident / breach reports.
+export const incidents = () => loadDb().incidents;
+export function getIncident(id) {
+  return incidents().find((r) => r.id === id) || null;
+}
+export function upsertIncident(record) {
+  const list = incidents();
+  const i = list.findIndex((r) => r.id === record.id);
+  if (i >= 0) list[i] = record; else list.push(record);
+  afterWrite('incidents', record);
   return record;
 }
 
