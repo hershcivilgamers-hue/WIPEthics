@@ -221,9 +221,11 @@
 .plain-list li:last-child { border-bottom: none; }
 
 /* --- Situation Board & Docket Board (shared rollup styles) ------------------ */
-.stat-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--s4); margin: var(--s5) 0; }
+/* Board rollup tiles sit at a natural width and centre as a group, rather than
+   stretching edge-to-edge. */
+.stat-strip { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s4); margin: var(--s5) 0; }
 .stat { padding: var(--s4) var(--s4) var(--s4); }
-.stat-strip .stat { text-align: center; }
+.stat-strip .stat { flex: 0 1 170px; text-align: center; }
 .stat__n { font-family: var(--mono); font-size: 32px; line-height: 1.1; }
 .stat__k { margin-top: 5px; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--text-3); }
 .stat__sub { margin-top: 3px; font-size: 11px; color: var(--text-3); }
