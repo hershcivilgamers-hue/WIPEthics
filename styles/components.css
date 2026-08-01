@@ -304,6 +304,9 @@
 
 /* Chain of command — a rank ladder per organisation. */
 .avatar--sm { width: 30px; height: 30px; font-size: 12px; font-weight: 600; border-radius: var(--radius); }
+/* Org-chart chips are 999px pills; a circular monogram nests inside the rounded
+   end instead of poking square corners past the curve. */
+.oc-chip .avatar { border-radius: 50%; }
 .ladder { display: flex; flex-direction: column; }
 .ladder__tier { display: grid; grid-template-columns: 150px 1fr; gap: var(--s3); align-items: start; padding: var(--s3) 0; border-top: 1px solid var(--line); }
 .ladder__tier:first-child { border-top: 0; padding-top: 0; }

@@ -108,7 +108,7 @@ export function render(host, app) {
 
     ${invReadout}
 
-    <div class="ntk-banner">Internal Security material. These records are not visible outside the Department.</div>
+    <div class="ntk-banner ntk-banner--center">Internal Security material. These records are not visible outside the Department.</div>
 
     <div class="pipeline pipeline--4 rise">${columns}</div>
 

@@ -64,7 +64,7 @@ export function render(host, app) {
       ${canFileInduction(actor) ? '<button class="btn btn--primary" id="ind-new">+ New induction</button>' : ''}
     </div>
 
-    <div class="ntk-banner">Internal Security material. These assessments are not visible outside the Department.</div>
+    <div class="ntk-banner ntk-banner--center">Internal Security material. These assessments are not visible outside the Department.</div>
 
     <section class="card">
       <div class="card__title">Awaiting a decision ${pending.length ? `<span class="badge badge--warn">${pending.length}</span>` : ''}</div>
