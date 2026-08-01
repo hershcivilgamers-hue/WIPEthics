@@ -5,10 +5,9 @@ worker/.wrangler/
 # Node
 node_modules/
 
-# Local MCP config — may hold a Figma API token. Never commit.
-.mcp.json
-.mcp.json.txt
-.mcp.json.txt.bak
+# Local MCP config — may hold a Figma API token. Never commit. The glob covers
+# every variant (.mcp.json, .mcp.json.bak, .mcp.json.txt, .mcp.json.txt.bak, …).
+.mcp.json*
 
 # OS cruft
 .DS_Store
