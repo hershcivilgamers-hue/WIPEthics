@@ -10,7 +10,7 @@
 
 import { RANKS, ORGS, ORG_ORDER, clearanceForRank, isdRankFor, isdBadgeFor } from '../constants.js';
 import { users } from '../storage.js';
-import { isISD, isdMember, isCL5 } from '../permissions.js';
+import { isISD, isdMember, isCL5, canSeeISD } from '../permissions.js';
 import { esc, clearanceBadge, orgTag, monogram } from '../ui.js';
 
 // Group members onto a rank ladder — senior tier first — plus an "Unlisted"
@@ -66,7 +66,7 @@ export function render(host, app) {
 
   // Internal Security ladder — derived rank + 6/2-series badge; covert, so shown
   // only to those who may see the Department at all.
-  if (isISD(actor) || isCL5(actor)) {
+  if (canSeeISD(actor)) {
     const isd = roster.filter((u) => isdMember(u));
     if (isd.length) {
       const tiers = ladderTiers(RANKS.isd, isd, (m) => isdRankFor(m), (r) => clearanceForRank('isd', r));

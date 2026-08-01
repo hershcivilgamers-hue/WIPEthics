@@ -10,7 +10,7 @@
 
 import { CONFIG } from './config.js';
 import { ORGS } from './constants.js';
-import { canViewCommandRoster, canAccessAdmin, canManageOrg, canParticipateRecruitment, isCL5, isISD, canManageISD, isAdmin } from './permissions.js';
+import { canViewCommandRoster, canAccessAdmin, canManageOrg, canParticipateRecruitment, isCL5, canSeeISD, canManageISD, isAdmin } from './permissions.js';
 
 // Each recruitment feed is for the unit's CL4 cadre (a stake in that org), or CL5.
 const canSeeOmegaRecruitment = (u) => isCL5(u) || canParticipateRecruitment(u, 'omega-1');
@@ -28,8 +28,8 @@ const canSeeEngagement = (u) => isCL5(u) || canManageOrg(u, 'omega-1');
 // Evidence is self-service for Omega personnel (submit their own), plus managers/CL5 (review).
 const canSeeEvidence = (u) => isCL5(u) || u.org === 'omega-1' || canManageOrg(u, 'omega-1');
 // Insight aggregates across organisations — Command oversight only.
-// Internal Security is covert: only its own members (or CL5) see it exists.
-const canSeeISD = (u) => isCL5(u) || isISD(u);
+// Internal Security is covert: the Department, CL5, and the read-in Ethics
+// Committee see it exists (canSeeISD, the shared predicate from permissions).
 // ISD scoring is command-tier within the Department (Commissioner/Director).
 const canSeeISDEngagement = (u) => canManageISD(u);
 const canSeeInsight = (u) => isCL5(u);

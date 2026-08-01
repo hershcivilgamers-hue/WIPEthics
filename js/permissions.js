@@ -111,6 +111,17 @@ export function isdAtLeast(actor, rank) {
   return mine >= 0 && need >= 0 && mine <= need;
 }
 
+// Who may SEE Internal Security material: the Department itself (isISD), CL5
+// oversight, and the Ethics Committee — the body ISD answers to, read in for
+// oversight. This is VISIBILITY ONLY and is deliberately kept separate from
+// isISD: a Committee member is not an ISD agent, gains no ISD command, and is
+// NOT caught by the agent-side restrictions keyed on isISD (notably the
+// termination-Target wall, which the Committee must sit outside). Widen ISD
+// visibility through this predicate; never through isISD.
+export function canSeeISD(actor) {
+  return isCL5(actor) || isISD(actor) || (!!actor && actor.org === 'ethics-committee');
+}
+
 // --- ISD investigations ------------------------------------------------------
 // Reading is for the Department (or CL5) — nobody else knows these exist.
 // Filing and adding entries starts at Investigator; an Operative may read and be
@@ -118,7 +129,7 @@ export function isdAtLeast(actor, rank) {
 // an ACTIVE investigation is an Inspector's call; adjudication, disposition and
 // closure belong to ISD command.
 export function canViewInvestigation(actor) {
-  return isCL5(actor) || isISD(actor) || isAdmin(actor);
+  return canSeeISD(actor) || isAdmin(actor);
 }
 export function canFileInvestigation(actor) {
   return isdAtLeast(actor, 'Investigator');
@@ -134,7 +145,7 @@ export function canAdjudicateInvestigation(actor) {
 // A recruiter (Investigator and above) files and scores an induction; the final
 // outcome — and reading a passing candidate in — is ISD command's.
 export function canViewInduction(actor) {
-  return isCL5(actor) || isISD(actor) || isAdmin(actor);
+  return canSeeISD(actor) || isAdmin(actor);
 }
 export function canFileInduction(actor) {
   return isdAtLeast(actor, 'Investigator');

@@ -21,7 +21,7 @@ import { orgLogo } from '../logos.js';
 import {
   canEditPersonnel, canSetClearance, canSetRank, canIssueStrike,
   canDeletePersonnel, canPromote, canDemote, accessLevel, isCL5, canManageOrg, canManageTraining, canViewCase, canDischarge, canManageLeave,
-  isISD, isdMember, canManageISD,
+  isISD, isdMember, canManageISD, canSeeISD,
 } from '../permissions.js';
 import { logAction } from '../audit.js';
 import { exportPersonnel, exportIdCard, exportMedalCertificate } from '../export.js';
@@ -471,7 +471,7 @@ function sectionISD(u, actor) {
   // The subject carries a front, but a front stays covert: only the Department
   // (isISD) and CL5 may see it. An Omega front is derived from the public
   // designation, so without this gate a non-ISD viewer could read it off the file.
-  if (!isISD(actor) && !isCL5(actor)) return '';
+  if (!canSeeISD(actor)) return '';
   const omega = u.org === 'omega-1';
   const m = u.isd || { standing: 'active' }; // Omega members carry no stored caveat
   const self = actor.id === u.id;
@@ -489,7 +489,7 @@ function sectionISD(u, actor) {
     <div class="card__body">
       <div class="kv"><span class="kv__k">ISD rank</span><span class="kv__v">${rank ? `${esc(rank)} ${clearanceBadge(isdClearanceFor(u))}` : '<span class="muted-text">—</span>'}</span></div>
       <div class="kv"><span class="kv__k">Badge number</span><span class="kv__v mono">${badge ? esc(badge) : '<span class="muted-text">not issued</span>'}</span></div>
-      <div class="kv"><span class="kv__k">${omega ? 'Cover post' : 'Home unit'}</span><span class="kv__v">${orgTag(u.org)} ${esc(u.rank || '—')}</span></div>
+      <div class="kv"><span class="kv__k">${omega ? 'True post' : 'Home unit'}</span><span class="kv__v">${orgTag(u.org)} ${esc(u.rank || '—')}</span></div>
       ${self && !omega ? '<div class="btn-row" style="margin-top:10px"><button class="btn btn--sm" data-act="isd-badge">Record badge number</button></div>' : ''}
 
       ${omega
