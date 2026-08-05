@@ -43,17 +43,13 @@ export const NAV = [
   {
     group: 'CAIRO',
     items: [
-      { name: 'overview',     hash: '#/overview',     label: 'Command Overview' },
-      { name: 'notifications', hash: '#/notifications', label: 'For Your Attention' },
       { name: 'search',       hash: '#/search',       label: 'Search' },
-      { name: 'orgchart',     hash: '#/orgchart',     label: 'Chain of Command' },
       { name: 'surveillance', hash: '#/surveillance', label: 'Surveillance',    feature: 'surveillance' },
       { name: 'compartments', hash: '#/compartments', label: 'Need-To-Know',    feature: 'compartments' },
       { name: 'operations',   hash: '#/operations',   label: 'Readiness',       feature: 'operations' },
       { name: 'trainings',    hash: '#/trainings',    label: 'Trainings',       feature: 'trainings' },
       { name: 'directives',   hash: '#/directives',   label: 'Standing Orders', feature: 'directives' },
       { name: 'documents',    hash: '#/documents',    label: 'Documents', feature: 'documents' },
-      { name: 'terminal',     hash: '#/terminal',     label: 'CAIRO Terminal', feature: 'terminal' },
       { name: 'activity',     hash: '#/activity',     label: 'Activity Log',    feature: 'activityLog', guard: isAtLeastCL4 },
       { name: 'blacklist',    hash: '#/blacklist',    label: 'Blacklist',       feature: 'blacklist', guard: isAtLeastCL4 },
       { name: 'incidents',    hash: '#/incidents',    label: 'Incident Reports', guard: canFileIncident },

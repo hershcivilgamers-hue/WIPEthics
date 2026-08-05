@@ -18,7 +18,7 @@ import { users, directives, subjects, cases, getActivityForUser, getSetting } fr
 import { canViewSubject, canViewCase } from '../permissions.js';
 import { esc, clearanceBadge, countUp } from '../ui.js';
 import { buildNotifications, watchSummary } from './notifications.js';
-import { partitionNotes } from '../inbox.js';
+import { partitionNotes, markDone, snooze } from '../inbox.js';
 
 const HOME_FEED_LIMIT = 8;
 const RING_CIRC = 326.7; // 2πr, r=52
@@ -69,13 +69,17 @@ export function render(host, app) {
   }).join('');
 
   const feedHtml = shown.length ? shown.map((n) => `
-    <button class="oh-row oh-row--${feedTone(n.tone)}" data-nav="${esc(n.hash)}">
+    <div class="oh-row oh-row--${feedTone(n.tone)}" data-nav="${esc(n.hash)}" role="button" tabindex="0">
       ${n._unread ? '<span class="oh-row__pip"></span>' : ''}
       <span class="oh-row__stripe"></span>
       <span class="oh-row__ic">${n.icon ? esc(n.icon) : '•'}</span>
       <span class="oh-row__txt">${esc(n.text)}</span>
       <span class="oh-row__meta">${esc(relLabel(n.at))}</span>
-    </button>`).join('')
+      <span class="oh-row__actions">
+        <button class="note-act" data-snooze="${esc(n._key)}" title="Snooze for a day" aria-label="Snooze for a day">⏰</button>
+        <button class="note-act" data-done="${esc(n._key)}" title="Acknowledge" aria-label="Acknowledge">✓</button>
+      </span>
+    </div>`).join('')
     + (activeNotes.length > shown.length
       ? `<button class="oh-more" data-nav="#/notifications">+ ${activeNotes.length - shown.length} more · view all in For Your Attention →</button>`
       : '')
@@ -145,7 +149,10 @@ export function render(host, app) {
     </div>
   `;
 
-  host.querySelectorAll('[data-nav]').forEach((b) => b.addEventListener('click', () => app.navigate(b.dataset.nav)));
+  host.querySelectorAll('[data-nav]').forEach((b) => b.addEventListener('click', (e) => { if (e.target.closest('.note-act')) return; app.navigate(b.dataset.nav); }));
+  host.querySelectorAll('.oh-row[data-nav]').forEach((el) => el.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.target.closest('.note-act')) app.navigate(el.dataset.nav); }));
+  host.querySelectorAll('[data-done]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); markDone(actor.id, b.dataset.done); app.refresh(); }));
+  host.querySelectorAll('[data-snooze]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); snooze(actor.id, b.dataset.snooze); app.refresh(); }));
   wireMotion(host);
 }
 
