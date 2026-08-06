@@ -14,7 +14,7 @@
 // Export can never become a disclosure side-channel.
 // =============================================================================
 
-import { getUser, getSubject } from './storage.js';
+import { getUser, getSubject, getTraining } from './storage.js';
 import { CONFIG } from './config.js';
 import { orgLogo } from './logos.js';
 import {
@@ -964,6 +964,24 @@ export function buildPersonnelDocumentHTML(user, actor) {
     sections.push('<div class="jhead">Awards &amp; Commendations</div>');
     sections.push(`<table class="log"><tbody>${user.awards.map((a) => `
       <tr><td class="ld">${longDate(a.date)}</td><td>${esc(a.title)}${a.note ? `<div class="lby">${esc(a.note)}</div>` : ''}</td></tr>`).join('')}</tbody></table>`);
+  }
+
+  if (!nameOnly && (user.trainings || []).length) {
+    // Latest completion per course; a qualification is current unless its expiry has lapsed.
+    const byCourse = new Map();
+    for (const t of user.trainings) {
+      const prev = byCourse.get(t.courseId);
+      if (!prev || new Date(t.awardedAt) > new Date(prev.awardedAt)) byCourse.set(t.courseId, t);
+    }
+    const rows = [...byCourse.values()].sort((a, b) => new Date(b.awardedAt) - new Date(a.awardedAt)).map((t) => {
+      const course = getTraining(t.courseId);
+      const name = course ? `${course.code ? `${esc(course.code)} — ` : ''}${esc(course.title)}` : esc(t.courseId);
+      const expired = t.expiresAt && new Date(t.expiresAt).getTime() <= Date.now();
+      const status = t.expiresAt ? (expired ? ` · EXPIRED ${longDate(t.expiresAt)}` : ` · current to ${longDate(t.expiresAt)}`) : ' · no expiry';
+      return `<tr><td class="ld">${longDate(t.awardedAt)}</td><td>${name}${expired ? ' <strong>— EXPIRED</strong>' : ''}<div class="lby">Awarded by ${esc(t.awardedBy || '—')}${status}</div></td></tr>`;
+    }).join('');
+    sections.push('<div class="jhead">Qualifications &amp; Trainings</div>');
+    sections.push(`<table class="log"><tbody>${rows}</tbody></table>`);
   }
 
   if (!nameOnly) {
