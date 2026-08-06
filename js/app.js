@@ -56,6 +56,7 @@ import * as insightView from './views/insight.js';
 import * as investigationsView from './views/investigations.js';
 import * as incidentsView from './views/incidents.js';
 import * as commendationsView from './views/commendations.js';
+import * as myInsightsView from './views/my-insights.js';
 import * as isdInductionView from './views/isd-induction.js';
 
 const root = document.getElementById('app');
@@ -154,6 +155,7 @@ function buildSidebar(user, activeName) {
         <div class="sidebar__account-btns">
           <button class="btn btn--ghost btn--sm" data-act="home">Command Overview</button>
           <button class="btn btn--ghost btn--sm" data-act="orgchart">Chain of Command</button>
+          <button class="btn btn--ghost btn--sm" data-act="myinsights">My Insights</button>
           ${CONFIG.features.terminal ? '<button class="btn btn--ghost btn--sm" data-act="terminal">CAIRO Terminal</button>' : ''}
           <button class="btn btn--ghost btn--sm" data-act="tour">Tour</button>
           <button class="btn btn--ghost btn--sm" data-act="change-pass">Change passphrase</button>
@@ -231,6 +233,7 @@ function renderShell(user, route) {
               <button class="btn btn--ghost btn--sm topbar__iconbtn" data-act="home" title="Command Overview" aria-label="Command Overview"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/></svg></button>
               <button class="btn btn--ghost btn--sm topbar__iconbtn" data-act="orgchart" title="Chain of Command" aria-label="Chain of Command"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v3M6 13.5v2.5M6 16h12v-2.5M18 16v0"/></svg></button>
               ${CONFIG.features.terminal ? `<button class="btn btn--ghost btn--sm topbar__iconbtn" data-act="terminal" title="CAIRO Terminal" aria-label="CAIRO Terminal"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3"/><path d="M13 15h4"/></svg></button>` : ''}
+              <button class="btn btn--ghost btn--sm topbar__iconbtn" data-act="myinsights" title="My Insights" aria-label="My Insights"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><rect x="5" y="11" width="3.2" height="8" rx="0.5"/><rect x="10.4" y="6" width="3.2" height="13" rx="0.5"/><rect x="15.8" y="14" width="3.2" height="5" rx="0.5"/></svg></button>
               <button class="btn btn--ghost btn--sm topbar__iconbtn" data-act="messages" title="Messages" aria-label="Messages"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>${(() => { const n = messagesView.unreadMessages(user); return n ? `<span class="topbar__badge">${n > 9 ? '9+' : n}</span>` : ''; })()}</button>
               <button class="btn btn--ghost btn--sm topbar__iconbtn" id="glossary-btn" data-act="glossary" title="Field Guide — clearances, Need-To-Know, badges" aria-label="Open the Field Guide">?</button>
               <button class="btn btn--ghost btn--sm topbar__iconbtn" id="tour-btn" data-act="tour" title="Re-run the system tour" aria-label="Re-run the system tour"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.3a3 3 0 0 1 5.6 1.2c0 2-3 2.5-3 2.5"/><path d="M12 17h.01"/></svg></button>
@@ -255,6 +258,7 @@ function renderShell(user, route) {
   root.querySelectorAll('[data-act="home"]').forEach((b) => b.addEventListener('click', () => app.navigate('#/overview')));
   root.querySelectorAll('[data-act="orgchart"]').forEach((b) => b.addEventListener('click', () => app.navigate('#/orgchart')));
   root.querySelectorAll('[data-act="terminal"]').forEach((b) => b.addEventListener('click', () => app.navigate('#/terminal')));
+  root.querySelectorAll('[data-act="myinsights"]').forEach((b) => b.addEventListener('click', () => app.navigate('#/my-insights')));
   root.querySelectorAll('[data-act="change-pass"]').forEach((b) => b.addEventListener('click', () => personnelView.openChangePassphrase(app)));
   root.querySelectorAll('[data-act="logout"]').forEach((b) => b.addEventListener('click', () => {
     logAction(user, 'LOGOUT', `${user.designation} signed out.`);
@@ -329,6 +333,7 @@ function dispatch(route, user) {
     case 'blacklist':    blacklistView.render(view, app); break;
     case 'incidents':    incidentsView.render(view, app); break;
     case 'commendations': commendationsView.render(view, app); break;
+    case 'my-insights':  myInsightsView.render(view, app); break;
     case 'dashboard':    dashboardView.render(view, app); break;
     case 'docket':       docketView.render(view, app); break;
     case 'notifications': notificationsView.render(view, app); break;

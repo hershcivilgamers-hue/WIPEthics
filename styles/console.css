@@ -44,6 +44,16 @@
 tr.rowsev--bad > td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
 tr.rowsev--warn > td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 
+/* --- My Insights: weekly activity bar chart -------------------------------- */
+.ins-bars { display: flex; align-items: flex-end; gap: 6px; }
+.ins-bar { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.ins-bar__val { font-family: var(--mono); font-size: 10px; color: var(--text-2); margin-bottom: 3px; min-height: 12px; }
+.ins-bar__track { width: 100%; max-width: 32px; height: 120px; display: flex; align-items: flex-end; }
+.ins-bar__fill { width: 100%; min-height: 2px; border-radius: 3px 3px 0 0; background: var(--amber); }
+.ins-bar--ok .ins-bar__fill { background: var(--ok); }
+.ins-bar--under .ins-bar__fill { background: var(--bad); }
+.ins-bar__lbl { font-family: var(--mono); font-size: 9px; color: var(--text-3); margin-top: 5px; white-space: nowrap; }
+
 /* --- Additive load motion (matches home.css; only when the viewer allows it) */
 .rise { opacity: 1; }
 @media (prefers-reduced-motion: no-preference) {

@@ -158,7 +158,7 @@ function featureBlocked(name) {
   return false;
 }
 
-const TOP_LEVEL = ['overview', 'notifications', 'messages', 'search', 'orgchart', 'surveillance', 'compartments', 'operations', 'trainings', 'deployments', 'intel', 'engagement', 'evidence', 'dashboard', 'docket', 'tribunals', 'directives', 'documents', 'terminal', 'activity', 'blacklist', 'recruit-omega', 'recruit-ethics', 'omega-1', 'ethics', 'command', 'isd', 'investigations', 'incidents', 'commendations', 'isd-engagement', 'isd-induction', 'insight', 'admin'];
+const TOP_LEVEL = ['overview', 'notifications', 'messages', 'my-insights', 'search', 'orgchart', 'surveillance', 'compartments', 'operations', 'trainings', 'deployments', 'intel', 'engagement', 'evidence', 'dashboard', 'docket', 'tribunals', 'directives', 'documents', 'terminal', 'activity', 'blacklist', 'recruit-omega', 'recruit-ethics', 'omega-1', 'ethics', 'command', 'isd', 'investigations', 'incidents', 'commendations', 'isd-engagement', 'isd-induction', 'insight', 'admin'];
 
 // Parse the current location hash into a route { name, params }.
 export function parseHash() {
